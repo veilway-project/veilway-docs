@@ -1,18 +1,286 @@
 ---
 title: Config reference
-description: Every option of the Veilway server configuration.
+description: Every option of the Veilway server configuration, version 1.
 ---
 
-:::caution[Not written yet]
-This page is a stub. No option is documented here yet, and the config schema may still change.
+:::caution[Draft]
+This is config version 1 as designed for Phase 1 of the plan. `veilway check` validates it. The engine still runs on the older single-tunnel file and switches to this format in the next step, so nothing here is enforced by `veilway run` yet. Sections marked "engine" describe behaviour the engine must have when it does.
 :::
 
-This page will list every configuration option with its type, default and an example, grouped as:
+The core reads one JSON document. It is the source of truth: the panel changes it through the control API, never by editing the file.
 
-- inbounds and their transports
-- exits and outbounds
-- users and limits
-- routing rules
-- logging and metrics
+```json
+{
+  "version": 1,
+  "log": {"level": "info"},
+  "dns": {"servers": ["1.1.1.1:53"]},
+  "groups": [],
+  "inbounds": [],
+  "outbounds": [],
+  "exits": [],
+  "routing": {"default": "main", "rules": []},
+  "users": []
+}
+```
 
-Examples will only use placeholder names and addresses such as `example.com` and `192.0.2.1`.
+`version`, `dns`, `inbounds`, `outbounds`, `exits`, `routing` and `users` are required. `log` and `groups` are optional.
+
+## Rules that apply everywhere
+
+- **Strict JSON.** Unknown keys and duplicate keys are errors at every level. A byte order mark, data after the document, invalid UTF-8 and a NUL inside a string are errors. Where an integer is expected, only an integer token is accepted (`1`, never `1.0`).
+- **Growth.** Version 1 only grows by new optional keys and new enum values. A build that meets a key or value it does not know refuses the file and says the config may be newer than the build.
+- **Tags.** Inbounds, outbounds, exits and routing rules each have a `tag` matching `[a-z0-9][a-z0-9_-]{0,63}`, unique within its section. These words cannot be tags: `all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`.
+- **References.** Every tag, user name and group name used anywhere must exist. A dangling reference is an error.
+- **Lists.** A list never contains the same entry twice. Inside a routing rule, a condition that is present must not be an empty list.
+- **Canonical spelling.** Numbers inside strings (a port, a prefix length, a `lo-hi` range) have no sign and no leading zeros. A timestamp uses `T` between date and time.
+- **Addresses.** IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) and addresses with a zone (`%eth0`) are errors everywhere. A network written with host bits set (`10.7.0.5/24`) is an error, except in an inbound's `address`, where the host part is the gateway. Port 0 is an error everywhere.
+- **Secrets.** `private_key`, `preshared_key`, `username` and `password` are secrets. No error, warning, log line or API response contains a field's value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read unless started with `--allow-readable-config`; `veilway check` warns.
+- **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
+- **Paths.** A file path in the config is relative to the directory of the config file. Absolute paths and any `..` component are errors.
+- **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users and 16 devices per user.
+- **Errors and warnings.** Validation reports problems with the path of the field, at most 100 errors and 100 warnings followed by a count of the rest. An error refuses the config. A warning lets it load and is logged. Warnings are advice and are not part of the format.
+
+## `version`
+
+Must be the integer `1`.
+
+## `log`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `level` | `error`, `warn`, `info`, `debug`, `trace` | `info` | Lowest level written. `RUST_LOG` overrides it when set. |
+| `destinations` | bool | `false` | Whether log lines at any level may contain the destinations and DNS names users reach. Off by default at every level. |
+
+## `groups`
+
+A list of group names, each matching `[a-z0-9][a-z0-9._-]{0,63}`. A group must be declared here before a user or a rule may name it.
+
+## `dns`
+
+The node answers DNS for its tunnels at each inbound's gateway address.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `servers` | list of `ip:port`, 1 to 4 | required | Upstream resolvers, tried in order with 5 seconds each. |
+| `hijack` | bool | `true` | Answer every UDP and TCP port 53 flow from a tunnel here, whatever address it was sent to. With `false`, only queries sent to a gateway address are answered and other port 53 traffic is routed like any flow. |
+
+A server address may not be loopback, link-local, unspecified, multicast, or inside any inbound pool.
+
+Engine:
+
+- A forwarded query is a flow from that user to the chosen server on port 53. It is routed by the rules like any flow, with `domain` conditions matched against the queried name, it must pass the destination gate of the exit it leaves through, and a `block`, `reject` or not-entitled result answers `REFUSED`.
+- The node remembers, per user, which names it resolved to which addresses: at most 4096 entries per user, each kept for the answer's TTL clamped to between 60 and 3600 seconds. Only answers the node's own resolver obtained are recorded, and answers that contain pool, gateway, loopback or link-local addresses are not. Nothing is cached across users.
+- With `hijack` on, rules with `port: [53]` never see tunnel DNS, and port 53 traffic that is not DNS is dropped. DNS over TLS and DNS over HTTPS pass untouched, and `domain` rules cannot see names resolved that way.
+
+## `inbounds`
+
+An inbound is one tunnel: one key, one address pool, reached over one or more transports. A device keeps the same tunnel address whichever transport it uses.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | |
+| `type` | `wireguard` | required | Stock WireGuard peers. The `veilway` type arrives with the native protocol in Phase 2. |
+| `private_key` | key | required | The tunnel's static key. Secret. Unique across inbounds, compared by the public key derived from it. |
+| `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the address pool for this tunnel. |
+| `mtu` | integer 1280 to 1500 | `1420` | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path. |
+| `transports` | list of 1 to 8 | required | See below. |
+
+Rules for `address`:
+
+- IPv4 prefix from /16 to /30, inside `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16` or `100.64.0.0/10`. IPv6 prefix from /48 to /126, inside `fc00::/7`.
+- The gateway is a host address in the pool, never the network address and, for IPv4, never the broadcast address.
+- Pools of different inbounds do not overlap.
+
+Who may use an inbound is decided by addresses alone: a device belongs to the inbound whose pool contains its address.
+
+### `transports`
+
+| `type` | Keys | Meaning |
+|---|---|---|
+| `udp` | `listen` (`ip:port`) | Plain WireGuard datagrams. |
+| `ws` | `listen` (`ip:port`), `path`, optional `tls` with `cert` and `key` (both required) | One WireGuard datagram per binary WebSocket frame. Without `tls` it serves plain `ws` for a reverse proxy that terminates TLS; validation warns when such a listener is not on a loopback address. |
+
+`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`.
+
+Listen conflicts, across all inbounds:
+
+- IPv6 sockets are always IPv6-only, so `0.0.0.0:443` and `[::]:443` do not conflict. A wildcard address conflicts with every address of its own family on the same port.
+- Two `udp` transports never share an address and port.
+- Two `ws` transports may share an address and port when their `path` differs and their `tls` is identical. Otherwise they conflict.
+
+## `outbounds`
+
+An outbound is a way for the userspace stack to open TCP and UDP flows.
+
+| `type` | Keys | Meaning |
+|---|---|---|
+| `direct` | optional `bind` (a local IP, not a wildcard) | Connects from the node itself. With `bind`, flows of the other address family are rejected. |
+| `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes) | Connects through a SOCKS5 proxy. UDP uses UDP ASSOCIATE when the proxy offers it. |
+
+Every outbound also has a `tag`.
+
+Engine: a `server` host name is resolved by the system resolver at start, on reload and after a failed dial, never through a tunnel exit. The UDP relay address a proxy returns is used only if it is the address the control connection is connected to.
+
+## `exits`
+
+An exit is a named way out that users are routed to.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | |
+| `name` | string, 1 to 64 characters, no control, bidirectional formatting, zero-width, line separator or other invisible characters | the tag | Display name. |
+| `country` | two uppercase letters | none | ISO 3166-1 alpha-2 code shown in clients. Not checked against the ISO list. |
+| `backend` | object | required | See below. |
+
+### `backend`
+
+| `type` | Carries | Keys |
+|---|---|---|
+| `netstack` | TCP and UDP | `outbound` (tag, required), `proxy_only`, `tcp_idle_secs` (10 to 86400, default 7200), `udp_idle_secs` (5 to 3600, default 60), `unsupported` |
+| `l3` | every IP protocol | `interface` (matching `[a-z][a-z0-9_-]{0,14}`, default `veilway0`, unique across exits), `masquerade` (bool, default `true`). Linux only, needs `CAP_NET_ADMIN`: on another system `run` refuses to start. `check` does not look at the system it runs on. |
+| `block` | nothing | none. Every packet is dropped silently. |
+
+### The destination gate
+
+Every exit refuses these destinations, whatever the config says: every address inside an inbound pool (traffic between users never leaves through an exit, see below), the node's own addresses, loopback, link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, unspecified, `0.0.0.0/8`, and IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused.
+
+Private networks are not part of that fixed list. They are ordinary destinations, and routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
+
+### Traffic between users
+
+A packet whose destination lies inside an inbound pool is never sent to an exit. Routing rules still decide about it, and the name `tunnel:users` in a rule's `ip` list stands for every address in every pool except the gateways:
+
+- If the matching rule says `block` or `reject`, the packet is refused. A config that isolates users, which is the normal case, has a rule that rejects `tunnel:users`.
+- Otherwise the packet is delivered inside the node to the device that holds the address, on the same inbound or another one. An address no connected device holds is answered as unreachable.
+
+This is what a shared-network setup for games needs: switch the isolating rule off, or limit it with an `inbound` condition to the tunnels that should stay isolated.
+
+Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and nothing else. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
+
+### `proxy_only` and `unsupported`
+
+`proxy_only` (bool) says that traffic through this exit leaves only through its SOCKS5 proxy. It defaults to `true` when the outbound is `socks5` and must be absent or `false` when the outbound is `direct`.
+
+`unsupported` says what a `netstack` exit does with traffic its outbound cannot carry:
+
+| Key | Applies to | Default | Allowed values |
+|---|---|---|---|
+| `icmp_echo` | ping | `"local"` | `"local"`, `"reject"`, `"drop"`, `"direct"`, `{"via": "<exit tag>"}` |
+| `udp` | UDP when the proxy has no UDP ASSOCIATE (DNS keeps its TCP fallback) | `"reject"` | `"reject"`, `"drop"`, `"direct"`, `{"via": "<exit tag>"}` |
+| `other` | every other IP protocol | `"reject"` | `"reject"`, `"drop"`, `{"via": "<exit tag>"}` |
+
+- `reject` answers with the matching ICMP error. `drop` discards. `local` makes the node answer the ping itself, after the destination gate.
+- `direct` sends from the node's own address around the proxy, and `via` hands the traffic to another exit. Either one is an error unless the exit sets `"proxy_only": false`, and validation still warns for each use.
+- A `via` target must exist, must not be the exit itself, must be an `l3` exit for `icmp_echo` and `other`, and must carry UDP for `udp`. The target's own `unsupported` policy is never consulted, so chains and loops cannot form.
+- On a `direct` outbound, setting `udp` is a warning: it never applies.
+
+Engine: `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start. The `udp` policy is decided once per flow at its first packet and the flow never moves between the proxy and the other path. A destination sent by `direct` or `via` must pass the gate of both exits. A `via` target that cannot carry the packet rejects it. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
+
+## `routing`
+
+The first packet of a flow is matched against `rules` in order. The first match decides, and the whole flow keeps that decision.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `default` | exit tag | required | Used when nothing else chose an exit. |
+| `rules` | list | `[]` | See below. |
+
+### A rule
+
+All conditions present in a rule must hold. Inside one list, any entry may match. A rule needs at least one condition.
+
+| Key | Type | Matches |
+|---|---|---|
+| `tag` | tag | required. The rule's identity for the control API. |
+| `enabled` | bool, default `true` | Not a condition. A disabled rule is validated like any other and skipped when flows are matched. |
+| `inbound` | list of inbound tags | the inbound the packet arrived on |
+| `user` | list of user names | the sending user |
+| `group` | list of group names | any group of the sending user |
+| `ip` | list of networks, or the names `geoip:private` and `tunnel:users` | destination address |
+| `domain` | list of names | a name this user resolved to the destination address through the node. `example.com` matches that name only. `*.example.com` matches every name below it and not `example.com` itself. |
+| `protocol` | list of `tcp`, `udp`, `icmp`, `icmpv6`, `gre`, `esp`, `sctp`, or an integer 0 to 255 | IP protocol. A name and its number are the same entry. |
+| `port` | list of integers 1 to 65535 or strings `"lo-hi"` with `lo <= hi` | destination port. Needs `protocol` present and limited to `tcp`, `udp` and `sctp`. |
+| `icmp_type`, `icmp_code` | lists of integers 0 to 255 | Need `protocol` to be exactly `["icmp"]` or exactly `["icmpv6"]`. `icmp_code` needs `icmp_type`. |
+| `action` | `{"exit": "<tag>"}`, `"user"`, `"block"` or `"reject"` | required |
+
+A domain is lowercase ASCII (punycode for other scripts), at most 253 bytes with labels of 1 to 63, no trailing dot, not an IP address in any spelling (a last label that is all digits, or `0x` followed by hex digits, is refused). `*` may only be the whole first label and needs at least two labels after it.
+
+`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool; those are `tunnel:users`. No other `geoip:` or `tunnel:` name is accepted yet. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
+
+```json
+{"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"},
+{"tag": "no-private", "ip": ["geoip:private"], "action": "reject"}
+```
+
+To let one group reach one private network, put a rule for it before that one. To switch a rule off without deleting it, set `"enabled": false`.
+
+Actions: `{"exit": ...}` sends the flow to that exit. `"user"` sends it to the user's own `exit`, or to `default` when the user has none. `block` drops silently. `reject` answers with an ICMP error, or a TCP reset for TCP. A flow that matches no rule is treated as `"user"`.
+
+### Entitlement
+
+A flow may only leave through an exit in its user's `exits`, whatever chose it: a rule, the user's `exit`, `default`, or a `via`. Otherwise the flow is rejected. It never falls through to another rule.
+
+Validation:
+
+- Error: a rule with a `user` condition sends a named user to an exit outside that user's `exits`.
+- Error: a user with a non-empty restricted `exits` has no `exit` and `default` is not in the list.
+- Warning, with a count of affected users: a rule without a `user` condition can send users to an exit they are not entitled to, directly or through `via`.
+- Error: a rule limited to protocols other than TCP and UDP sends them to a `netstack` exit whose policy for that class is `reject` or `drop`. UDP is never checked, because whether a proxy carries UDP is only known at run time.
+- Warning: a `domain` rule with an `exit` action comes before a `block` or `reject` rule. A user who controls any name matching the pattern can point it at any address, so a `domain` rule is a routing convenience and never a security control.
+- Warning: no enabled rule isolates users for everyone, that is, no enabled rule with `block` or `reject` has `tunnel:users` in `ip` and no other condition. The warning says that users can reach each other's devices, and names the inbounds where that is so when an `inbound` condition limits the rule.
+- Warning: no enabled rule refuses private destinations for everyone, that is, no enabled rule with `block` or `reject` has `geoip:private` in `ip` and no other condition. The warning says that private networks behind the exits are reachable.
+- Warning: an enabled `block` or `reject` rule whose only conditions are `ip`, `protocol` and `port` matches a configured DNS server on port 53 before any rule that would send it to an exit, so the node cannot reach its own resolver.
+- Warning, best effort: a rule is completely covered by a single earlier rule. `check` does this within a fixed budget; a reload does not.
+
+Engine: `protocol` is the upper-layer protocol after walking IPv6 extension headers. Fragments are reassembled before routing, within a per-user bound, or dropped. A packet whose headers cannot be parsed is dropped and counted.
+
+## `users`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | matching `[a-z0-9][a-z0-9._-]{0,63}` | required | Unique. This is the user's identity: usage counters and rules refer to it, and renaming a user is removing one and adding another. |
+| `enabled` | bool | `true` | |
+| `groups` | list of declared group names | `[]` | |
+| `devices` | list of 1 to 16 | required | See below. |
+| `exits` | `"all"` or a list of exit tags | required | Exits the user may leave through. An empty list means none: the user can connect but every flow is rejected, and validation warns. |
+| `exit` | exit tag | none | The user's own exit. Must be in `exits`. |
+| `quota_bytes` | integer 1 to 9007199254740991 | none | Bytes of inner IP traffic, both directions, per period. |
+| `quota_period` | `daily`, `weekly`, `monthly` | none | When the count resets, at 00:00 UTC (weekly on Monday, monthly on the 1st). Needs `quota_bytes`. Without it the quota never resets. |
+| `expires_at` | RFC 3339 timestamp with an explicit offset | none | From this moment the user is treated as disabled. |
+
+### `devices`
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `name` | matching `[a-z0-9][a-z0-9._-]{0,63}` | required | Unique within the user. |
+| `public_key` | key | required | Unique across all devices of all users, and never equal to the public key of an inbound. |
+| `preshared_key` | key | none | Secret. |
+| `addresses` | list of 1 to 16 host addresses, written without a prefix | required | The device's tunnel addresses. |
+
+Each address must lie in the pool of exactly one inbound and may not be that pool's gateway, network or IPv4 broadcast address. A device has at most one IPv4 and one IPv6 address per inbound. No address is used by two devices.
+
+Engine: when a user is disabled, expires, runs out of quota or is removed, or when a device's key or addresses change or it is removed, then within one second the core drops the session keys, resets every flow and clears the DNS memory that belong to it, and logs it at info. Expiry and quota are driven by a timer and by the byte count, not only checked at handshake. A backward step of the node's clock does not re-enable a user. Usage is kept outside this document in a state file keyed by user name, and survives reloads and restarts. Traffic that is rejected or answered locally counts.
+
+## Reloading
+
+Engine. The core reloads on `SIGHUP` and on an apply through the control API. It does not watch the file.
+
+1. The new document is parsed and validated. An error leaves the running config in force and is logged once with the field path.
+2. Prepare: every new listener is bound, every certificate loaded, every device and firewall change staged, while the old config keeps running. Any failure aborts the reload and the old config stays whole.
+3. Commit: the new config replaces the old one in one step. The core logs which inbounds, outbounds, exits, rules and users were added, changed or removed, by tag or name.
+
+After a commit:
+
+- A flow belongs to a user and device, not to an address. A device is identified by its public key across reloads.
+- Every live flow is checked again. It is reset when its exit is gone, its exit's backend or outbound changed, its destination no longer passes the gate, its user is no longer entitled to the exit, or the rules now decide differently for it.
+- Changing an inbound's `private_key`, `address` or `mtu` restarts that tunnel and drops its sessions. Changing one transport restarts that transport only. Changing a tag is removing one object and adding another.
+- Certificates are read again on every reload.
+
+## Commands
+
+```
+veilway check --config config.json
+veilway schema
+```
+
+`check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.

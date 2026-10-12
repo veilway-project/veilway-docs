@@ -1,0 +1,20 @@
+{
+	"name": "veilway-docs",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"description": "Documentation site for Veilway, in English and Persian.",
+	"license": "Apache-2.0",
+	"repository": "https://github.com/veilway-project/veilway-docs",
+	"scripts": {
+		"dev": "astro dev",
+		"build": "astro build"
+	},
+	"engines": {
+		"node": ">=22.12.0"
+	},
+	"dependencies": {
+		"@astrojs/starlight": "^0.42.6",
+		"astro": "^7.3.8"
+	}
+}

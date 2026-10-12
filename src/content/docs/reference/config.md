@@ -153,7 +153,16 @@ A packet whose destination lies inside an inbound pool is never sent to an exit.
 - If the matching rule says `block` or `reject`, the packet is refused. A config that isolates users, which is the normal case, has a rule that rejects `tunnel:users`.
 - Otherwise the packet is delivered inside the node to the device that holds the address, on the same inbound or another one. An address no connected device holds is answered as unreachable.
 
-This is what a shared-network setup for games needs: switch the isolating rule off, or limit it with an `inbound` condition to the tunnels that should stay isolated.
+`tunnel:<inbound tag>`, for example `tunnel:gaming`, stands for the addresses of one inbound only. Together with the `inbound` condition, which says where a packet came from, a rule can be about one tunnel in either direction. An inbound cannot have the tag `users`.
+
+A shared network for games on one tunnel, with every other tunnel isolated, is one rule placed before the isolating rule. Its action `"user"` means "handle normally", which for a destination inside a pool is delivery to that device:
+
+```json
+{"tag": "gaming-lan", "inbound": ["gaming"], "ip": ["tunnel:gaming"], "action": "user"},
+{"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"}
+```
+
+Users on `gaming` reach each other. They do not reach users of other tunnels, and users of other tunnels reach nobody.
 
 Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and nothing else. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
 
@@ -196,7 +205,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 | `inbound` | list of inbound tags | the inbound the packet arrived on |
 | `user` | list of user names | the sending user |
 | `group` | list of group names | any group of the sending user |
-| `ip` | list of networks, or the names `geoip:private` and `tunnel:users` | destination address |
+| `ip` | list of networks, or the names `geoip:private`, `tunnel:users` and `tunnel:<inbound tag>` | destination address |
 | `domain` | list of names | a name this user resolved to the destination address through the node. `example.com` matches that name only. `*.example.com` matches every name below it and not `example.com` itself. |
 | `protocol` | list of `tcp`, `udp`, `icmp`, `icmpv6`, `gre`, `esp`, `sctp`, or an integer 0 to 255 | IP protocol. A name and its number are the same entry. |
 | `port` | list of integers 1 to 65535 or strings `"lo-hi"` with `lo <= hi` | destination port. Needs `protocol` present and limited to `tcp`, `udp` and `sctp`. |
@@ -205,7 +214,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 
 A domain is lowercase ASCII (punycode for other scripts), at most 253 bytes with labels of 1 to 63, no trailing dot, not an IP address in any spelling (a last label that is all digits, or `0x` followed by hex digits, is refused). `*` may only be the whole first label and needs at least two labels after it.
 
-`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool; those are `tunnel:users`. No other `geoip:` or `tunnel:` name is accepted yet. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
+`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool; those are `tunnel:users`. No other `geoip:` name is accepted yet, and a `tunnel:` name must be `users` or the tag of an inbound. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
 
 ```json
 {"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"},

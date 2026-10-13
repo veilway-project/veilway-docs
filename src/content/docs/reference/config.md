@@ -146,6 +146,9 @@ Engine, `l3`:
 - Only one `l3` exit can run on a node for now; a second is refused at start. The host needs `ip` (iproute2) and `nft` (nftables).
 - With `masquerade` true the node turns on forwarding for the whole host if it is off and sets it back when it stops (it stays on if the node is killed). With `masquerade` false the node still loads a small nftables table named `veilway_<interface>` that keeps tunnel traffic away from the host itself.
 - Return traffic is delivered only when it belongs to a live flow that left through that exit. Flows through an `l3` exit idle out after 7200 seconds for TCP and 60 for UDP.
+- An `l3` exit can go down while the node runs: its interface was removed under the node, or a reload closed the interface and could set up neither the new one nor the old one again. The node then tries to bring the interface up again with the config that is in force, 2 seconds after it went down and then after twice the wait each time, once a minute at most, until it is up.
+- While the exit is down, traffic routed to it is answered as unreachable (a reset for TCP, host unreachable for everything else, counted under `unreachable` in the drop counters). It never leaves through another exit. The node logs a warning with the step that failed when the exit goes down and for every try that fails, and an info line when it is up again. `GET /v1/exits` shows the state in `interface_up`, `interface_down_secs` and `interface_flips`.
+- A reload that leaves the `l3` exit as it is goes through while the exit is down, and makes the node try at once. A reload that changes or removes the exit ends the tries for the old one. Stopping the node ends them too and leaves no interface, route, nftables table or sysctl behind.
 
 ### The destination gate
 
@@ -293,11 +296,15 @@ Engine: when a user is disabled, expires, runs out of quota or is removed, or wh
 Engine. Usage never lives in the config document. It is kept in one state file (see `--state` under Commands) and survives reloads and restarts. Without a state file path the node keeps usage in memory only and it is lost on restart.
 
 - **Counting.** `quota_bytes` counts inner IP bytes in both directions. Traffic that is rejected or answered locally counts too.
-- **Over quota.** A user at or over quota is cut off by the same path as a disabled user, within one second, and the info log line names quota as the reason. The user cannot shake hands again until the period rolls over or a reload raises or removes the quota.
-- **Period.** Without `quota_period` the count never resets. With it the count resets at 00:00 UTC (weekly on Monday, monthly on the 1st). A backward step of the clock never resets a count and never re-enables a user: the start of a period only moves forward.
+- **Over quota.** A user at or over quota is cut off by the same path as a disabled user, within one second, and the info log line names quota as the reason. The user cannot shake hands again until the period rolls over, a reload raises or removes the quota, or the operator resets the user's usage.
+- **Period.** Without `quota_period` the count never resets by itself. With it the count resets at 00:00 UTC (weekly on Monday, monthly on the 1st).
+- **Clock steps back.** A backward step of the clock by less than one period never resets a count and never re-enables a user, at that moment or when the clock moves forward again. The period start stays where it was.
+- **A period start far in the future.** A period start that lies more than one whole period after the node's clock (more than 1 day for `daily`, 7 days for `weekly`, 31 days for `monthly`) is not trusted. It can come from a state file that was edited or written while the clock was wrong, or from a clock that was ahead by more than a period and was then set right. Left alone, such a count would not reset until the clock reached that time, which can be years. So the node sets the period start to the start of the period its clock is in, keeps `used_bytes`, and logs one warning that names the user. This is checked when the state file is loaded and four times a second while the node runs. The price: a clock that jumps back by more than a period and then forward again gives that period's quota a second time. Keep the node's clock synchronised.
+- **Without `quota_period`.** Any period start after the node's clock is set to `0` with `used_bytes` kept and one warning. Nothing resets by itself for such a user, so this costs nothing.
+- **Reset by the operator.** `veilway usage reset --user <name>`, or `POST /v1/users/{name}/usage/reset` on the control API, sets `used_bytes` to 0 and the period start to the start of the current period. A user who was over quota can connect again at once, without a reload. Lifetime totals are kept unless `--totals` (`"totals": true`) is given. See Commands and the control API reference.
 - **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. They are totals; rates are computed by whoever polls. Counters follow names and tags across reloads. Exit counters count inner IP packets and bytes where a packet is handed to or taken from the exit, and a flow that leaves by way of another exit (`via`) is counted on the exit that carries it and not on the exit the rule chose.
 - **State file.** Versioned JSON keyed by user name. Per user it holds the bytes used in the current quota period, the start of that period, and lifetime totals (up and down, bytes and packets).
-- **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename. It is written at most once every 10 seconds and only when something changed, once more on shutdown, and right after a user is cut off for quota. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
+- **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename. It is written at most once every 10 seconds and only when something changed, once more on shutdown, right after a user is cut off for quota, and right after a usage reset. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
 - **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended, logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not a valid entry is skipped and only that user starts from zero. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
 - **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it. Renaming a user is removing one and adding another, so it starts from zero.
 
@@ -326,12 +333,36 @@ veilway run --config config.json --no-api
 veilway check --config config.json
 veilway doctor --config config.json
 veilway doctor --config config.json --json --timeout 3
+veilway usage reset --user alice
+veilway usage reset --user alice --totals --api /run/veilway/veilway.sock
 veilway schema
 ```
 
 `run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.
 
 `doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
+
+`usage reset` starts one user's quota count over on a node that is running. It talks to the node through the control socket, so it exists on Unix only and needs a node started without `--no-api`. It does not read or change the config file or the state file itself.
+
+| Flag | Meaning |
+|---|---|
+| `--user <name>` | The user to reset. Required. |
+| `--totals` | Also zero the user's lifetime totals (up and down, bytes and packets). Without it they are kept. |
+| `--api <path>` | The control socket of the node. Default: `veilway.sock` next to the config file. |
+| `--config <file>` | Only used to find the default socket path. Default: `config.json`. |
+
+On success it prints one line with the new `used_bytes` and `period_start`, and says so if the user still cannot connect because they are disabled or expired. Errors go to standard error.
+
+| Exit status | Meaning |
+|---|---|
+| 0 | The usage was reset. |
+| 1 | Anything else: the node answered with another error, or did not answer within 30 seconds. |
+| 2 | Wrong command line, for example no `--user`. |
+| 3 | The running config has no user of that name. Nothing was changed. |
+| 4 | No node answers on the socket: nothing is at the path, or a node that was killed left its socket behind. |
+| 5 | This user may not open the socket. Run the command as the user the node runs as, or as root. |
+
+Running it twice is safe: the second run sets the count to 0 again and changes nothing more.
 
 Each check prints one line: its status, the kind of check, what it looked at, and one sentence on what was found and, on `warn` and `fail`, what to do about it. The checks run in this order:
 
@@ -341,7 +372,7 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 4. Every certificate and key of a `ws` transport: both load, the key matches the certificate, the certificate is not expired and not yet valid, and the names it covers. Under 14 days left is a warning.
 5. Every DNS server of the config: one query over UDP and the same query over TCP from the node itself, with the answer time. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
 6. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires.
-7. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free.
+7. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free. When a running node has the exit and its interface is not there, a warning says the exit is down and being retried.
 8. ICMP ping sockets, when a policy uses `icmp_echo: direct`.
 9. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses. Then the control socket path: what is there, and whether its directory can be written.
 

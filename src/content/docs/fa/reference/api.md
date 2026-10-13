@@ -32,7 +32,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 
 ## درخواست‌ها و پاسخ‌ها
 
-- همهٔ بدنه‌ها JSON هستند. درخواستی که سند پیکربندی دارد باید با `Content-Type: application/json` فرستاده شود.
+- همهٔ بدنه‌ها JSON هستند. درخواستی که بدنه دارد باید با `Content-Type: application/json` فرستاده شود.
 - هر پاسخی که موفقیت نیست این شکل را دارد، با وضعیتی که به آن بخورد:
 
 ```json
@@ -54,13 +54,14 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | 400 | `bad_request` | بدنه تا انتها خوانده نشد. |
 | 400 | `bad_json` | بدنه یک سند JSON نیست. |
 | 404 | `not_found` | چنین مسیری وجود ندارد. |
-| 404 | `user_not_found` | `GET /v1/users/{name}` برای نامی که پیکربندی در حال اجرا ندارد. |
+| 404 | `user_not_found` | `GET /v1/users/{name}` یا ریست مصرف برای نامی که پیکربندی در حال اجرا ندارد. |
 | 405 | `method_not_allowed` | مسیر این متد را نمی‌پذیرد. |
-| 408 | `request_timeout` | درخواست در 30 ثانیه تمام نشد. برای apply پایین‌تر را ببینید. |
+| 408 | `request_timeout` | درخواست در 30 ثانیه تمام نشد. برای apply و ریست مصرف پایین‌تر را ببینید. |
 | 409 | `stale_revision` | `If-Match` ریویژنِ در حال اجرا را نشان نمی‌دهد. |
 | 413 | `body_too_large` | بدنه از 4 MiB بزرگ‌تر است. |
 | 415 | `unsupported_media_type` | بدنه با `application/json` فرستاده نشد. |
 | 422 | `config_invalid` | سند خطا دارد. `details` آن‌ها را فهرست می‌کند. چیزی تغییر نکرد. |
+| 422 | `body_invalid` | بدنهٔ ریست مصرف JSON است ولی `{"totals": true}` یا `{"totals": false}` یا `{}` نیست. چیزی تغییر نکرد. |
 | 422 | `config_not_prepared` | سند معتبر است ولی گره نتوانست آن را آماده کند (مثلاً شنونده‌ای که bind نمی‌شود). چیزی تغییر نکرد. |
 | 428 | `precondition_required` | apply بدون هدر `If-Match`. |
 | 503 | `too_many_connections` | گره همین حالا 64 اتصال را سرویس می‌دهد. |
@@ -77,6 +78,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | PUT | `/v1/config` | سند را اعمال می‌کند |
 | GET | `/v1/users` | همهٔ کاربران |
 | GET | `/v1/users/{name}` | یک کاربر |
+| POST | `/v1/users/{name}/usage/reset` | شمارش سهمیهٔ کاربر را از نو شروع می‌کند و کاربر را برمی‌گرداند |
 | GET | `/v1/stats` | همهٔ شمارنده‌ها با نرخ زنده |
 | GET | `/v1/sessions` | دستگاه‌های دارای نشست زنده |
 | GET | `/v1/exits` | هر نقطهٔ خروج با سلامت upstream آن |
@@ -186,11 +188,42 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | `expires_at` | مثل پیکربندی، یا `null`. |
 | `quota_bytes`، `quota_period` | مثل پیکربندی، یا `null`. |
 | `used_bytes` | بایت‌های هر دو جهت از `period_start`. |
-| `period_start` | آخرین باری که شمارش از نو شروع شد، به ثانیهٔ یونیکس. برای کاربری که هرگز `quota_period` نداشته `0` است. |
+| `period_start` | آخرین باری که شمارش از نو شروع شد، به ثانیهٔ یونیکس. برای کاربری که هرگز `quota_period` نداشته، یا هنگام آخرین ریست مصرفش نداشته، `0` است. |
 | `traffic` | شمارنده‌های طول عمر: `up_bytes`، `up_packets`، `down_bytes`، `down_packets`. up یعنی از دستگاه به گره. |
 | `devices` | برای هر دستگاه: `name`، `public_key`، `addresses`، `handshake_age_secs` (ثانیه‌های گذشته از ساخته‌شدن نشستش، بدون نشست `null`). |
 
 کلید preshared هرگز در آن نیست.
+
+### `POST /v1/users/{name}/usage/reset`
+
+شمارش سهمیهٔ یک کاربر را از نو شروع می‌کند. دستور `veilway usage reset` همین مسیر را صدا می‌زند.
+
+| | |
+|---|---|
+| بدنه | اختیاری. `{"totals": true}` یا `{"totals": false}`. بدون بدنه یعنی `false`. |
+| `used_bytes` | `0` می‌شود. |
+| `period_start` | آغاز دورهٔ سهمیه‌ای می‌شود که ساعت گره در آن است (00:00 UTC همان روز، دوشنبه یا روز اول ماه). برای کاربر بدون `quota_period` برابر `0`. |
+| `traffic` | می‌ماند. با `"totals": true` چهار شمارندهٔ طول عمر هم `0` می‌شوند. |
+
+| وضعیت | معنی |
+|---|---|
+| 200 | انجام شد. بدنه همان کاربر است، دقیقاً مثل پاسخ `GET /v1/users/{name}`. |
+| 404 | `user_not_found`. چیزی تغییر نکرد. |
+| 400، 413، 415 | `bad_json`، `body_too_large`، `unsupported_media_type`، برای بدنه‌ای که فرستاده شده و قابل استفاده نیست. چیزی تغییر نکرد. |
+| 422 | `body_invalid`: بدنه JSON است ولی فیلدی جز `totals` دارد، یا `totals` برابر `true` یا `false` نیست. چیزی تغییر نکرد. |
+
+- **عبور از سهمیه.** کاربری که به‌دلیل سهمیه قطع شده بود به‌محض فرستاده‌شدن پاسخ می‌تواند دوباره وصل شود. بارگذاری مجدد لازم نیست. کاربری که غیرفعال یا منقضی است همچنان رد می‌شود و `denied` در پاسخ همین را می‌گوید.
+- **چیز دیگری عوض نمی‌شود.** نشست‌ها، جریان‌ها و پیکربندی همان می‌مانند. به کاربران دیگر دست زده نمی‌شود.
+- **فایل state.** ریست پیش از پاسخ در فایل state نوشته می‌شود، نه در نوشتن 10 ثانیه‌ای بعدی. اگر آن نوشتن شکست بخورد یا بیش از 5 ثانیه طول بکشد، ریست همچنان اعمال شده است، شکست لاگ می‌شود و در `state_write_failures` شمرده می‌شود، و نوشتن دوباره تلاش می‌شود.
+- **تکرار.** فرستادن دوبارهٔ همان درخواست بی‌خطر است. شمارش را دوباره `0` می‌کند و چیز دیگری را تغییر نمی‌دهد.
+- **رویدادها.** یک رویداد `usage_reset` فرستاده می‌شود، و اگر کاربر از سهمیه گذشته بود پس از آن `user_restored`.
+- **لاگ.** یک خط info با نام کاربر، شمارش پیش از ریست و اینکه مجموع‌ها صفر شدند یا نه.
+- **مهلت.** 30 ثانیه فقط خواندن بدنه را می‌پوشاند. وقتی گره ریست را شروع کرد، پاسخ منتظرش می‌ماند و برای ریستی که بعد انجام می‌شود هرگز `408` فرستاده نمی‌شود.
+
+```
+curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/reset
+curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/reset -H 'Content-Type: application/json' --data '{"totals": true}'
+```
 
 ### `GET /v1/stats`
 
@@ -224,6 +257,9 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | `udp` | تا آنجا که گره می‌داند، آیا پروکسی SOCKS5 این خروجی UDP را رله می‌کند. برای خروجی بدون پروکسی SOCKS5 `null`. |
 | `udp_down_secs` | ثانیه‌های گذشته از آخرین باری که پروکسی رله‌کردن UDP را رد کرد. گره هر یک دقیقه دوباره امتحان می‌کند. مگر وقتی `udp` برابر `false` باشد `null` است. |
 | `udp_flips` | چند بار پروکسی بین رله‌کردن UDP و نکردن جابه‌جا شد. |
+| `interface_up` | آیا رابط بک‌اند `l3` بالا است. تا وقتی `false` است، ترافیکی که به این خروجی مسیریابی شده پاسخ «غیرقابل دسترس» می‌گیرد و گره دوباره برای برپا کردن رابط تلاش می‌کند: 2 ثانیه پس از افتادن، بعد هر بار با دو برابر فاصلهٔ قبلی، حداکثر هر یک دقیقه یک بار. برای هر بک‌اند دیگر `null`. |
+| `interface_down_secs` | ثانیه‌های گذشته از افتادن رابط. مگر وقتی `interface_up` برابر `false` باشد `null` است. |
+| `interface_flips` | چند بار رابط بین بالا و پایین جابه‌جا شد. |
 | `traffic` | شمارنده‌ها، مثل کاربر. |
 
 ## رویدادها
@@ -236,6 +272,7 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | `config_refused` | `stage` (`validate` یا `prepare`) و `errors` (تعدادشان). reload یا applyای که پیکربندی در حال اجرا را سر جایش گذاشت. |
 | `user_cut_off` | `user` و `reason`: `disabled`، `expired`، `quota` یا `removed`. |
 | `user_restored` | `user`. |
+| `usage_reset` | `user` و `totals` (اینکه شمارنده‌های طول عمر هم صفر شدند یا نه). برای هر ریست مصرف فرستاده می‌شود. |
 | `exit_udp_changed` | `exit` و `udp` (وضعیت تازه). |
 | `stats` | عکس لحظه‌ای `/v1/stats`، هر ثانیه. فقط وقتی ساخته می‌شود که کسی جریان را می‌خواند. |
 | `lagged` | `missed`. `id` ندارد. |
@@ -287,7 +324,7 @@ for await (const event of client.events()) {
 }
 ```
 
-متدها: `status`، `getConfig`، `validateConfig`، `diffConfig`، `applyConfig`، `listUsers`، `getUser`، `stats`، `listSessions`، `listExits` و `events`. هر شکستی به شکل `VeilwayError` با `status`، `code`، `message` و `details` پرتاب می‌شود. `events` وقتی گره جریان را ببندد یا signal لغو شود تمام می‌شود و رویدادهای `lagged` را هم می‌دهد.
+متدها: `status`، `getConfig`، `validateConfig`، `diffConfig`، `applyConfig`، `listUsers`، `getUser`، `resetUsage`، `stats`، `listSessions`، `listExits` و `events`. هر شکستی به شکل `VeilwayError` با `status`، `code`، `message` و `details` پرتاب می‌شود. `resetUsage(name, {totals: true})` مصرف یک کاربر را ریست می‌کند و کاربر را برمی‌گرداند. `events` وقتی گره جریان را ببندد یا signal لغو شود تمام می‌شود و رویدادهای `lagged` را هم می‌دهد.
 
 ## هنوز ساخته نشده
 

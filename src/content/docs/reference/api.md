@@ -32,7 +32,7 @@ The host name in the URL is never looked up over a unix socket, so any name work
 
 ## Requests and answers
 
-- All bodies are JSON. A request that carries a config document must be sent with `Content-Type: application/json`.
+- All bodies are JSON. A request that carries a body must be sent with `Content-Type: application/json`.
 - Every answer that is not a success has this shape, with a status that fits it:
 
 ```json
@@ -54,13 +54,14 @@ No answer, event or log line of the API contains the value of a secret (`private
 | 400 | `bad_request` | The body could not be read to its end. |
 | 400 | `bad_json` | The body is not one JSON document. |
 | 404 | `not_found` | No such route. |
-| 404 | `user_not_found` | `GET /v1/users/{name}` for a name the running config does not have. |
+| 404 | `user_not_found` | `GET /v1/users/{name}` or a usage reset for a name the running config does not have. |
 | 405 | `method_not_allowed` | The route does not take that method. |
-| 408 | `request_timeout` | The request was not finished within 30 seconds. For an apply, see below. |
+| 408 | `request_timeout` | The request was not finished within 30 seconds. For an apply and a usage reset, see below. |
 | 409 | `stale_revision` | `If-Match` does not name the revision that runs. |
 | 413 | `body_too_large` | The body is larger than 4 MiB. |
 | 415 | `unsupported_media_type` | The body was not sent as `application/json`. |
 | 422 | `config_invalid` | The document has errors. `details` lists them. Nothing was changed. |
+| 422 | `body_invalid` | The body of a usage reset is JSON but not `{"totals": true}` or `{"totals": false}` or `{}`. Nothing was changed. |
 | 422 | `config_not_prepared` | The document is valid but the node could not prepare it (for example a listener that cannot bind). Nothing was changed. |
 | 428 | `precondition_required` | An apply without the header `If-Match`. |
 | 503 | `too_many_connections` | The node already serves 64 connections. |
@@ -77,6 +78,7 @@ No answer, event or log line of the API contains the value of a secret (`private
 | PUT | `/v1/config` | Puts a document in force |
 | GET | `/v1/users` | Every user |
 | GET | `/v1/users/{name}` | One user |
+| POST | `/v1/users/{name}/usage/reset` | Starts the user's quota count over, and answers with the user |
 | GET | `/v1/stats` | All counters with live rates |
 | GET | `/v1/sessions` | Devices with a live session |
 | GET | `/v1/exits` | Every exit with its upstream health |
@@ -186,11 +188,42 @@ The list answers `{"users": [...]}`. The single route answers one user, or `404 
 | `expires_at` | As in the config, or `null`. |
 | `quota_bytes`, `quota_period` | As in the config, or `null`. |
 | `used_bytes` | Bytes in both directions since `period_start`. |
-| `period_start` | When the count last started over, in Unix seconds. `0` for a user who never had a `quota_period`. |
+| `period_start` | When the count last started over, in Unix seconds. `0` for a user who never had a `quota_period`, or who had none when their usage was last reset. |
 | `traffic` | Lifetime counters: `up_bytes`, `up_packets`, `down_bytes`, `down_packets`. Up is from the device into the node. |
 | `devices` | Per device: `name`, `public_key`, `addresses`, `handshake_age_secs` (seconds since its session was made, `null` without a session). |
 
 A preshared key is never part of it.
+
+### `POST /v1/users/{name}/usage/reset`
+
+Starts one user's quota count over. This is the route behind `veilway usage reset`.
+
+| | |
+|---|---|
+| Body | Optional. `{"totals": true}` or `{"totals": false}`. No body means `false`. |
+| `used_bytes` | Set to `0`. |
+| `period_start` | Set to the start of the quota period the node's clock is in (00:00 UTC of the day, of Monday or of the 1st). `0` for a user without a `quota_period`. |
+| `traffic` | Kept. With `"totals": true` the four lifetime counters go back to `0` as well. |
+
+| Status | Meaning |
+|---|---|
+| 200 | Done. The body is the user, exactly as `GET /v1/users/{name}` gives them. |
+| 404 | `user_not_found`. Nothing was changed. |
+| 400, 413, 415 | `bad_json`, `body_too_large`, `unsupported_media_type`, for a body that is sent and is not usable. Nothing was changed. |
+| 422 | `body_invalid`: the body is JSON but has another field than `totals`, or `totals` is not `true` or `false`. Nothing was changed. |
+
+- **Over quota.** A user who was cut off for quota can connect again as soon as the answer is sent. No reload is needed. A user who is disabled or expired stays denied, and `denied` in the answer says so.
+- **Nothing else changes.** Sessions, flows and the config stay as they are. Other users are not touched.
+- **State file.** The reset is written to the state file before the answer, not at the next 10-second write. If that write fails or takes longer than 5 seconds, the reset is still in force, the failure is logged and counted in `state_write_failures`, and the write is tried again.
+- **Repeat.** Sending the same request again is safe. It sets the count to `0` again and changes nothing more.
+- **Events.** A `usage_reset` event is sent, followed by `user_restored` when the user was out of quota.
+- **Log.** One info line with the user's name, the count before the reset and whether the totals were zeroed.
+- **Time limit.** The 30 seconds cover reading the body. Once the node has begun the reset, the answer waits for it, and a `408` is never sent for a reset that then happens.
+
+```
+curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/reset
+curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/reset -H 'Content-Type: application/json' --data '{"totals": true}'
+```
 
 ### `GET /v1/stats`
 
@@ -224,6 +257,9 @@ The address a device connects from is not part of a session. It is never put in 
 | `udp` | Whether the SOCKS5 proxy of the exit relays UDP as far as the node knows. `null` for an exit without a SOCKS5 proxy. |
 | `udp_down_secs` | Seconds since the proxy last refused to relay UDP. The node tries again once a minute. `null` unless `udp` is `false`. |
 | `udp_flips` | How often the proxy switched between relaying UDP and not. |
+| `interface_up` | Whether the interface of an `l3` backend is up. While it is `false`, traffic routed to the exit is answered as unreachable and the node tries to bring the interface up again: 2 seconds after it went down, then after twice the wait each time, once a minute at most. `null` for any other backend. |
+| `interface_down_secs` | Seconds since the interface went down. `null` unless `interface_up` is `false`. |
+| `interface_flips` | How often the interface switched between up and down. |
 | `traffic` | Counters, as for a user. |
 
 ## Events
@@ -236,6 +272,7 @@ The address a device connects from is not part of a session. It is never put in 
 | `config_refused` | `stage` (`validate` or `prepare`) and `errors` (their count). A reload or apply that left the running config in force. |
 | `user_cut_off` | `user` and `reason`: `disabled`, `expired`, `quota` or `removed`. |
 | `user_restored` | `user`. |
+| `usage_reset` | `user` and `totals` (whether the lifetime counters were zeroed too). Sent for every usage reset. |
 | `exit_udp_changed` | `exit` and `udp` (the new state). |
 | `stats` | The snapshot of `/v1/stats`, once a second. Only made while somebody reads the stream. |
 | `lagged` | `missed`. Has no `id`. |
@@ -287,7 +324,7 @@ for await (const event of client.events()) {
 }
 ```
 
-Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `stats`, `listSessions`, `listExits` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
+Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `resetUsage`, `stats`, `listSessions`, `listExits` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `resetUsage(name, {totals: true})` resets a user's usage and returns the user. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
 
 ## Not built yet
 

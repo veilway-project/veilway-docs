@@ -58,6 +58,10 @@ No answer, event or log line of the API contains the value of a secret (`private
 | 405 | `method_not_allowed` | The route does not take that method. |
 | 408 | `request_timeout` | The request was not finished within 30 seconds. For an apply and a usage reset, see below. |
 | 409 | `stale_revision` | `If-Match` does not name the revision that runs. |
+| 409 | `replay_absent` | A reset of the replay memory on a node that keeps none, because it has run no obfuscated transport. Nothing was changed. |
+| 409 | `replay_busy` | A reset of the replay memory while an earlier one is not known to be on disk, or while the node stops. Nothing was changed. |
+| 500 | `replay_unwritten` | A reset of the replay memory whose file could not be written. See the route. |
+| 500 | `replay_writing` | A reset of the replay memory whose write has not ended after 10 seconds and may still land. Do not ask again. See the route. |
 | 413 | `body_too_large` | The body is larger than 4 MiB. |
 | 415 | `unsupported_media_type` | The body was not sent as `application/json`. |
 | 422 | `config_invalid` | The document has errors. `details` lists them. Nothing was changed. |
@@ -79,6 +83,7 @@ No answer, event or log line of the API contains the value of a secret (`private
 | GET | `/v1/users` | Every user |
 | GET | `/v1/users/{name}` | One user |
 | POST | `/v1/users/{name}/usage/reset` | Starts the user's quota count over, and answers with the user |
+| POST | `/v1/replay/reset` | Resets the replay memory of the obfuscated transports, and answers with it |
 | GET | `/v1/stats` | All counters with live rates |
 | GET | `/v1/sessions` | Devices with a live session |
 | GET | `/v1/exits` | Every exit with its upstream health |
@@ -120,9 +125,9 @@ Body: a config document. Nothing changes. The answer holds `valid`, `report` as 
 | `diff` field | Meaning |
 |---|---|
 | `inbounds`, `outbounds`, `exits`, `rules`, `users` | `{"added", "changed", "removed"}`, each a list of tags (names for users). |
-| `dns`, `log`, `routing_default`, `rules_reordered`, `notices` | `true` when that part changed. |
-| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type` alone changed is listed with `restart` false and both lists empty. |
-| `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed`, `devices_secrets_changed` (devices by public key) and `lost_access`. `devices_secrets_changed` lists the kept devices whose `transport_secrets` are not the ones they were; a control connection that proved a secret that is gone is closed. |
+| `dns`, `log`, `routing_default`, `rules_reordered`, `notices`, `replay` | `true` when that part changed. For `replay`, the rate per source is in force at once and the cache size from the next start of the node. |
+| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type` or `padding` alone changed is listed with `restart` false and both lists empty. Adding a `udp-obfs` transport to an inbound with no `mtu` written is a `restart`: its `mtu` goes from 1420 to 1390. |
+| `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed`, `devices_secrets_changed` (devices by public key) and `lost_access`. `devices_secrets_changed` lists the kept devices whose `transport_secrets` are not the ones they were; a control connection that proved a secret that is gone is closed, and a `udp-obfs` session that was opened with it ends. |
 
 An outbound whose `username` or `password` is written out in the document, instead of left as the marker, is listed as changed whatever the values are. Otherwise "not changed" would tell whoever guessed a password that the guess was right.
 
@@ -227,6 +232,31 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/rese
 curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/reset -H 'Content-Type: application/json' --data '{"totals": true}'
 ```
 
+### `POST /v1/replay/reset`
+
+Resets the replay memory of the obfuscated transports. This is the route behind `veilway replay reset`, and it is for one state only: the floor of the replay memory is ahead of the node's clock, after the clock ran ahead, and the node refuses every device. The [config reference](../config/) describes that state under `replay`.
+
+The request has no body. The cache of accepted proofs is emptied, and the floor and the limit become the node's clock plus 60 seconds, also when that is lower than before. The replay file is written before the answer and before the next proof is accepted.
+
+It costs two things:
+
+- Every client is refused for 60 seconds.
+- A proof that was accepted with a timestamp above the new floor is forgotten. Whoever recorded it can use it once more when the clock reaches that timestamp.
+
+| Status | Meaning |
+|---|---|
+| 200 | Done and on disk. The body is the replay memory after the reset, as `replay` of `/v1/stats` gives it. |
+| 409 | `replay_absent`: the node has run no obfuscated transport and keeps no replay memory. `replay_busy`: an earlier reset is not known to be on disk yet, or the node is stopping. Nothing was changed. |
+| 500 | `replay_unwritten`: the replay file could not be written, so the reset may or may not be on disk. The node accepts no proof until it has written the floor and the limit it had back, which it tries once a second. Then they are in force again and the reset has to be asked for again. `replay_writing`: the write has not ended after 10 seconds. The reset is in force when it does, so do not ask again: poll `GET /v1/stats`, where `replay.resets` grows by one when the reset has landed and `replay.ready` is false while the node accepts no proof. |
+
+- **Nothing else changes.** Usage, quotas, sessions that are open, flows and the config stay as they are.
+- **Log.** One warn line with the floor and the limit before and after, and how many proofs were forgotten.
+- **Time limit.** The answer waits for the node for 10 seconds. A write that has not ended by then is answered `replay_writing`, never "ask again": a second reset would cost another 60 seconds. A `408` is never sent for a reset that then happens.
+
+```
+curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
+```
+
 ### `GET /v1/stats`
 
 One snapshot of every counter, with rates in bytes per second. The node samples its counters once a second, and a rate is the growth between the oldest and the newest of the last 5 seconds of samples.
@@ -240,11 +270,44 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `flows` | Flows in the flow table right now. |
 | `ws_stalled`, `ws_refused` | WebSocket connections dropped because they never finished the upgrade, and refused at accept. |
 | `state_write_failures` | Writes of the usage state file that failed since start. |
+| `send_failed` | Datagrams the node made for a device and no socket took, over every transport of every inbound. A `veilway` inbound never fragments, so a packet larger than the host's interface carries is counted here and not sent, and logged at info once a minute: lower the inbound's `mtu` when this grows. |
 | `control` | What the control channel of the `veilway` inbounds did since start: `accepted` and `authenticated` connections, connections closed for `auth_failed`, `malformed`, `timed_out` (the opening took over 10 seconds) and `replaced` (a newer connection of the device took the place), requests answered `rate_limited`, `exits_selected`, `exits_refused` and `exits_dropped` (by a reload), `probe_runs`, `probes_confirmed`, `probes_sent`, `probes_refused`, `mtus_set`, `byes`, and `open`, the authenticated connections right now. All zero on a node without a `veilway` inbound. |
+| `udp_obfs` | What the `udp-obfs` transports did since start, and what they hold now. See below. All zero on a node without one. |
+| `replay` | The replay memory of the obfuscated transports. `null` on a node that has run none. See below. |
+
+`udp_obfs`. No counter names an address, a tag or a key, and a datagram that is dropped got no answer whatever its reason:
+
+| Field | Meaning |
+|---|---|
+| `pending`, `sessions` | Right now: sessions whose opening packet was accepted and on which WireGuard has not authenticated yet, and established sessions. `sessions` includes those that a newer session from the same source replaced and that stay readable for 10 seconds. |
+| `tags` | Epoch tags in the tag tables right now: three for each transport secret of each device that may connect. |
+| `opened`, `established` | Opening packets that were accepted, and sessions that became established. |
+| `sent` | Packets the listeners made for a socket. Every one is a data packet of an established session, so a node that only strangers talk to has 0 here. |
+| `waited`, `spent` | Opening packets that were kept until a higher limit was written and then taken to the replay rule again, and opening packets a limit refused whose salt was recorded as used, so that nobody who saw one can use it later. A device has an allowance of 16 such records at once and 1 a second; a refused packet beyond it is not recorded. |
+| `short`, `unknown`, `open_failed` | Datagrams shorter than a data packet. Datagrams that are no packet of a session at their source and whose tag is not in the tag table: every datagram of a stranger is counted here. And datagrams whose tag is in the table and that do not open: the sender holds a tag of this epoch without the device's secret, or the packet was changed on its way. |
+| `window`, `floor`, `seen`, `cache_full` | Opening packets of a device that the replay rule refused: a timestamp more than 60 seconds off the node's clock, one at or below the floor, a packet that was accepted before, and any while the cache is full. `window` that grows for one device points at a wrong clock on that device or on the node. |
+| `limit`, `no_replay` | Opening packets with a timestamp above the written limit that were dropped, because the listener already kept 64 others or no write ended within 2 seconds, and those that came while the node took no proof at all. |
+| `source_devices`, `pool`, `pending_full`, `device_rate`, `source_rate` | Opening packets refused by a limit: the source has sessions of 4 other devices, the listener's `limits.sessions` is reached, the device has 2 pending sessions, the device's allowance (16, then 1 a second) or the source's (`replay.per_source`) is spent. |
+| `handshakes`, `tunnel`, `unsendable` | WireGuard handshake initiations above a session's allowance (3, then 1 a second), datagrams inside a session that WireGuard did not take as a packet of the session's device, and packets the node could not make. |
+| `ended_deadline`, `ended_idle`, `ended_packets`, `ended_replaced`, `ended_displaced`, `ended_revoked` | Sessions that ended: no WireGuard packet within 10 seconds of the opening packet, no activity for 180 seconds, 2^31 packets sent, a newer session of the same source and device, the device's ninth session, and a device that was cut off for any reason or a transport secret the config no longer has. |
+| `table_rebuilds`, `table_rebuilds_late`, `table_build_failures`, `tag_collisions` | How often a tag table was built for a new epoch (every 120 seconds for each inbound), how often that was more than 10 seconds late, how often a build did not end and the table before stayed, and tags that were left out because another secret had the same, which never happens with random secrets. |
+
+`replay`. Times are Unix seconds on the node's clock:
+
+| Field | Meaning |
+|---|---|
+| `ready` | `false` while no proof is accepted at all: a reset whose file is not known to be on disk. |
+| `clock`, `floor`, `limit` | The node's clock, the time up to which proofs are refused, and the time above which a proof is not accepted before a higher limit is written. While the node runs, `limit` is 10 to 20 seconds ahead of `clock`. |
+| `disk_limit` | The highest limit that may be on disk, which a start after a kill takes as its floor. |
+| `entries`, `capacity` | Proofs in the cache, and `replay.cache` as the node was started with. |
+| `refusing_secs` | How many seconds the floor is ahead of the clock, whatever the cause. For that long proofs with a right clock are refused. Up to 80 after a start or a reset, which passes by itself. |
+| `floor_ahead`, `refused_floor_ahead` | Whether the floor is ahead of the clock in a way no start explains, more than 80 seconds or risen while the node ran, which refuses every device until the clock passes it or the memory is reset, and how many proofs were refused for it. |
+| `writes`, `write_failures`, `slow_writes` | Writes of the replay file that went through, that failed, and that took more than 2 seconds. While `write_failures` grows the node accepts no new proof. |
+| `limit_lowered`, `resets` | How often the node brought its own limit down after a clock that had run ahead, and how often the memory was reset. |
 
 ### `GET /v1/sessions`
 
-`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp` or `ws`, `null` when the transport the device came over is gone), `handshake_age_secs`, `flows` (the flows of the device across all its inbounds), `selected_exit` (the exit the device chose on the control channel, `null` when it chose none and leaves through its user's exit), `control_connections` (its authenticated control connections) and `mtu` (the MTU the device set, `null` when it set none and its tunnel has the inbound's).
+`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp`, `ws` or `udp-obfs`, `null` when the transport the device came over is gone, or its `udp-obfs` session has ended), `handshake_age_secs`, `flows` (the flows of the device across all its inbounds), `selected_exit` (the exit the device chose on the control channel, `null` when it chose none and leaves through its user's exit), `control_connections` (its authenticated control connections) and `mtu` (the MTU the device set, `null` when it set none and its tunnel has the inbound's).
 
 The address a device connects from is not part of a session. It is never put in an answer, whatever `log.destinations` says.
 
@@ -327,7 +390,7 @@ for await (const event of client.events()) {
 }
 ```
 
-Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `resetUsage`, `stats`, `listSessions`, `listExits` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `resetUsage(name, {totals: true})` resets a user's usage and returns the user. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
+Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `resetUsage`, `resetReplay`, `stats`, `listSessions`, `listExits` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `resetUsage(name, {totals: true})` resets a user's usage and returns the user. `resetReplay()` resets the replay memory and returns it; read what it costs under `POST /v1/replay/reset` first. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
 
 ## Not built yet
 

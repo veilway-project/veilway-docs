@@ -19,7 +19,7 @@ The core reads one JSON document. It is the source of truth: the panel changes i
 }
 ```
 
-`version`, `dns`, `inbounds`, `outbounds`, `exits`, `routing` and `users` are required. `log`, `groups` and `notices` are optional.
+`version`, `dns`, `inbounds`, `outbounds`, `exits`, `routing` and `users` are required. `log`, `groups`, `notices` and `replay` are optional.
 
 ## Rules that apply everywhere
 
@@ -132,7 +132,8 @@ An inbound is one tunnel: one key, one address pool, reached over one or more tr
 | `type` | `wireguard` or `veilway` | required | `wireguard`: stock WireGuard peers. `veilway`: the same tunnel, with the control channel at its gateway address, see "The control channel" below. Changing the type restarts nothing. |
 | `private_key` | key | required | The tunnel's static key. Secret. Unique across inbounds, compared by the public key derived from it. |
 | `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the address pool for this tunnel. |
-| `mtu` | integer 1280 to 1500 | `1420` | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path. |
+| `mtu` | integer 1280 to 1500 | `1420`, or `1390` for a `veilway` inbound with a `udp-obfs` transport | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path, or is lost on a `veilway` inbound, which never fragments. With a `udp-obfs` transport the warning starts above 1390: a full-size packet then does not fit a 1500 byte path over IPv6. |
+| `padding` | object | see below | The upper bounds of the padding the node puts on what it sends over `udp-obfs`: `wide` from 512 to 1023 (default 1023) and `normal` from 64 to 255 (default 255), both optional. On an inbound without a `udp-obfs` transport the key is a warning. See `udp-obfs` below. |
 | `transports` | list of 1 to 8 | required | See below. |
 
 Rules for `address`:
@@ -151,7 +152,7 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 - **Who is let in.** A connection must prove one of the device's `transport_secrets` within 10 seconds, in an exchange that is bound to that device's and that inbound's keys. Anything else is closed with no answer. A device may have 4 connections that have not proven it and 2 that have; one more replaces the oldest.
 - **What it gives.** The device's addresses, gateway and MTU as the node holds them, the exits of its user's `exits` (tag, `name`, `country`, whether it carries every IP protocol, whether it is up), its user's usage and quota, and the `notices`. A reload sends again what it changed. Usage is sent again when it changed, at most once every 30 to 90 seconds, and never because of the channel's own traffic.
 - **Choosing an exit.** A device may choose which exit the action `"user"` means for it, among its user's `exits`. The choice belongs to that device only. It moves the flows that the rules send to `"user"` or that match no rule: those are reset and leave through the new exit from their next packet. A flow a rule sends to a named exit is not touched. A device without a choice leaves through `users[].exit`, then `routing.default`, as before. A choice goes into the state file at its next regular write, not at once: a node that is killed within those 10 seconds forgets it, and the device chooses again.
-- **MTU.** A device may probe which packet size its path carries and set the MTU of its own tunnel, from 1280 to the inbound's `mtu`. The node then sends that device nothing larger: TCP it ends itself keeps to the segment size the device announces, what else the node sends itself it fragments, IPv4 that it forwards and that allows it is fragmented, and the sender of anything else gets "fragmentation needed" or "packet too big". The value is forgotten when the device has had no session for 180 seconds. A device with addresses in two `veilway` inbounds has one MTU, one chosen exit and one set of limits for both. This version does not yet prohibit fragmentation of the outer UDP packets, so a probe can pass a path that fragments it.
+- **MTU.** A device may probe which packet size its path carries and set the MTU of its own tunnel, from 1280 to the inbound's `mtu`. The node then sends that device nothing larger: TCP it ends itself keeps to the segment size the device announces, what else the node sends itself it fragments, IPv4 that it forwards and that allows it is fragmented, and the sender of anything else gets "fragmentation needed" or "packet too big". The value is forgotten when the device has had no session for 180 seconds. A device with addresses in two `veilway` inbounds has one MTU, one chosen exit and one set of limits for both. A probe applies on `udp` and `udp-obfs`. On Linux the node prohibits fragmentation of everything it sends from the `udp` and `udp-obfs` sockets of a `veilway` inbound, so a packet that does not fit the path is lost and a probe measures what the path carries. On another system it cannot, and says so in a warning at start: there a probe can pass a path that fragments it. Over `udp-obfs` a probe leaves with no padding around it.
 - **Being cut off.** Before a device is cut off (quota, expiry, disabled or removed, or the node stops) the node writes it the reason. The cut-off does not wait for that.
 - **Limits.** 10 requests at once and then one a second for a device, 3 exit changes and then one in 5 seconds, one probe run a minute. Over a limit a request is answered "rate limited" and does nothing.
 - **What is logged and counted.** A channel that opens or closes, an exit that is chosen or dropped and an MTU that is set are logged at info with the user and device name, at most 6 such lines at once for one device and then one in 30 seconds; the rest go to debug and the next line says how many. Nothing of it names a destination. Counters are in `control` of `/v1/stats`, and `/v1/sessions` shows each device's chosen exit, open control connections and MTU.
@@ -162,8 +163,9 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 |---|---|---|
 | `udp` | `listen` (`ip:port`) | Plain WireGuard datagrams. |
 | `ws` | `listen` (`ip:port`), `path`, optional `tls` with `cert` and `key` (both required) | One WireGuard datagram per binary WebSocket frame. Without `tls` it serves plain `ws` for a reverse proxy that terminates TLS; validation warns when such a listener is not on a loopback address. |
+| `udp-obfs` | `listen` (`ip:port`), optional `limits` with `sessions` (1 to 1,048,576, default 16,384) | Every WireGuard datagram inside the `udp-obfs` envelope of the [protocol](../../protocol/transports/), keyed by the device's `transport_secrets`. Only on a `veilway` inbound. See `udp-obfs` below. |
 
-A `veilway` inbound takes `udp` only in this version. The transports of the native protocol (`udp-obfs`, `tls`, its own `ws`, `fronted`) are not built, and the `ws` above is the format of a `wireguard` inbound, so validation refuses it on a `veilway` inbound and does not take it for the other.
+A `veilway` inbound takes `udp` and `udp-obfs` in this version. The other transports of the native protocol (`tls`, its own `ws`, `fronted`) are not built, and the `ws` above is the format of a `wireguard` inbound, so validation refuses it on a `veilway` inbound and does not take it for the other. A `wireguard` inbound takes `udp` and `ws`: its devices have no transport secret for `udp-obfs` to be keyed with.
 
 `path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`.
 
@@ -172,8 +174,28 @@ Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 s
 Listen conflicts, across all inbounds:
 
 - IPv6 sockets are always IPv6-only, so `0.0.0.0:443` and `[::]:443` do not conflict. A wildcard address conflicts with every address of its own family on the same port.
-- Two `udp` transports never share an address and port.
+- Two `udp` or `udp-obfs` transports never share an address and port, in any combination.
 - Two `ws` transports may share an address and port when their `path` differs and their `tls` is identical. Otherwise they conflict.
+
+### `udp-obfs`
+
+Engine. Only the node's side is built. No client speaks it yet. The [transports page](../../protocol/transports/) is the specification, and it is a draft that nobody outside the project has reviewed. `udp-obfs` hides WireGuard's fixed bytes and sizes from an observer without a subscription. It imitates nothing, and its rating is Detectable.
+
+```json
+{"type": "udp-obfs", "listen": "0.0.0.0:51821", "limits": {"sessions": 16384}}
+```
+
+- **Who is let in.** A device opens a session with one opening packet that only a holder of one of its `transport_secrets` can make. The session then carries that device's WireGuard and no other device's. The node sends nothing on a session until a WireGuard packet of that device has authenticated on it.
+- **What a stranger gets.** Nothing. Whatever is not a valid packet of a device gets no answer and no log line, and is counted by reason in `udp_obfs` of `/v1/stats`.
+- **Replay.** An opening packet is accepted once, also across restarts. That needs the replay file, see `replay` below. A node does not start a config with a `udp-obfs` transport without a replay file it can write and lock. An opening packet from a device whose clock is ahead of the node's limit is kept, at most 64 of them for at most 2 seconds, until the limit is written, and then answered at its own source. One that a limit refuses is recorded as used all the same, so that nobody who saw it can use it later.
+- **Being cut off.** Whenever the node cuts a device off (its user is disabled, expired, over quota or removed, the device is removed, or its addresses, its preshared key or its key change), every `udp-obfs` session of that device ends with its tunnel, and so does a session whose transport secret was removed.
+- **Packets that cannot be sent.** A `veilway` inbound never fragments. A packet larger than the host's interface carries is refused by the system, counted in `send_failed` of `/v1/stats` and logged at info once a minute. Lower the inbound's `mtu` when that counter grows.
+- **Limits that are fixed.** A device may have 2 sessions that are not yet established and 8 that are, and 16 accepted opening packets at once and then one a second. One source address and port may have sessions of 4 devices. A session ends 10 seconds after its opening packet if WireGuard has not authenticated on it, and after 180 seconds without an authentic WireGuard packet. The idle time of the client's keepalive is well below that.
+- **`limits.sessions`.** How many established sessions the listener holds at once. When it is full, new opening packets are refused, and nothing a stranger does takes a place.
+- **`padding`.** The node pads what it sends, inside the encryption. `wide` bounds the padding of the first 16 packets of a session, of every WireGuard handshake message and of every control channel packet. `normal` bounds the rest. A full-size packet carries none: no packet is larger than `mtu` + 62 bytes. Change them so that not every node shows the same ranges.
+- **`mtu`.** `udp-obfs` adds 62 bytes around a tunnel packet, 30 more than `udp`. The default `mtu` of a `veilway` inbound with a `udp-obfs` transport is therefore 1390. Adding the transport to an inbound that has no `mtu` written changes its `mtu` from 1420 to 1390, which restarts the tunnel once.
+- **The clock.** A device and the node must agree on the time within 60 seconds. A node whose clock is wrong refuses its devices, and a clock that ran ahead can leave the node refusing everybody after it is put right, see `replay`. Run the node with a synchronised clock.
+- **What is logged.** At info: a listener that starts, sessions that a reload ended, a session that reached the packet limit of its keys. At warn or error: a tag table that was built late, and everything about the replay file. No line names a client address, a tag or a secret.
 
 ## `outbounds`
 
@@ -390,6 +412,49 @@ A list of at most 4 notices that the control channel of every `veilway` inbound 
 
 Notices on a node with no `veilway` inbound are a warning.
 
+## `replay`
+
+Engine. The replay memory makes sure that a proof (for `udp-obfs`, an opening packet) is accepted once. One memory serves every obfuscated transport of the node. A node without such a transport keeps none, and the key is then a warning.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `cache` | integer 1024 to 1,048,576 | `262144` | How many accepted proofs the node remembers at once. When it is full, every proof is refused until entries leave, which they do 60 seconds after their time. It is read when the node starts: a reload that changes it logs a warning and changes nothing until the next start. |
+| `per_source` | object with `burst` and `rate`, each 1 to 65,536 | `{"burst": 256, "rate": 32}` | Accepted proofs one source may bring: `burst` at once, then `rate` a second. A source is an IPv4 address or an IPv6 /64. Raise it when many users share one address. A reload changes it at once. |
+
+```json
+"replay": {"cache": 262144, "per_source": {"burst": 256, "rate": 32}}
+```
+
+### The replay file
+
+The memory is kept in a file of its own: `veilway-replay` next to the state file, or the path given with `run --replay`. Next to it the node keeps a lock file (`veilway-replay.lock`) and, during a write, a temporary file (`veilway-replay.tmp`).
+
+- **Start.** A node does not start a config with an obfuscated transport, and does not reload into one, without a replay path whose directory it can write. A second node on the same file does not start: two nodes never share a replay file, and an inbound's keys belong to one node.
+- **Size.** While the node runs the file is 68 bytes and is written about every 10 seconds, with mode 600. A clean stop writes the cache as well, 41 bytes for each entry, at most about 10 MiB at the default `cache`.
+- **After a clean stop** nobody is refused because of the restart.
+- **After a kill or a crash** the node refuses proofs for up to 20 seconds, or up to 80 if a device with a fast clock had connected just before. Logged at info.
+- **With no file**, which is how a node starts for the first time, every proof is refused for 60 seconds. Logged at warn.
+- **A file that cannot be used** (cut short, damaged, larger than `cache` allows, writable by group or others) is moved aside with `.bad` behind its name and logged at error. The node then starts as with no file. A config that lowers `cache` below the entries of the last clean file makes that file unusable in this way.
+- **A file that cannot be written while the node runs**: within about 20 seconds the node accepts no new proof. Sessions that are open go on. Logged at error once a minute, and counted in `replay.write_failures` of `/v1/stats`.
+
+Three things undo replay protection:
+
+- **Never restore the replay file from a backup or a machine snapshot.** An older file reopens replay for everything accepted since it was taken. If in doubt, delete it: that costs 60 seconds of refusals.
+- A reset (below) after the node's clock ran ahead.
+- A lost file on a node whose clock is behind where it has been. Do not start the node before its clock is synchronised.
+
+### When the floor is ahead of the clock
+
+A node whose clock ran ahead, and was then put right, can be left refusing every device: its floor, the time up to which proofs are refused, lies in the future. This is an outage that lasts as long as the clock was wrong by, and waiting is the only thing that ends it by itself.
+
+It is not the same as what a start costs. After a start or a reset the floor is up to 80 seconds ahead of the clock, as the list above says. That passes by itself, is logged once at start with the time left, and is shown as `replay.refusing_secs` of `/v1/stats`. Do not reset for it: a reset costs another 60 seconds.
+
+The fault is a floor more than 80 seconds ahead of the clock, or one that rose while the node ran:
+
+- The node logs it at error once a minute with the distance, and counts the refused proofs in `replay.refused_floor_ahead`. `replay.floor_ahead` of `/v1/stats` is true.
+- `veilway doctor` shows the floor, the limit and the clock, fails when the floor is more than 80 seconds ahead, and warns when the limit is. A floor up to 80 seconds ahead is reported as what a start costs, with the time left.
+- `veilway replay reset` ends it, see Commands.
+
 ## Reloading
 
 Engine. The core reloads on `SIGHUP` and on an apply through the control API. It does not watch the file.
@@ -405,7 +470,9 @@ After a commit:
 - Changing an inbound's `private_key`, `address` or `mtu` restarts that tunnel and drops its sessions. Changing one transport restarts that transport only. Changing a tag is removing one object and adding another.
 - Certificates are read again on every reload.
 - A device's chosen exit is kept across a reload while it is still in the user's `exits`. One that is not is dropped and logged at info, and the device leaves through the user's exit. It does not come back when the exit is given back.
-- A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. The device's tunnel stays up: on `udp` no secret opened it. Adding a second secret disturbs nothing.
+- A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. The same holds for a `udp-obfs` session: one that was opened with the removed secret ends at the reload, and an opening packet under that secret is a stranger's from then on. A session opened with the device's other secret, and a tunnel that came over `udp`, where no secret opened it, stay up. Adding a second secret disturbs nothing.
+- A `udp-obfs` transport that stays as it was keeps its sessions across a reload, also when `limits.sessions` or the inbound's `padding` change. New padding bounds apply to sessions opened afterwards. A transport whose `listen` changes, or whose tunnel restarts, loses its sessions, and its devices open new ones.
+- `replay.per_source` changes at once. `replay.cache` changes at the next start.
 - An inbound whose `type` changes from `veilway` to `wireguard` loses its control channel: its connections are closed and the port is refused. The other way round the port starts to answer. Sessions stay.
 - Changed `notices` are sent to every open control connection.
 - DNS sets change without touching a tunnel or a session: a set can be added, removed, given other servers or given to other inbounds, groups and users. The next query of every user goes to the list the new config gives them.
@@ -417,6 +484,7 @@ After a commit:
 ```
 veilway run --config config.json
 veilway run --config config.json --state veilway-state.json
+veilway run --config config.json --replay /var/lib/veilway/veilway-replay
 veilway run --config config.json --api /run/veilway/veilway.sock
 veilway run --config config.json --no-api
 veilway check --config config.json
@@ -424,14 +492,16 @@ veilway doctor --config config.json
 veilway doctor --config config.json --json --timeout 3
 veilway usage reset --user alice
 veilway usage reset --user alice --totals --api /run/veilway/veilway.sock
+veilway replay reset
+veilway replay reset --yes
 veilway schema
 veilway genkey
 veilway gensecret
 ```
 
-`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key, and `gensecret` prints a new transport secret for one device of a `veilway` inbound.
+`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --replay <file>` sets the path of the replay file, `veilway-replay` next to the state file by default; only a config with an obfuscated transport uses it, see `replay`. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key, and `gensecret` prints a new transport secret for one device of a `veilway` inbound.
 
-`doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
+`doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--replay <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
 
 `usage reset` starts one user's quota count over on a node that is running. It talks to the node through the control socket, so it exists on Unix only and needs a node started without `--no-api`. It does not read or change the config file or the state file itself.
 
@@ -455,6 +525,31 @@ On success it prints one line with the new `used_bytes` and `period_start`, and 
 
 Running it twice is safe: the second run sets the count to 0 again and changes nothing more.
 
+`replay reset` empties the replay memory of a node that is running and sets its floor and its limit to the node's clock plus 60 seconds. It is for a node whose floor is ahead of its clock, see `replay`. It talks to the node through the control socket, like `usage reset`, and never touches the replay file itself: a file edited under a running node would be undone by the node's next write. With the node stopped, deleting the replay file has the same effect. Usage and quotas are not touched.
+
+It costs two things, and the command prints them every time before it does anything:
+
+- Every client is refused for 60 seconds.
+- A proof that was accepted with a timestamp above the new floor is forgotten. Whoever recorded it can use it once more when the clock reaches that timestamp. That can only be a proof from the time the node's clock ran ahead.
+
+| Flag | Meaning |
+|---|---|
+| `--yes` | Do it. Without this flag the command prints what a reset costs and changes nothing. |
+| `--api <path>` | The control socket of the node. Default: `veilway.sock` next to the config file. |
+| `--config <file>` | Only used to find the default socket path. Default: `config.json`. |
+
+On success it prints one line with the new floor and limit and the node's clock.
+
+| Exit status | Meaning |
+|---|---|
+| 0 | The replay memory was reset and its file is written. |
+| 1 | Anything else. The node could not write the replay file: it then accepts no proof until it has written the floor and the limit it had back, and the reset has to be run again. Or the node did not answer within 30 seconds. |
+| 6 | The node has not finished writing the reset after 10 seconds. The reset is in force when the write ends. Do not run the command again: that would cost another 60 seconds. `replay.resets` of `/v1/stats` grows by one when it has landed. |
+| 2 | `--yes` was not given, or the command line is wrong. Nothing was changed. |
+| 3 | The node keeps no replay memory, because it has run no obfuscated transport. |
+| 4 | No node answers on the socket. |
+| 5 | This user may not open the socket. |
+
 Each check prints one line: its status, the kind of check, what it looked at, and one sentence on what was found and, on `warn` and `fail`, what to do about it. The checks run in this order:
 
 1. The config file: its mode, and the validation report with every error and warning. A config that does not validate ends the run here, and everything after it is reported as `skipped`.
@@ -465,7 +560,9 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 6. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds, and when the config has sets a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where the queries of a set leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
 7. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free. When a running node has the exit and its interface is not there, a warning says the exit is down and being retried.
 8. ICMP ping sockets, when a policy uses `icmp_echo: direct`.
-9. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses. Then the control socket path: what is there, and whether its directory can be written.
+9. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses.
+10. The replay file, for a config with an obfuscated transport: a regular file or absent, a directory the user can write, whether it is a replay file, and its floor, its limit and the clock. A floor more than 80 seconds ahead of the clock is a failure, because the node then refuses every device for longer than any start costs. A floor up to 80 seconds ahead is what a start or a reset leaves, and the line says how long it lasts. A limit more than 80 seconds ahead of the clock is a warning: a clock ran ahead, and a node that is started on that file refuses every device until the clock passes the limit. A file that is not a replay file is a failure. Doctor reads the file and never moves or writes it.
+11. The control socket path: what is there, and whether its directory can be written.
 
 The four statuses: `ok` means the check passed. `warn` means the node starts and works, but something is likely not what you want. `fail` means the node would not start or would not work for the thing checked. `skipped` means the check was not tried because a step before it failed, or because of `--no-api`. A final line counts the statuses.
 

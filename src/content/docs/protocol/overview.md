@@ -75,7 +75,7 @@ Two more adversaries shape the control channel: a node that lies to its clients 
 | Gateway address | The node's own address inside an inbound's pool. The client's resolver and the control channel live there. |
 | Profile | What one device needs to connect to one inbound. It reaches the client inside a signed subscription. |
 | Datagram, stream | A datagram transport (`udp`, `udp-obfs`) sends each packet on its own and may lose or reorder it. A stream transport (`tls`, `ws`, `fronted`) runs over TCP, which delivers bytes in order and retransmits. |
-| Class | Cover (`tls`, `ws`, `fronted`: imitates a known protocol), no cover (`udp-obfs`: hides WireGuard's bytes, imitates nothing), plain (`udp`, legacy `ws`: hides nothing). |
+| Class | Cover (`tls`, `ws`, `fronted`: imitates a known protocol), no cover (`udp-obfs`: hides WireGuard's bytes, imitates nothing), exposed (`ws-plain`: hides WireGuard's bytes, shows the server's name and the shape of a tunnel in clear), plain (`udp`, legacy `ws`: hides nothing). That is the order from strongest to weakest. |
 | Proof | The bytes by which a client shows a listener that it is a known device, before the node sends anything of its own. |
 | Session | One authenticated use of a transport: one WebSocket connection, one `fronted` polling session, one `udp-obfs` association. |
 | Chunk | The unit of framing on obfuscated transports: one encrypted message that holds zero or more WireGuard datagrams and padding. |
@@ -155,8 +155,8 @@ These hold for every transport and for the control channel. A design choice that
 
 1. **No plaintext, ever.** A transport carries WireGuard datagrams and nothing else. There is no mode in which an inner packet travels outside WireGuard, and no "try without encryption" path.
 2. **No traffic outside the tunnel on error.** While the user has asked to be connected, a lost session, a failed handshake, a refusal, transport fallback and a crash of the client engine all leave the kill switch in force: nothing leaves the device except the transport's own connection to the node or front (threat model invariant 24).
-3. **No silent move to a weaker class.** The client moves between transports only within the signed profile. It uses a transport of a lower class than the best class in the profile (cover, then no cover, then plain) only when the user has agreed to that class for this profile. The transport in use, its class and its rating are always on screen.
-4. **Certificate checks do not bend.** A certificate that does not validate, or does not match a pin where the profile has one, ends the attempt. There is no "continue anyway" and no retry without the check.
+3. **No silent move to a weaker class.** The client moves between transports only within the signed profile. It uses a transport of a lower class than the best class in the profile (cover, then no cover, then exposed, then plain) only when the user has agreed to that class for this profile. The transport in use, its class and its rating are always on screen.
+4. **Certificate checks do not bend.** A certificate that does not validate, or does not match a pin where the profile has one, ends the attempt. There is no "continue anyway" and no retry without the check. The transport `ws-plain` reaches a front over plain HTTP with no TLS. It exists only where the signed profile names it, is a class of its own below every other obfuscated transport, needs its own consent, and is never reached as a retry or fallback from a transport with TLS.
 5. **A refused proof looks like a stranger.** The node gives a refused client exactly what it gives anyone else. The client reports a refusal and waits. It never retries without a proof or with a weaker one.
 6. **Unknown means refused.** An unknown version, message type, transport name or field value is refused, by both sides. Nothing is skipped or guessed.
 7. **A full table refuses the newcomer.** A full replay cache or a full session table refuses new proofs. Nothing a stranger does displaces a device's session, and no check is loosened to make room. The refusal takes the unauthenticated path.
@@ -173,10 +173,11 @@ These keys do not exist in the [config reference](../../reference/config/) yet. 
 | `inbounds[].type` value `veilway` | enum value | A tunnel that serves the native transports and the control channel. |
 | `inbounds[].transport_keys` | list of 1 or 2 keys, secret | The node transport keys. Required when the inbound has a `tls`, `ws` or `fronted` transport. |
 | `inbounds[].padding` | object | The node's upper bounds for wide and normal padding, inside the spec's bounds. |
-| `inbounds[].upgrade_cookie` | cookie name, no default | The name of the cookie on the WebSocket upgrade answer. Required with a `tls` or `ws` transport. |
+| `inbounds[].upgrade_cookie` | cookie name, no default | The name of the cookie on the WebSocket upgrade answer. Required with a `tls` or `ws` transport. It is also required with a `ws-plain` transport, where it is the name of the cookie that carries the client's token, and where the answer sets no cookie. |
 | `inbounds[].upgrade_headers` | ordered list of header field names, default `Server`, `Date` on `tls` and empty on `ws` | The fields the upgrade answer takes from the decoy origin, in this order. |
 | `users[].devices[].transport_secrets` | list of 1 or 2 keys, secret | The device transport secrets. Required for a device with an address on a `veilway` inbound. |
-| `transports[].type` values `udp-obfs`, `tls`, `fronted` | enum values | See the transports page. On a `veilway` inbound, `ws` is the native format and has no `tls` key. A `ws` or `fronted` listener that is not on loopback or a unix socket is a warning. |
+| `transports[].type` values `udp-obfs`, `tls`, `fronted`, `ws-plain` | enum values | See the transports page. On a `veilway` inbound, `ws` is the native format and has no `tls` key. `ws-plain` is `ws` over plain HTTP and carries its own transport key. A `ws`, `ws-plain` or `fronted` listener that is not on loopback or a unix socket is a warning. |
+| `transports[].appearance` on a `ws-plain` transport | fixed identifier | Optional. Dresses the frames as another kind of content. A design, not built. |
 | `transports[].tls` on a `tls` transport | `cert` and `key` files | As on the built `ws`. |
 | `transports[].decoy` | object with `origin` and optional `proxy_protocol` | The decoy origin of a `tls`, `ws` or `fronted` listener: the operator's own web server. There is no default. |
 | `transports[].trusted_proxies`, `client_address_header` | list of networks, header name | The reverse proxies or CDN ranges from which a `ws` or `fronted` listener accepts a forwarded client address. |
@@ -199,6 +200,8 @@ These pages deliberately do not state how browsers, web servers, CDNs and librar
 
 | What to measure | What depends on it |
 |---|---|
+| A plausible set of HTTP header fields for a plain WebSocket upgrade, which the whole path reads | The plain variant of the fingerprint pack, used by `ws-plain` |
+| Whether plain HTTP passes on networks that slow or filter TLS to the same addresses, with a date | Whether `ws-plain` is worth its exposure on a given network |
 | Whether the WireGuard library pads a short inner packet to a multiple of 16 bytes | The sizes padding has to blur, and the wording of the `udp` layout |
 | What systems other than Linux need for "do not fragment" on outer packets. On Linux it is set for `veilway` inbounds, in the probing mode that ignores the cached path MTU. | The "no outer fragmentation" rule and MTU discovery on those systems |
 | How common web servers treat a request line that is malformed, slow or never finished: at which byte they answer, and after how long | The request line rule of the stream listener and its timing residual |
@@ -208,7 +211,7 @@ These pages deliberately do not state how browsers, web servers, CDNs and librar
 | Whether the node's TLS library can pad records | An alternative to the cookie for varying the length of the upgrade answer |
 | What the node's TLS library answers in its handshake (versions, protocols offered, tickets, alerts), next to common web servers | The cap on `tls`, and whether it can ever be lifted |
 | Which protocols a mainstream browser offers in its ClientHello for a WebSocket connection, and which HTTP version it then uses | The fingerprint pack and the upgrade request |
-| How CDNs treat the request: path rewriting, retries, the format of the forwarded-address header with more than one hop, the HTTP version towards the origin, limits on body size and request rate | `ws` behind a CDN and `fronted` |
+| How CDNs treat the request: path rewriting, retries, the format of the forwarded-address header with more than one hop, the HTTP version towards the origin, limits on body size and request rate | `ws` behind a CDN and `fronted` Also whether a CDN passes a plain WebSocket upgrade at all, and which fields it adds. |
 | How much later an answer arrives through the node than from the origin | The published timing residual |
 | The length and timing shape of each transport under idle, browsing and bulk load, including the first two records of each direction | Every padding and timer range |
 | That the WireGuard library lets a client start a handshake and send a keepalive at a time the transport chooses | The rekey and keepalive rules |
@@ -254,6 +257,8 @@ Each is listed with the default this draft takes. The pages are written to the d
 | `tls` as a whole transport | Node side built: one listener for each address of a `tls` transport of a `veilway` inbound, with the session bound to its device's WireGuard, its timers, its close, the limits per device counted together with `udp-obfs`, and the end of every session of a device that is cut off, whose transport secret is removed, or that was opened under a node transport key that is removed. The client side is not built. | Reviewed once with the listener. Capped at Detectable in version 1, because the TLS handshake is the node's own. The node offers TLS 1.2 and 1.3 and `http/1.1` only, and issues session tickets as its library does by default: a client that offers only `h2` gets an alert, and what a common web server offers next to that is on the list to measure. Removing a node transport key ends the sessions opened under it within one second, by the path that cuts off a disabled user. Certificate issuance is a marked gap and does not block. |
 | `ws`, `fronted` as whole transports | Settled enough to implement | The reader of `fronted` chunks is built and was reviewed twice. The transports themselves are not built. |
 | Fronting options, refusal handling, transport fallback | Settled enough to implement | Not built. |
+| `ws-plain` | Designed, reviewed twice, not built | The node gains a listener type and a proof name for it. Its header set is unmeasured. |
+| Appearance of `ws-plain` frames | Designed, reviewed once, not built | No value is defined in version 1. Form (a) is an interface with requirements and no container. Form (b) is an option of last resort with conditions, outside the default set, and the page recommends against building it. |
 | Client TLS and HTTP fingerprint | Not yet | It waits for a measurement that has not been made. It does not block the rest. |
 | `faketls`, `quic` | Goals only | No wire format. `faketls` waits for a project decision on relaying to third parties. |
 | Subscription format: link grammar, envelope verification, payload schema, request, the client's state machine, legacy reading | Client-side reading built | Implemented as code with no input or output of its own, and reviewed once against the page. No client uses it yet. Display text in several languages and the display filter's joiner rule are implemented in that code. They were reviewed as a design, not yet as code against the page, and no client or panel uses them. One condition of the joiner rule (the virama's own Script) is on the page and not yet in the code. |

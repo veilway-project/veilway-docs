@@ -17,11 +17,12 @@ A transport carries WireGuard datagrams between a client and a node. The tunnel 
 | `udp-obfs` | No cover | UDP | Masked epoch tag and sealed opening packet, keyed by the device transport secret | No TLS | Silence | Specified here |
 | `tls` | Cover | WebSocket inside TLS 1.3, with the operator's own name and certificate | Stream proof in the request target | The node | The decoy origin's answer, behind the node's own TLS | Specified here |
 | `ws` | Cover | WebSocket behind the operator's web server or a CDN | Stream proof in the request target | The web server or the CDN, never the node | The decoy origin's answer | Specified here. The built `ws` is the legacy format. |
+| `ws-plain` | Exposed | Plain HTTP WebSocket to the front, no TLS | Stream proof in a cookie | The front terminates nothing; plain HTTP reaches the operator's web server | The decoy origin's answer | Specified here, weakest option |
 | `fronted` | Cover | HTTP request and response polling through a CDN | Stream proof in the request target | The CDN | The decoy origin's answer | Specified here |
 | `faketls` | | | | | | Goals and open questions only |
 | `quic` | | | | | | Goals and open questions only |
 
-**Classes.** A transport of the cover class imitates a protocol that an observer already knows (TLS to a web server). A transport of the no-cover class hides WireGuard's bytes and imitates nothing. A plain transport hides nothing. Legacy `ws` is plain. The class is fixed by this table and is what transport fallback and consent are based on. It is not a rating and not a promise.
+**Classes.** A transport of the cover class imitates a protocol that an observer already knows (TLS to a web server). A transport of the no-cover class hides WireGuard's bytes and imitates nothing. A plain transport hides nothing. Legacy `ws` is plain. The class is fixed by this table and is what transport fallback and consent are based on. It is not a rating and not a promise. `ws-plain` is a class of its own, named exposed: it hides WireGuard's bytes but shows the server name and the shape of a tunnel in clear. The full order, from strongest to weakest, is cover, no cover, exposed, plain. Its own consent is separate, and agreeing to the no-cover class (`udp-obfs`) is not agreeing to it.
 
 `tls` and `ws` share one wire format after TLS. They differ in who ends TLS. The recommended first choice is a name and certificate the operator owns, served by an ordinary web server with the node behind it (`ws`).
 
@@ -291,7 +292,7 @@ HPKE base mode hides the message from everyone but the node. It does not show wh
 | HPKE input | Value |
 |---|---|
 | Recipient public key | The node transport public key from the profile |
-| `info` | `"veilway v1 proof" \|\| name \|\| inbound_pub`, where `name` is the label `"tls"`, `"ws"` or `"fronted"` |
+| `info` | `"veilway v1 proof" \|\| name \|\| inbound_pub`, where `name` is the label `"tls"`, `"ws"`, `"fronted"` or `"ws-plain"` |
 | `aad` | Empty. The request path is not bound, because a front may rewrite it. |
 | Plaintext | The hello below |
 
@@ -754,6 +755,144 @@ The same WebSocket session, behind something else that ends TLS: the operator's 
 
 **What a CDN or a front web server sees.** The client's address, the path, the token (opaque, of varying length, different every time), the WebSocket upgrade, and the length and timing of every message. It does not see WireGuard's type bytes or sizes, and it cannot tell which device it is, because the hello is sealed to a key it does not have. A request for a fixed path with a long random query, answered by an upgrade, is still a recognisable shape to whoever ends TLS. Operators should keep the query part of the request out of the front server's access log. A token the node has accepted cannot be used again on that node. A token that was logged on the way and never reached the node can be presented once by whoever holds it, inside its window of about a minute, and opens a pending session that this party cannot establish. Either way a logged token is a record that someone holding the node's transport key could later tie to a device.
 
+### `ws-plain`: WebSocket without TLS
+
+Some networks slow down or filter TLS to a front's addresses while plain HTTP to the same addresses passes. `ws-plain` is for that case. It is the same WebSocket session as `ws`, carried over plain HTTP to the front with no TLS between the client and the front. It is the weakest obfuscated transport, and it is a transport of its own, not a setting on a `ws` candidate. Whether plain HTTP really passes where TLS is slowed is a claim about networks and is on the list to measure.
+
+**Why its own transport type.** Making it a type, not a `ws` candidate with the TLS turned off, is what keeps it apart from the covered transports:
+
+- Its proof carries the transport name `"ws-plain"` in the HPKE `info`, so a token seen in clear on the plain path is a valid proof on no `tls`, `ws` or `fronted` listener. A capture on the plain path cannot be used to confirm a covered listener of the same inbound.
+- It has its own class, so fallback, `stream_first`, the remembered candidate, racing and hints all work per transport as they do for every other type. A `ws-plain` candidate never wins a race against a covered transport, is never the remembered candidate a covered one is passed over for, and a hint never names it.
+- The node has a listener type that knows it is plain. The node is not unchanged by `ws-plain`: it gains that listener type and the `"ws-plain"` proof name, and the plain listener reads the token from a cookie (see below).
+
+**Separation from the covered transports.** A `ws-plain` transport may not use a host or a path that any `tls`, `ws` or `fronted` candidate of the subscription uses. The panel refuses it and the client refuses the profile. The rating cap the client computes is by host name as well as by address, so a covered transport that shares either with a `ws-plain` transport is capped at Detectable.
+
+**The request.** The token does not travel in the query string, where it would be a long random value on an upgrade request and would land in ordinary URL logs. It travels in a `Cookie` field, under the cookie name the inbound already sets for the upgrade answer. The request target is the transport's path alone:
+
+```
+GET <path> HTTP/1.1
+Host: <host>
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Version: 13
+Sec-WebSocket-Key: <per RFC 6455>
+Cookie: <cookie name>=<token>
+```
+
+The token is the same 144 to 272 base64url characters as elsewhere. Cookies carry long opaque values on ordinary sites and browsers send them on upgrades, so the value does not stand out as a query would, and URL logs do not hold it. The node reads the whole request head before it decides, on the proxy path it already does, so the cookie adds no timing residual. Every other header field comes from the plain variant of the fingerprint pack (see "Client TLS and HTTP fingerprint"), with fixed values and no `Accept-Language`. The cookie is out of URL records and it is still a signature: one cookie, with a name that is the same on every connection to this inbound and a new value of 144 to 272 base64url characters each time. That is matchable from the first packet by its shape, and exactly by anyone who has seen one connection to that host. That cookies with long opaque values are ordinary on upgrades is a claim about browsers and sites, and is on the list to measure with the header set.
+
+How the node reads it: a `ws-plain` listener reads the whole request head from every peer before it decides, since the token is not in the request line. It accepts exactly one `Cookie` field holding exactly one cookie of the configured name, written as `name=value` with no quotes and no spaces inside the value. A head with the field twice, the name twice, a quoted or malformed value, or a value that is not a legal token is "not a user". The cookie name must not be one the operator's site sets itself, or the origin could answer a made-up value on that path differently from other paths.
+
+The upgrade answer on a `ws-plain` listener sets no cookie. On `tls` and `ws` the answer carries a cookie only to vary its length inside TLS. Here it would be read by the path, and a server that sets a value the client never sends back is a tell.
+
+When a proof is refused, the request with its cookie is forwarded to the decoy origin, as a refused query is on `ws`. Operators keep cookies out of the origin's log.
+
+**Consent and its wording.** `ws-plain` has its own consent question, separate from the no-cover one, and a profile that gains a `ws-plain` transport asks again even if the user consented to `udp-obfs`. Wherever it is offered or in use, the client and the panel say: "the network can see this server's name and can tell that you use this app, and when and how much, now and later in its records. It cannot see what you send." That is the honest statement: the server name in `Host`, the fact of this software on every connection, and a record that can be found later.
+
+**Its own transport key.** A `ws-plain` transport carries its own node transport key in the profile, not the inbound's shared one, with a shorter maximum age (rotate at least every 7 days). The reason is strong: the proof travels where the whole path can record it, so if that key ever leaks, anyone who kept traffic records can open every recorded token and link each device's connections back to the last rotation. With a shared key that leak would also be the key of the covered listeners, and the two could not be rotated apart. The user-facing page says that a later leak of this key ties all of a device's plain connections together. Rotation has an overlap, as everywhere: the transport lists the current key, and the node also accepts the previous one for at least as long as the age limit, so a client that refreshed within the last 14 days still connects. The trade is plain. A short age limits how far back a leak reaches. A user who was away for longer than the age and the overlap comes back with a dead key on what may be the one transport that passes on their network, and must refresh the subscription through another transport of the profile, or by asking for a refresh outside a tunnel.
+
+**What stays protected.** The content of the tunnel, by WireGuard and by the sealed chunks. The device's identity: the hello is sealed to the node's transport key, and every token has a fresh public value, so two tokens of one device cannot be linked by anyone who lacks that key. Replay: a token is accepted once.
+
+**What authenticates the node.** Not a certificate. There is none, and no pin. The node shows that it holds the transport private key by sending a chunk the client can open, since the session keys come from the proof's exchange, and WireGuard then authenticates the node's tunnel key. A client does not treat a session as open before that chunk. Someone in the middle can pass the bytes along, drop them or change them. It cannot read them, cannot answer as the node, and cannot keep a session alive with changed bytes.
+
+**What someone on the path sees.**
+
+| | With TLS (`tls`, `ws`, `fronted`) | `ws-plain` |
+|---|---|---|
+| The name | The TLS server name, unless it is encrypted | The `Host` field, always |
+| The path and that it is a WebSocket upgrade | Hidden from the path, seen by whoever ends TLS | Seen by everyone on the path |
+| The token | Seen by whoever ends TLS | In the cookie, seen by everyone on the path, and kept in logs that record cookies |
+| The header fields and the cookie | Seen by whoever ends TLS | Seen by everyone on the path |
+| The frames | TLS records | Binary WebSocket frames of random-looking bytes. The frame mask hides nothing, since its key is in the frame. Ordinary WebSocket traffic is mostly text or compresses well, and this does neither. |
+| Sizes and timing | Record sizes | The exact size of every chunk |
+| Changing the traffic | Not possible without ending TLS | Possible for anyone on the path |
+
+**What a recorded token gives.**
+
+- Seen after the client's request reached the node: nothing. It is in the replay cache, and later its timestamp is too old.
+- Held back, or copied, and sent first: the node answers `101` and holds a pending session for the sender. That sender cannot seal a chunk, because the session keys come from an exchange it was not part of, so the session is never established, gets no chunk from the node, and ends at the first tunnel packet deadline (10 s, one of the device's two pending places, one accepted proof from its rate). The `101` confirms that the token was valid: a live Veilway node at this address and a user. A guess from the request's shape becomes a confirmation with no false positives. The client's own request then arrives as a replay and gets the decoy's answer.
+- Kept, with a node transport key that later leaks: whoever recorded tokens on the path can open them and link a device's connections. On a plain path that is anyone who keeps traffic records, not only whoever ended TLS. The short key age limits how far back.
+
+**What interference does.** A changed, injected or missing frame makes a chunk fail to open, and the session ends. A forged answer to the upgrade gets the sender nowhere, because no chunk follows that opens. Middleboxes are the common failure, not attackers: a proxy that strips `Upgrade` or `Connection`, a transparent cache, or an "optimising" proxy that rewrites the request breaks the upgrade, and the candidate then does not work on that network.
+
+**An answer that is not a session.** On a plain connection anyone on the path can inject an answer, so an answer that does not become a session counts as unreachable at once, as a dropped connection would. The client does not treat it as a refusal and does not touch the profile's refusal waits. It sets the candidate aside for about 90 s, which covers a node restart, and moves on. The message says the network or the server answered and that it cannot tell which. The set-aside doubles on each failure in a row of the same candidate, up to the hour an unreachable candidate gets, and returns to 90 s when a session opens. Without that, a device that is over quota, disabled or has a wrong clock would put the server's name and the cookie on the path every 90 s without end, on the most visible transport there is.
+
+**What is lost against the TLS form.**
+
+- Every outer check of the server: no certificate, no pin.
+- The cover. A path observer sees the upgrade, the token in the cookie and the frames, and can classify the connection from its first packets.
+- The clock offset from a `Date` header, since anyone on the path can write that field.
+- Encrypted Client Hello and the TLS part of the fingerprint pack. The pack's HTTP header fields apply and matter more, because the whole path reads them.
+
+**The node side.** The operator's web server ends the plain HTTP connection as it ends a TLS one and forwards the transport's path to the node's `ws-plain` listener on loopback. On that plain listener the web server:
+
+- Forwards the upgrade on the transport's path to the node, and never answers that path with a redirect to HTTPS. A client does not follow a redirect.
+- Answers everything else as it always does. A site that redirects every plain request to HTTPS then has one path that does not redirect, and on a plain connection the path is visible. The decoy origin of this listener must therefore answer as the plain listener answers any other path, the redirect included, so a stranger who asks for the path with no valid cookie, or a made-up one, gets what any other path gets. There is no exception to the origin rule here: that rule forbids an origin that loops, and a plain site that redirects does not loop.
+- Behind a CDN that answers plain requests with a redirect at its edge, every other path is answered at the edge while the transport's path travels to the operator's server and back, so that one path is measurably slower on a connection the whole path can time, and an edge redirect and an origin redirect differ in their header sets. A zone with a `ws-plain` transport must therefore make the redirect at the operator's server for every path, never at the CDN edge. Where that cannot be met, the residual stands and is on the differential test.
+- What cannot be hidden: on that listener a request with a valid token is answered with an upgrade where every other request is answered with a redirect or a page. Only a user can cause it, and everyone on the path can see it. A long plain WebSocket to a name whose site tells browsers to use HTTPS only is unusual by itself.
+
+**How this relates to legacy `ws`.** The built `ws` transport on a `wireguard` inbound can also be reached without TLS, and that is a different thing: it has no proof, no padding and no decoy, shows WireGuard's own bytes in its frames, and is of the plain class. `ws-plain` keeps the proof, the sealed chunks, the padding and the decoy, and gives up only the outer TLS.
+
+### Appearance of `ws-plain` frames (designed, not built)
+
+:::caution[Designed, reviewed once, not built]
+This section is a design. It has had one internal review and is not implemented. Nothing here is claimed to work. It must not be read as making `ws-plain`, or anything else, undetectable.
+:::
+
+**The deciding point, first.** On `ws-plain` the upgrade request, with its cookie, has already classified the connection before any frame is sent. An appearance changes nothing about that request. It can only matter against an observer that judges the content of frames and ignores the request that opened them. Against any other observer it is worth nothing, and that bounds how much this whole layer is worth.
+
+On a plain connection the frames are high-entropy binary, which ordinary WebSocket traffic is not. An optional appearance lets a provider dress the frames of an accepted session as another kind of content. It is a property of a `ws-plain` transport in the signed profile, chosen by the provider, and the node is told the same choice in its config. The default is none, and in version 1 no value is defined, so any value refuses the transport.
+
+**What it is, and is not.** An appearance is an encoding over the chunks that are already sealed, inside the binary frames of the WebSocket session and nowhere else. It adds no secrecy and uses no new cryptography: the chunk is already an AEAD message, and the encoding is public and reversible by anyone who knows the format, exactly as base64 is. It is the family of format-transforming encryption (Dyer and others, 2013) and of the mimicry transports in the pluggable-transport literature. The lesson of that literature is the one to keep in view: a transport that imitates a protocol imperfectly can be easier to detect than one that imitates nothing, because an observer can test it against the real thing and find the one place it differs (Houmansadr, Brubaker and Shmatikov, "The Parrot is Dead", 2013). The rating is Detectable whether an appearance is used or not.
+
+**The decoy is not changed by it.** A stranger on a `ws-plain` path never gets an upgrade, so there is nothing of an appearance for a stranger to see. The `ws-plain` rule stands as it is: a stranger gets what any other path of that plain listener gets. An appearance must not make the origin's answers on that path differ from its answers elsewhere.
+
+**Form (a), "media": a container whose payload is high-entropy by nature.** It is an interface and a set of requirements. No container is named in version 1. A container may be named only when all of these are met:
+
+- **What "a decoder accepts" means.** The writer's output passes a named validator of a named version for that container, at the level of the container's structure. That is the claim. Decoding one frame of the content finds noise at once, because the content is sealed bytes, and no claim is made that it does not.
+- **Both directions.** The requirement covers what dresses the client's frames as well as the node's. A download has no upload, so a container that only makes sense one way does not qualify.
+- **Time fields.** A container carries timestamps and durations. The writer needs a stated policy for what it puts there, and for what it does while the tunnel is idle.
+- **Nothing from a secret or from the user's system** goes into the container's fields.
+- **The reader is a parser of hostile input.** The container's framing is outside the sealed chunk, so anyone on the plain path can alter or inject it, and on the node it is reachable for 10 s by whoever raced a token into a pending session. The reader has hard bounds before any allocation, its own fuzz targets on both sides, and is written for this purpose. It is not a general media library.
+- **The reader and the writer** come from the client release and the node, under a fixed identifier. Never from the provider.
+- **Measured first:** which plain WebSocket media traffic exists on the networks in question, whether those networks treat it differently from other binary frames at all, the validator's verdict on the writer's output, and a comparison of sizes and timing against a real stream of that kind.
+
+What an observer still sees, whatever the container: the sizes, the timing and the direction are the tunnel's. A stream that carries a tunnel uploads about as much as it downloads, has no real duration or bitrate, never ends and never repeats, and lives exactly as long as the tunnel. Media over a plain WebSocket is itself uncommon.
+
+**Form (b), "text": the bytes carried as ordinary-looking text.** For a path where only text passes. This section states its cost, how it is told apart, and the conditions under which it may be built. It gives no encoding.
+
+- **The cost.** A scheme that carries about one bit per word expands the data about fifty times, at about six bytes a word. One that carries about one bit per sentence expands it several hundred times. Schemes that carry a few bits per word drive a language model, and they need the same model and the same arithmetic, bit for bit, on the device and on the node, which this project cannot ship or keep in step. So the realistic form is the first: about fifty times. One full-size tunnel packet is then about 70 KB of text and the first handshake message about 7 KB.
+- **How it is told apart.** Text made to carry data is what simple statistics, and a language model more so, separate from real writing most easily. It is also a long, two-way stream of text at a steady rate, which no reader produces.
+- **Recommendation.** It is not part of version 1's default set, and this page recommends against building it: the cost is certain and large, and the benefit rests on an observer that passes text and never tests it.
+
+It exists as an option of last resort for a provider and a user who choose it knowingly. If it is built, all of these hold:
+
+1. `ws-plain` only. Never a default, never chosen automatically, never reached by fallback, never the remembered candidate.
+2. Its own consent, which shows a measured speed in plain numbers and says that it can be recognised by simple statistics.
+3. The generator and its word lists ship in the signed client release and in the node, under a versioned identifier. Nothing is fetched, and nothing comes from the provider.
+4. The codec is integer-only and fully specified, so that two implementations agree byte for byte. No model.
+5. The cover text is never shown to the user, stored or logged.
+6. Every length is bounded before it is read, a frame that does not decode ends the session, and both sides have fuzz targets.
+7. Padding and the transport's time limits get values of their own for this form. The values of the other transports were not set for a fifty-fold expansion.
+8. The operator is told plainly that a front or a CDN in the path carries about fifty times the tunnel's volume, and the node caps it. That is the one cost this option puts on a third party.
+9. The rating stays Detectable and the label says "experimental disguise".
+
+**Rules for any appearance.**
+
+- It is named in the signed profile and set to the same value in the node config. It is never negotiated in clear, because a negotiation is itself a signature.
+- Everything parsed from it is bounded in size and time before it is read, and a frame that does not decode ends the session as an invalid chunk does.
+- The rating stays Detectable at most, and no text may say or imply that an appearance makes the transport undetectable.
+- The config key stays out of the config reference and its schema until a value exists.
+
+**Should this layer exist for anything but `ws-plain`?** No, not in version 1. On `tls`, `ws` and `fronted` the bytes are already inside TLS, so an appearance would be read only by whoever ends TLS. That is a separate design against a different observer and is not specified here.
+
+**Open questions.**
+
+- Whether an appearance has any value while the request that opens the connection is unchanged.
+- Which container form (a) could name, under the requirements above. None is named.
+- Whether any appearance is worth its cost before it is measured against the test that "The Parrot is Dead" describes.
+- Whether form (b) should be built at all. The recommendation here is no. The conditions above are what it would take.
+
 ### What `tls` and `ws` do not hide
 
 - That the client holds a long-lived connection to this host and moves a lot of data over it, in both directions.
@@ -880,7 +1019,7 @@ Even so, a client that tries several addresses of one CDN within a short time, w
 
 ## Transport fallback
 
-The rating of a profile is too coarse to guard a change of transport, because in version 1 every native transport is rated Detectable. Fallback is therefore guarded by the class in the table at the top of this page: cover, no cover, plain.
+The rating of a profile is too coarse to guard a change of transport, because in version 1 every native transport is rated Detectable. Fallback is therefore guarded by the class in the table at the top of this page: cover, no cover, exposed, plain.
 
 **Order.** A profile lists its transports in the provider's order. Two things can change which is tried first:
 
@@ -916,6 +1055,7 @@ The first message of a TLS connection, the ClientHello, differs between programs
 | Where a pack comes from | Client releases and the client's signed update channel only. Never a subscription, a profile or the control channel. |
 | Expiry | An expired pack is still used, and every profile that depends on it is capped at Detectable until a newer pack arrives. |
 | Session resumption | Tickets are kept in memory only and never written to disk. |
+| The plain variant, for `ws-plain` | `ws-plain` sends no TLS, so only the HTTP part of the pack applies, and the whole path reads it. The pack holds a fixed set of header fields for a plain upgrade, with fixed values and never `Accept-Language`. What a plausible set is for a plain WebSocket upgrade is unmeasured, so until it is measured the client sends the set the pack names and the page records that it is unmeasured. |
 
 What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognisable.
 
@@ -1007,6 +1147,10 @@ Each is listed with the default this draft takes. The first six are the ones an 
 | Built-in certificate issuance for `tls` | Not specified, files only. If it is added, a challenge that needs no listener (a DNS record) avoids a new probe surface. The plan says issuance is built in. |
 | Should the token on `tls` also be bound to the TLS connection (RFC 9266)? | No. It cannot be done behind a CDN, and one format for `tls` and `ws` was preferred. |
 | Always prohibiting outer fragmentation on datagram transports | Yes. Without a working control channel a path with a small MTU then loses full-size packets until the client lowers its MTU by itself. |
+| `fronted` without TLS | Refused in version 1. Polling in clear shows a session id on every request, a request counter, and bodies of random bytes at a steady rhythm, and plain HTTP through a CDN is more often cached, retried or rewritten than a WebSocket is. Where plain HTTP passes and WebSocket does not, there is no transport in version 1. |
+| `ws-plain` carries its token in a cookie, which is visible on the plain path but not in URL logs. Is a cookie the least conspicuous place? | As written. Any place on a plain connection is seen, and the cookie is still a fixed shape. It keeps the token out of kept URL records. |
+| The plain variant sends no `Accept-Language`, which protects the user's language and is itself unlike a browser. Should it send a fixed value from the pack? | A fixed value from the pack, never the user's, once the header set is measured. Until then none. |
+| Does `ws-plain` belong in version 1 at all, as the weakest option, or should it wait? | In version 1, below every other obfuscated transport, behind its own consent, for networks where it is the only thing that passes. |
 | Junk packets on `udp-obfs`, which the plan lists | None before the first packet. They may come back. |
 | Padding ranges, the session base, the 16 chunk count, and the keepalive and rekey ranges (threat model Q5) | As in the table of numbers, with no measurement. The length and timing test decides. |
 | Parallel connections (threat model Q13) | Default 1, at most 4. Whether more than 1 is worth its pattern is unmeasured. The node answers on the session it heard last, so a flow can be reordered when a device alternates. Whether a later version should pick the session by flow, and how it would learn that a connection has died, is open. |

@@ -333,7 +333,7 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 - **Push.** The client does not poll. The node sends a new `usage` when the numbers changed since the last one, and not sooner than the time in the table of numbers. Nothing is pushed while nothing changes. The one thing the channel does on a schedule is the MTU re-confirmation on a datagram transport, see "What shows through the transport". A new `session`, `exits` or `notices` is sent when a reload changed it for this device.
 - **Applying.** The client applies pushed snapshot messages no faster than the limit in the table of numbers, so that a node cannot make the interface flicker or keep the client busy. The limit covers `session`, `exits`, `usage`, `notices` and `hints` only. Answers to the client's own requests (`exit_result`, `probe_token`, `probe_ack`, `mtu_result`, `error`) and `bye` are handled as they arrive.
 - **Notices.** They come from the operator's config (the proposed `notices` key). The node writes none of its own. A notice is plain text.
-- **Hints.** A hint tells a client which of the candidates in its signed profile this node also answers on. It is two indices into the profile's own lists and can name nothing that is not already there. In version 1 the node may always send an empty list.
+- **Hints.** A hint tells a client which of the candidates in its signed profile this node also answers on. It is two indices into the profile's own lists and can name nothing that is not already there. In version 1 the node may always send an empty list. A hint whose transport index names a `ws-plain` transport is ignored.
 
 ### Languages
 

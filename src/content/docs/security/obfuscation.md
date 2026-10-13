@@ -59,12 +59,13 @@ Two transports are built, `udp` and legacy `ws`. Neither is obfuscation, and bot
 
 Everything else on this page is specified and not built.
 
-## Three classes of transport
+## Four classes of transport
 
-The app sorts transports into three classes, and never moves to a lower one without asking you:
+The app sorts transports into four classes, and never moves to a lower one without asking you:
 
 - **Cover** (`tls`, `ws`, `fronted`): the connection is shaped like something ordinary, TLS to a web site.
 - **No cover** (`udp-obfs`): WireGuard's bytes are hidden, and the result looks like nothing in particular.
+- **Exposed** (`ws-plain`): WireGuard's bytes are hidden, and the connection is plain HTTP. The network can see the server's name and can tell that you use this app, and when and how much, now and later in its records. It cannot see what you send. If the server's key for this transport ever leaks, anyone who kept records of the network can tie all of your connections over it together, back to the key's last change. It is specified and not built, and it has its own question before the app uses it.
 - **Plain** (`udp`, legacy `ws`): nothing is hidden.
 
 A class says what a transport tries to do. It does not say that it succeeds.

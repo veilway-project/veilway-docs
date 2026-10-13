@@ -228,7 +228,7 @@ A catalogue that breaks any of these is dropped whole, nothing of it is shown, a
 | A `set_exit` that is within the limit for all messages and over the `set_exit` limit | Answers `exit_result` with status 2 and the tag in force, and changes nothing |
 | A `probe_down` with a `size` outside 1280 to `max_size` or a `port` of 0 | Malformed body: closes the connection with no message |
 | A `set_mtu` outside 1280 to the inbound's `mtu` | Changes nothing and answers `mtu_result` with the value in force |
-| `probe_start` on a transport where it does not apply, or `probe_down` without a live token | Answers `error` with code 2 (not applicable) |
+| `probe_start` on any transport but `udp` and `udp-obfs`, or `probe_down` without a live token | Answers `error` with code 2 (not applicable) |
 | `probe_start` while a run is open or too soon after one | Answers `error` with code 3 (busy) |
 | `set_exit` for a tag that does not exist, or one the user is not entitled to | Answers `exit_result` with status 1. Both cases look the same, so the channel does not reveal which tags exist. |
 
@@ -274,7 +274,7 @@ A client never adds or changes an address, a resolver or a route because a node 
 
 The profile carries the inbound's `mtu`. On a `veilway` inbound, outer packets of a datagram transport are never fragmented (see "MTU" on the transports page), so on a path that cannot carry packets of that size every full-size packet is lost. The channel lets the client find the largest size that passes in both directions. The method is that of RFC 8899 (path MTU discovery by probing from the packet layer): send probes of chosen sizes and treat a size as working only when a probe of that size was confirmed.
 
-It applies on `udp` and `udp-obfs`. On a stream transport nothing fragments, the node answers `probe_start` with `error` code 2, and the client keeps the profile's `mtu`.
+It applies on `udp` and `udp-obfs`, and `probe_start` is answered only there. On every other transport the node answers `probe_start` with `error` code 2, since nothing fragments on a stream, and the client keeps the profile's `mtu`.
 
 A probe is one UDP datagram between the device's address and the gateway's probe port, whose inner IP packet is exactly `size` bytes:
 

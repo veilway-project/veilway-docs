@@ -52,7 +52,9 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Wait for the peer's close frame | 5 s | `tls`, `ws` |
 | Body of a `fronted` request | 10 s to arrive | `fronted` node |
 | `fronted` request number | at most 10 decimal digits, at most 4,294,967,295 | `fronted` |
-| Decoy requests in flight per source on the proxy path | 16 | stream listeners |
+| Strangers' requests waiting on the proxy path | 16 per source, and half the proxy pool in all | stream listeners |
+| Head read on the proxy path to find the source | up to 65,536 bytes. A head above 16,384 bytes is never a user's. | stream listeners |
+| `trusted_proxies` | 1 to 64 entries | `ws`, `fronted` |
 | Chunk plaintext | at most 16,000 bytes | every obfuscated transport |
 | Datagram inside a chunk | at most 1,600 bytes | every obfuscated transport |
 | Datagrams in one chunk | at most 470, which follows from the two sizes above and the smallest item | every obfuscated transport |
@@ -103,8 +105,8 @@ Node capacity numbers. These are not wire parameters. Each is a proposed config 
 | Sessions | 16,384 | per listen address |
 | Undecided connections | 512, and 64 per source | per listen address |
 | Relayed connections | 1,024, and at most 65,536 when set in the config (`limits.relayed`) | per listen address |
-| Proxy connections | twice the `fronted` sessions, 8,192 | per listen address |
-| `fronted` sessions | 4,096 | per listen address |
+| Proxy connections | twice the `fronted` sessions, 2,048 | per listen address |
+| `fronted` sessions | 1,024. Each keeps up to 65,536 bytes of its last response, 64 MiB when the pool is full. Validation warns above 4,096. | per listen address |
 | Replay cache | 262,144 entries | per node |
 | Accepted proofs per source | burst 256, then 32 a second | per node |
 
@@ -605,10 +607,10 @@ The decoy origin is a web server that answers everyone who is not a user. There 
 | Deployment | TLS server the path sees | What the node receives |
 |---|---|---|
 | `tls` | The node's TLS library | TLS from the client |
-| `ws` or `fronted` behind a web server on the same host | That web server | Plain HTTP/1.1 from the web server, on a loopback or unix socket listener |
-| `ws` or `fronted` behind a CDN | The CDN towards the client. The operator's web server towards the CDN. | Plain HTTP/1.1 from the operator's web server, on a loopback or unix socket listener |
+| `ws` or `fronted` behind a web server on the same host | That web server | Plain HTTP/1.1 from the web server, on a loopback address |
+| `ws` or `fronted` behind a CDN | The CDN towards the client. The operator's web server towards the CDN. | Plain HTTP/1.1 from the operator's web server, on a loopback address |
 
-A native `ws` or `fronted` listener never ends TLS itself. A listener where the node ends TLS is `tls`. Behind a CDN, the operator's own web server ends the CDN's TLS and the node sits behind it, so tokens, session ids and the decoy's pages never cross the path from CDN to node unprotected. Validation warns when a `ws` or `fronted` listener is not on a loopback address or a unix socket, as it does for the built `ws`.
+A native `ws` or `fronted` listener never ends TLS itself. A listener where the node ends TLS is `tls`. Behind a CDN, the operator's own web server ends the CDN's TLS and the node sits behind it, so tokens, session ids and the decoy's pages never cross the path from CDN to node unprotected. Validation warns when a `ws` or `fronted` listener is not on a loopback address, as it does for the built `ws`. The listener is an address. There is no unix socket listener in version 1, which leaves a stated gap: any local process whose address is inside `trusted_proxies` is believed about the source.
 
 ### Pools and what happens when one is full
 
@@ -626,8 +628,8 @@ A connection is in one of four states, each with its own pool, so that pressure 
 Rules:
 
 - Strangers may displace strangers. Nothing a stranger does displaces a session.
-- **Strangers on the proxy path.** A proxy connection also carries strangers' requests, and each one that waits for the decoy holds a connection. On this path the source is known from the header, so it is capped: one source may have 16 requests in flight to the decoy. Over that, the proxy connection that carries that source's oldest waiting request is closed. A user's request is never the one that is cut.
-- The default size of the proxy pool is twice the cap on `fronted` sessions, because a front may open one connection per request in flight.
+- **Strangers on the proxy path.** A proxy connection also carries strangers' requests, and each one that waits for the decoy holds a connection. Such waiting requests hold at most half the proxy pool together, and 16 for one source. Over either, the connection with the oldest such request is closed at once, in the middle of an answer if need be, and the front turns that into its own error. A user's request is never the one that is cut. A `fronted` request counts among its source's 16 while its body is read. While the origin is down, the front sees a connection closed with no answer.
+- The default size of the proxy pool is twice the cap on `fronted` sessions, 2,048, because a front may open one connection per request in flight.
 - The undecided pool is shared by nature: until a connection has sent its request line, the node cannot tell a user from a stranger. Under heavy churn a user's connection can be decided as "not a user" before its request arrives. The client then sees a refusal and waits. This is a limit of the design, not a guarantee that was kept.
 - There is no limit per source on relayed connections of direct peers and no limit on their size or lifetime. The origin is the operator's own, and its limits decide, as they do for its direct visitors. Closing an idle connection for room is what web servers do.
 - The node never closes a connection at accept because of a count. If it cannot take more connections, it stops accepting and leaves new ones in the system's queue, as a busy server does.
@@ -646,13 +648,32 @@ Rules:
 6. **A user.** Read the rest of the request head within its limits, close the decoy connection unused, and continue with "WebSocket session". If the head is over a limit or is not a WebSocket upgrade as that section requires, close the connection: `close_notify` where the node ends TLS, then FIN, with no HTTP answer. No WebSocket exists yet, so no WebSocket close is sent.
 7. **Not a user.** If the decoy connection is open, write every byte read so far to it, unchanged, then relay both directions until either side closes. The node reads nothing more as a protocol on this connection, so there is no second reading of the bytes for the origin to disagree with. Every byte the origin sent is written out to the peer before the node waits for anything else, so the end of an answer never stays inside the node. When the origin closes, the peer is closed only after all of what the origin sent has been handed on, however slowly the peer reads. An origin's reset reaches the peer as a reset. When the origin closes its side, the node closes the peer's connection, also while the peer is still sending. If the origin closed the waiting connection, close the peer's connection the same way. If the origin could not be reached, close the peer's connection, count it as `decoy_down`, and log at warn at most once a minute. A connection that is closed to make room in a pool is closed at once, with no graceful wait.
 
-**Trusted proxy peer.** The connection is a proxy connection and is handled request by request:
+**Trusted proxy peer.** The connection is a proxy connection and is handled request by request.
 
-1. **Read the whole request head**, within the limits for a head. The proxy has buffered it already, so waiting for it adds no delay that a prober could measure. A head that is over the size limit or not complete in time is "not a user": forward what was read to the decoy origin, relay both directions until the answer ends or either side closes, and then close the proxy connection, because the node no longer knows where the next request starts.
-2. **Source.** The source for every limit and log line is the rightmost address in the header named by `client_address_header` that is not itself inside `trusted_proxies`. If the header is absent or unreadable, it is the peer.
-3. **Evaluate** the request line as a direct peer's is evaluated, with that source. Here a `GET` for a `ws` path or a `POST` for a `fronted` path can be a user's. Steps 1 to 4 of "Verifying" run for every request.
-4. **A user.** For a WebSocket open, the connection leaves the proxy pool: continue with "WebSocket session". A head that is not a WebSocket upgrade closes the connection with no HTTP answer. A `fronted` request is handled as "`fronted`" says, and the node returns to step 1.
-5. **Not a user.** Forward this request to a connection to the decoy origin and relay its response, then return to step 1. Forwarding uses an existing HTTP/1.1 implementation. Header fields are passed in order, except hop-by-hop fields. A request with both `Content-Length` and `Transfer-Encoding`, with more than one `Content-Length`, with a `Transfer-Encoding` other than exactly `chunked`, or that the implementation refuses, closes both connections with no response. If the origin cannot be reached, the proxy connection is closed with no response, counted as `decoy_down`. The front then gives the visitor its own error, as it would if the site were down.
+*Who may be a user.*
+
+1. Whether a connection may carry a user is decided by the socket's peer address alone, checked against `trusted_proxies` at every request, so that a reload which removes an address takes effect on connections that are already open. A peer outside the list on such a listener is a stranger, whatever it sends.
+2. `trusted_proxies` is required on a `ws` or `fronted` listener. It holds 1 to 64 entries and may not cover a whole address family between them. An entry that is not loopback or private is a warning.
+3. The web server in front must speak HTTP/1.1 to the node and must append the address it took the request from at the right end of `client_address_header`. A request line that says HTTP/1.0 is never a user's. The node counts such requests from trusted proxies and `veilway doctor` reports them, because a common web server speaks HTTP/1.0 to what is behind it unless it is told otherwise.
+
+*Reading a request.*
+
+4. **Read the whole request head.** The proxy has buffered it already, so waiting for it adds no delay that a prober could measure. A head above 16,384 bytes is never a user's. The node reads on, up to 65,536 bytes, only to find the source its proxy named.
+5. **Source.** The source for every limit and log line is the rightmost address in `client_address_header` that is not a trusted proxy. A head the node cannot read whole or cannot parse names no source, and its source is then the proxy. Without `client_address_header` every request counts as the proxy, and the limits per source become one shared limit.
+6. **Evaluate** the request line as a direct peer's is evaluated, with that source. Here a `GET` for a `ws` path or a `POST` for a `fronted` path can be a user's. Steps 1 to 4 of "Verifying" run for every request. A `ws` request is eligible only with a strictly valid head, as rule 9 defines it, and no body.
+7. **A user.** For a WebSocket open, the connection leaves the proxy pool: continue with "WebSocket session". A head that is not a WebSocket upgrade closes the connection with no HTTP answer. A `fronted` request is handled as "`fronted`" says, and the node returns to step 4. An origin connection that this proxy connection had is dropped at any user request.
+
+*Forwarding a stranger's request.*
+
+8. **The node writes no byte of its own and changes none.** The head goes to the origin exactly as it was read, hop-by-hop fields included, then the body as far as its framing says. The answer comes back as the origin sent it, up to the last byte of that answer and no further. No HTTP implementation sits in between. A request head and the part of its body that arrived with it are written to the origin in one write, because a real origin was seen to answer differently when they were split.
+9. **The node reads framing more strictly than a web server does.** A request it can frame has exactly `METHOD SP target SP HTTP/1.1`, and either one `Content-Length` of digits only, at most 2^63 - 1, or exactly `Transfer-Encoding: chunked`, with CRLF line ends only, no folded lines and no chunk extensions. Anything else (both framings, several lengths, another coding, HTTP/1.0, `CONNECT` and so on) is a request whose end it cannot tell. Such a request is relayed as bytes until the origin's first answer ends, and then both connections are closed. The node never reads a next request after a boundary it could not be sure of.
+10. **The origin connection** is opened at the first request on this proxy connection that is not a user's, and kept for that proxy connection. It is not watched before a request as the direct path's is, because here the front owns the timers that a visitor sees.
+11. **What the origin does when no request is in its hands is not passed on.** If the origin sends anything, or closes, while the node has no request with it, the node drops that origin connection and keeps the proxy's. That includes a close that follows a complete answer to a complete request.
+12. **Bytes behind a complete answer** from the origin, in the same read or arriving while a request is still being sent, are never handed to the proxy. Both connections are closed.
+13. **An answer that ends the connection.** An answer that says `Connection: close`, or an HTTP/1.0 answer without `Connection: keep-alive`, ends the proxy's connection with it.
+14. **One resend.** A request that was whole when it was sent on a kept origin connection, and got nothing back before that connection ended, is sent once more on a new connection, whatever its method. The cost: an origin that took a request and died before answering gets that request twice.
+15. With `proxy_protocol`, the origin is told the source of each origin connection. For a source taken from the header the port is 0. When a head named no source, the origin is told the proxy's address, so an origin must grant nothing to an address on the strength of that header.
+16. If the origin cannot be reached, the proxy connection is closed with no response, counted as `decoy_down`. The front then gives the visitor its own error, as it would if the site were down.
 
 The decision point for a direct peer is the end of the request line, or the first byte that cannot belong to one. For a proxy peer it is the end of the request head.
 
@@ -682,7 +703,7 @@ The node never sends an error page, a status line or a header of its own to some
 
 The whole spread of the first four rows is under 1 microsecond. The judgement for version 1: that is not measurable across a wide-area path, where it sits behind the hop from the node to the decoy origin, and is at the edge of what can be measured on a local network. It is stated, not removed, and a timing check in the test suite is to catch a change that adds or drops a whole operation. Against the origin itself, an answer through the node is later by the hop from node to origin, and a request line that arrives slowly is held until its end. Those two are far larger, a prober can measure them, and they are to be published per transport with the probe test of the threat model.
 
-**The differential test.** "A stranger gets what the origin gives" is decided by a test, and no stream transport is rated above Detectable without it. The test sends the same inputs to the node and to its origin from one place and compares three things: the bytes that come back, whether the connection is left open or closed and how, and the time of a close or of the first byte. It must include a connection that sends nothing, a request that is never finished, and an answer larger than a socket buffer read by a peer that reads slowly. Comparing bytes alone does not find a node that answers correctly and late, or one that cuts a long answer. What the implemented test covers today: 28 kinds of request against one web server product; a second, hand-written origin for large answers that are read late and paced; an early `408`; a real WebSocket endpoint of the origin reached through the relay; a reset in the middle of an answer; an early answer to an upload; and a client that offers only `h2`. What it does not cover: any second web server product, any distribution of timings as opposed to single cases, and anything at the TLS layer. "The test passes" means exactly that list and no more.
+**The differential test.** "A stranger gets what the origin gives" is decided by a test, and no stream transport is rated above Detectable without it. The test sends the same inputs to the node and to its origin from one place and compares three things: the bytes that come back, whether the connection is left open or closed and how, and the time of a close or of the first byte. It must include a connection that sends nothing, a request that is never finished, and an answer larger than a socket buffer read by a peer that reads slowly. Comparing bytes alone does not find a node that answers correctly and late, or one that cuts a long answer. What the implemented test covers today: 28 kinds of request against one web server product; a second, hand-written origin for large answers that are read late and paced; an early `408`; a real WebSocket endpoint of the origin reached through the relay; a reset in the middle of an answer; an early answer to an upload; and a client that offers only `h2`. What it does not cover: any second web server product, any distribution of timings as opposed to single cases, and anything at the TLS layer. "The test passes" means exactly that list and no more. For the proxy path, what exists: 49 kinds of request against one web server product through a front written for the test; a hand-written origin for large answers that are read late; and a run between real servers, with nginx in front and first nginx, then HAProxy, as the origin, in which 18 kinds of request gave the same bytes and the same end, and a device connected over `ws` and one over `fronted` through the real front. What does not exist: any CDN, any other web server product, any distribution of timings, and an unrequested `408` from a real server, which was tested from a stub only.
 
 ### WebSocket session
 
@@ -695,7 +716,7 @@ The node's answer must not be the same bytes on every node in the world. It is t
 3. `Upgrade: websocket`, `Connection: Upgrade`, and `Sec-WebSocket-Accept` with the value RFC 6455 requires.
 4. One `Set-Cookie` field. The cookie's name is set per inbound in the config, with no default, and its value is random base64url text of a random length. It carries no meaning. It exists so that the answer's length varies.
 
-The node learns the origin's values by one `GET /` to the origin at start and on every reload. If that request fails, the node sends only `Date` from the list, logs at warn, and tries again every 60 s until it succeeds, logging at info when it does. Nothing else about the origin's responses is copied.
+The node learns the origin's values by one `GET /` to the origin at start and on every reload. If that request fails, the node sends only `Date` from the list, logs at warn, and tries again every 60 s until it succeeds, logging at info when it does. Nothing else about the origin's responses is copied. The request is skipped altogether when `upgrade_headers` names nothing but `Date`, which includes the empty default of a `ws` listener.
 
 It never accepts an extension and never selects a subprotocol. Behind a front web server, that server adds its own fields as it does for any upgrade.
 
@@ -751,7 +772,7 @@ The same WebSocket session, behind something else that ends TLS: the operator's 
 
 **The path.** The node compares the path it receives with its configured path. If the front rewrites the path, the node's `path` is the rewritten one and the profile's is the one the client sends. The proof does not depend on either.
 
-**Limits.** Those of the stream listener. Behind a proxy every connection has one TCP source, so limits per source work only when `trusted_proxies` and `client_address_header` are set. Without them every visitor shares one share.
+**Limits.** Those of the stream listener. Behind a proxy every connection has one TCP source, so limits per source work only when `client_address_header` is set. Without it every visitor shares one limit. `trusted_proxies` is always required.
 
 **What a CDN or a front web server sees.** The client's address, the path, the token (opaque, of varying length, different every time), the WebSocket upgrade, and the length and timing of every message. It does not see WireGuard's type bytes or sizes, and it cannot tell which device it is, because the hello is sealed to a key it does not have. A request for a fixed path with a long random query, answered by an upgrade, is still a recognisable shape to whoever ends TLS. Operators should keep the query part of the request out of the front server's access log. A token the node has accepted cannot be used again on that node. A token that was logged on the way and never reached the node can be presented once by whoever holds it, inside its window of about a minute, and opens a pending session that this party cannot establish. Either way a logged token is a record that someone holding the node's transport key could later tie to a device.
 
@@ -886,6 +907,8 @@ What an observer still sees, whatever the container: the sizes, the timing and t
 - The extra time of the hop from node to decoy origin on every unauthenticated answer. On `tls`, two more differences from a typical web server: a client that offers only `h2` gets a fatal alert, and plain HTTP sent to the port gets the TLS library's alert where many web servers send a 400 page. One difference in the relay was found and left: an origin that answers early to a large upload and then keeps reading the rest before it closes takes the whole upload when it is reached directly. Through the node, the upload ends in a reset once the origin has closed its side. It was left because the alternative is worse: keeping the peer's connection open after the origin's close would make a request sent after that close hang, where the origin itself answers with a reset, and that is the easier thing to probe.
 - A WebSocket connection with no page load from the same host before it, and a connection with no DNS lookup before it when the profile carries addresses.
 - Several parallel connections, when a profile allows them.
+- On the proxy path, three differences from the origin remain. After a request the node cannot frame, it closes the proxy connection once the origin's answer has ended, where the origin would keep it. That shows only through a front that maps a client's connection to one of its own. A head that is silent or unfinished never leaves a front that buffers heads, so it shows nothing of the node. A front that streams heads would show the node's 10 s limit for a head and its 300 s idle limit. And the origin gives up a quiet connection after its own timeout while the node keeps its proxy's.
+- The extra hop, in one measurement of the first implementation in October 2026 on one machine, not a requirement: first bytes within about 8 to 11 ms of the origin's, and closes within about 13 ms.
 
 ## `fronted`
 
@@ -909,7 +932,7 @@ A body, in both directions, is a sequence of:
 | 0 | 2 | `length` of the sealed chunk that follows, 16 to 16,016 |
 | 2 | `length` | One sealed chunk: ciphertext and tag |
 
-Both bodies are sent with `Content-Type: application/octet-stream` and a `Content-Length`. A request or response with nothing to carry holds one padding-only chunk, so no body is ever empty and every request is authenticated by chunks that only the session's client can seal.
+Both bodies are sent with `Content-Type: application/octet-stream` and a `Content-Length`. A request or response with nothing to carry holds one padding-only chunk, so no body is ever empty and every request is authenticated by chunks that only the session's client can seal. The node's response carries the status line, `Content-Type` and `Content-Length`, and no other field.
 
 ### State machine
 
@@ -917,13 +940,13 @@ The node decides every request in this order, and a request that fails any step 
 
 1. **The head.** The request must have exactly one `Content-Length`, from 18 to 65,536, and no `Transfer-Encoding`. This is decided from the head, before any of the body is read.
 2. **The target.** It is an opening request (`<path>?<token>`) or a later request (`<path>?<sid>.<n>`, with `<n>` from 1 to 4,294,967,295, at most 10 digits, no leading zero).
-3. **An opening request.** The node verifies the proof as "Verifying" says. An accepted proof is spent and creates a pending session, whatever happens next. A CDN's repeat of an opening request is therefore refused as a replay, and the client handles that as a refusal.
-4. **A later request.** The `sid` must be known, no other request of that session may be in flight, and `n` must be one more than the last accepted, or equal to it for a repeat. A request `n` + 1 that arrives while request `n` is still held is not queued: it takes the unauthenticated path.
+3. **An opening request.** The node verifies the proof as "Verifying" says. An accepted proof is spent and creates a pending session, whatever happens next. A CDN's repeat of an opening request is therefore refused as a replay, and the client handles that as a refusal. An opening request whose session is still pending is held until the first tunnel packet deadline and is then answered by the origin.
+4. **A later request.** The `sid` must be known, no other request of that session may be in flight, and `n` must be one more than the last accepted, or equal to it for a repeat. A request `n` + 1 that arrives while request `n` is still held is not queued: it takes the unauthenticated path. A later request is in flight from the moment its chunks have opened, not while its body is still being read.
 5. **The body.** The node reads the whole body, which must arrive within 10 s, before it acts on any of it.
 6. **The chunks.** Every chunk of the body must open under `k_c2s` at the expected chunk numbers. Chunk numbers advance only when the request is accepted. If any chunk does not open, nothing of the body is processed. For a later request the session stays as it was, so a stranger who learns a `sid` cannot disturb it. For an opening request the pending session is dropped at once.
 7. **A chunk that is invalid, in a body whose every chunk opened** (a bad item length), came from the session's client. The session is ended and the request takes the unauthenticated path. A body in which any chunk fails to open is handled by step 6, whatever its other chunks hold.
-8. **A repeat** of the last accepted request with the same body gets the stored response again, because a CDN may retry.
-9. **The answer.** The node answers an accepted request as soon as it has downstream data for the session, and otherwise after the hold time, with status 200. Its first answer on a new session comes when the session is established, as on every transport.
+8. **A repeat** of the last accepted request with the same body gets the stored response again, because a CDN may retry. The node knows a repeat by the length and the SHA-256 of the last request body, which it keeps with the last response, so a repeat is recognised before anything is opened. A repeat is not activity.
+9. **The answer.** The node answers an accepted request as soon as it has downstream data for the session, and otherwise after the hold time, with status 200. Its first answer on a new session comes when the session is established, as on every transport. A session that ends while a request is in flight still answers that request with 200 and what was queued for it.
 
 The client:
 
@@ -938,8 +961,8 @@ A session with no accepted request for its idle time is forgotten. There is no i
 
 - Bodies of at most 65,536 bytes in each direction.
 - A body is authenticated chunk by chunk, not as a whole. A front can therefore deliver a body cut at a chunk boundary, or two bodies joined in order, and the node accepts the chunks it gets. A front can also just drop a request, so this is a matter of availability and nothing else.
-- The node stores one response per session, for the repeat in step 8. With the cap on `fronted` sessions this bounds the memory: at the default, 4,096 sessions of 65,536 bytes.
-- At most 2 `fronted` sessions per device.
+- The node stores one response per session, for the repeat in step 8. With the cap on `fronted` sessions this bounds the memory: at the default, 1,024 sessions of 65,536 bytes, 64 MiB.
+- At most 2 `fronted` sessions per device. A third displaces the device's oldest `fronted` session at the moment it is established.
 
 ### Errors and decoy behaviour
 
@@ -949,7 +972,7 @@ Those of the stream listener. The node handles every connection request by reque
 
 - The polling: many small requests to one CDN host for as long as the tunnel is up, with near-equal request and response sizes when idle. Published research has recognised polling transports by exactly this rhythm.
 - From the CDN: the client's address, the path, the session id on every request, and all sizes and timing. Anyone the CDN answers to has the same.
-- Everything in the list for `tls` and `ws` that concerns the tunnel's own timing.
+- Everything in the list for `tls` and `ws` that concerns the tunnel's own timing. That includes the differences of the proxy path listed there.
 
 ### What `fronted` asks of the CDN
 

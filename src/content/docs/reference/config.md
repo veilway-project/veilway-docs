@@ -33,7 +33,7 @@ The core reads one JSON document. It is the source of truth: the panel changes i
 - **Secrets.** `private_key`, `preshared_key`, `username` and `password` are secrets. No error, warning, log line or API response contains a field's value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read unless started with `--allow-readable-config`; `veilway check` warns.
 - **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
 - **Paths.** A file path in the config is relative to the directory of the config file. Absolute paths and any `..` component are errors.
-- **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users and 16 devices per user.
+- **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users and 16 devices per user.
 - **Errors and warnings.** Validation reports problems with the path of the field, at most 100 errors and 100 warnings followed by a count of the rest. An error refuses the config. A warning lets it load and is logged. Warnings are advice and are not part of the format.
 
 ## `version`
@@ -59,8 +59,9 @@ The node answers DNS for its tunnels at each inbound's gateway address.
 |---|---|---|---|
 | `servers` | list of `ip:port`, 1 to 4 | required | Upstream resolvers, tried in order with 5 seconds each. |
 | `hijack` | bool | `true` | Answer every UDP and TCP port 53 flow from a tunnel here, whatever address it was sent to. With `false`, only queries sent to a gateway address are answered and other port 53 traffic is routed like any flow. |
+| `sets` | list of at most 32 sets | `[]` | Other lists of servers, each for the inbounds, groups and users it names. See DNS sets below. |
 
-A server address may not be loopback, link-local, unspecified, multicast, or inside any inbound pool.
+A server address may not be loopback, link-local, unspecified, broadcast, multicast, in `0.0.0.0/8`, or inside any inbound pool. An IPv6 address that embeds such an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) is refused as well. The destination gate refuses all of these at run time, so such a server would resolve nothing.
 
 Engine:
 
@@ -70,6 +71,56 @@ Engine:
 - A query name that is not a valid rule domain (for example one with an underscore label) is still forwarded, but no `domain` condition matches it and it is not remembered. A memory entry is one name with one address.
 - At most 64 queries of one user wait at once; more are answered `SERVFAIL`. Over TCP a query may be 1500 bytes and a connection carries at most 128 queries.
 - With `hijack` on, rules with `port: [53]` never see tunnel DNS, and port 53 traffic that is not DNS is dropped. DNS over TLS and DNS over HTTPS pass untouched, and `domain` rules cannot see names resolved that way.
+
+### DNS sets
+
+A set is a named list of upstream servers for some of the node's users: a filtering resolver for a `family` group, an ad-blocking resolver for a few users, another resolver for one inbound. `servers` stays the list for everybody no set speaks for, and a config without `sets` behaves as it always did.
+
+```json
+"dns": {
+  "servers": ["1.1.1.1:53"],
+  "sets": [
+    {"tag": "family", "servers": ["1.1.1.3:53", "1.0.0.3:53"], "groups": ["family"]},
+    {"tag": "adblock", "servers": ["192.0.2.53:53"], "users": ["alice", "bob"]},
+    {"tag": "lab", "servers": ["192.0.2.54:53"], "inbounds": ["office"]}
+  ]
+}
+```
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | Unique among the sets. |
+| `servers` | list of `ip:port`, 1 to 4 | required | Tried in order with 5 seconds each. The address rules of `dns.servers` apply. The same server may stand in several lists. |
+| `inbounds` | list of inbound tags | `[]` | Queries that come through these inbounds use the set. |
+| `groups` | list of group names | `[]` | Users in these groups use the set. |
+| `users` | list of user names | `[]` | These users use the set. |
+
+Which list a query goes to, most specific first:
+
+1. the set that names the user;
+2. otherwise the set that names one of the user's groups;
+3. otherwise the set that names the inbound the query came through;
+4. otherwise `dns.servers`.
+
+Steps 1 and 2 belong to the user. Step 3 belongs to the query: a user with devices on two inbounds, whom no set names by user or group, uses the list of whichever inbound a query comes through.
+
+Validation makes the answer the same whatever the order of the sets:
+
+- Error: an inbound, a group or a user is named by two sets, or twice in one list. The error gives the path of the first entry.
+- Error: a user whom no set names is in groups that two different sets name. The error is at that user's `groups` and gives the paths of the two entries. Name the user in the `users` of one set, or keep the groups in one set.
+- Error: a name no inbound, group or user has.
+- Error: `hijack` is `false` and `sets` is not empty. With `hijack` off a device reaches any resolver it likes by sending its queries to another address than the gateway, so a set would decide nothing.
+- Warning: a set no query goes to. It names nobody, or the groups it names have no user and every user of the inbounds it names goes by a set that names them or one of their groups.
+
+A set covers the DNS the node answers, which with `hijack` on is every UDP and TCP port 53 flow of a tunnel. DNS over TLS and DNS over HTTPS are not that: a device that uses them steps around its set, as it steps around `domain` rules. Where a filtering set has to hold, refuse those too, for example with a rule that rejects TCP and UDP port 853 and rules for the addresses of the public DoH resolvers.
+
+Engine:
+
+- Everything this section says about `dns.servers` holds for the servers of a set, with nothing taken away. A forwarded query is a flow from that user to the chosen server on port 53, routed by the rules, checked by the destination gate and by entitlement. The name memory, the limits, the ids and the TCP fallback are the same.
+- A set never falls back. When none of its servers answers, the query is answered `SERVFAIL`, and when the rules refuse a server it is answered `REFUSED`, as with `dns.servers`. The node never asks `dns.servers` or another set in its place: a filtering resolver that could be stepped around whenever it is down would filter nothing.
+- `hijack` is one setting for the whole node, not one per set, and it has to be on for a config with sets.
+- The name memory belongs to the user, whichever list answered. See Reloading for what happens to it when the servers a user resolves through change.
+- A log line that names a user and is about a query also names the set the query used. The info lines about a server that stopped answering, or answers again, name the list and the server's place in it (`server 2 of 2 of dns set family`), and both lines of one server read the same. A server that stands in two lists is counted in each by itself. No line shows a queried name or a server address unless `log.destinations` is on.
 
 ## `inbounds`
 
@@ -255,7 +306,7 @@ Validation:
 - Warning: a `domain` rule with an `exit` action comes before a `block` or `reject` rule. A user who controls any name matching the pattern can point it at any address, so a `domain` rule is a routing convenience and never a security control.
 - Warning: no enabled rule isolates users for everyone, that is, no enabled rule with `block` or `reject` has `tunnel:users` in `ip` and no other condition. The warning says that users can reach each other's devices, and names the inbounds where that is so when an `inbound` condition limits the rule.
 - Warning: no enabled rule refuses private destinations for everyone, that is, no enabled rule with `block` or `reject` has `geoip:private` in `ip` and no other condition. The warning says that private networks behind the exits are reachable.
-- Warning: an enabled `block` or `reject` rule whose only conditions are `ip`, `protocol` and `port` matches a configured DNS server on port 53 before any rule that would send it to an exit, so the node cannot reach its own resolver.
+- Warning: an enabled `block` or `reject` rule whose only conditions are `ip`, `protocol` and `port` matches a server of `dns.servers` or of a DNS set on port 53 before any rule that would send it to an exit, so the node cannot reach its own resolver. The warning gives the path of the server, for example `dns.sets[0].servers[1]`.
 - Warning, best effort: a rule is completely covered by a single earlier rule. `check` does this within a fixed budget; a reload does not.
 
 Engine: `protocol` is the upper-layer protocol after walking IPv6 extension headers. Fragments are reassembled before routing, within a per-user bound, or dropped. A packet whose headers cannot be parsed is dropped and counted.
@@ -322,6 +373,9 @@ After a commit:
 - Every live flow is checked again. It is reset when its exit is gone, its exit's backend or outbound changed, its destination no longer passes the gate, its user is no longer entitled to the exit, or the rules now decide differently for it.
 - Changing an inbound's `private_key`, `address` or `mtu` restarts that tunnel and drops its sessions. Changing one transport restarts that transport only. Changing a tag is removing one object and adding another.
 - Certificates are read again on every reload.
+- DNS sets change without touching a tunnel or a session: a set can be added, removed, given other servers or given to other inbounds, groups and users. The next query of every user goes to the list the new config gives them.
+- A user whose queries go to other servers than before loses the names the node remembered for them, so that no `domain` rule keeps matching by the word of a resolver that is no longer theirs. This is logged at info. What counts is the servers of the list the user's queries go to, looked at for each inbound their devices are on: moving a user, a group or an inbound into, out of or between sets clears the memory, and so does changing the `servers` of the set they are on. The same holds for `dns.servers`: changing it clears the memory of every user who resolves through it, which earlier builds did not do. The same servers in another order, and another set with the same servers, are no change. `domain` rules match for that user again as their names are resolved again; open flows are checked like after any reload.
+- A query that is waiting for a server when the reload happens is answered by that server. Its answer is not remembered when the servers its user resolves through changed in the meantime.
 
 ## Commands
 
@@ -370,8 +424,8 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 2. The control socket: whether a node answers on it. If one does, a listen address that is taken and an l3 interface that exists are expected, not failures.
 3. Every listen address of every inbound: whether it can be bound right now, over UDP or over TCP as the transport needs. Transports that share an address are tried once.
 4. Every certificate and key of a `ws` transport: both load, the key matches the certificate, the certificate is not expired and not yet valid, and the names it covers. Under 14 days left is a warning.
-5. Every DNS server of the config: one query over UDP and the same query over TCP from the node itself, with the answer time. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
-6. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires.
+5. Every DNS server of the config, those of `dns.servers` and then those of every DNS set: one query over UDP and the same query over TCP from the node itself, with the answer time. The line of a server of a set names the set, as in `set family, servers[0], udp`. A server that stands in two lists is asked once for each. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
+6. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds, and when the config has sets a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where the queries of a set leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
 7. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free. When a running node has the exit and its interface is not there, a warning says the exit is down and being retried.
 8. ICMP ping sockets, when a policy uses `icmp_echo: direct`.
 9. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses. Then the control socket path: what is there, and whether its directory can be written.

@@ -189,6 +189,7 @@ The list answers `{"users": [...]}`. The single route answers one user, or `404 
 | `quota_bytes`, `quota_period` | As in the config, or `null`. |
 | `used_bytes` | Bytes in both directions since `period_start`. |
 | `period_start` | When the count last started over, in Unix seconds. `0` for a user who never had a `quota_period`, or who had none when their usage was last reset. |
+| `dns_set` | The tag of the DNS set that names the user, or else one of their groups. `null` when no set does: the user's queries then go to the set that names the inbound they come through, or to `dns.servers`. |
 | `traffic` | Lifetime counters: `up_bytes`, `up_packets`, `down_bytes`, `down_packets`. Up is from the device into the node. |
 | `devices` | Per device: `name`, `public_key`, `addresses`, `handshake_age_secs` (seconds since its session was made, `null` without a session). |
 

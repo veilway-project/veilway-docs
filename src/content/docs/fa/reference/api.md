@@ -189,6 +189,7 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | `quota_bytes`، `quota_period` | مثل پیکربندی، یا `null`. |
 | `used_bytes` | بایت‌های هر دو جهت از `period_start`. |
 | `period_start` | آخرین باری که شمارش از نو شروع شد، به ثانیهٔ یونیکس. برای کاربری که هرگز `quota_period` نداشته، یا هنگام آخرین ریست مصرفش نداشته، `0` است. |
+| `dns_set` | تگ مجموعهٔ DNS که نام کاربر را آورده، و اگر چنین مجموعه‌ای نیست، مجموعه‌ای که نام یکی از گروه‌های او را آورده است. وقتی هیچ مجموعه‌ای این کار را نکرده `null` است: پرسمان‌های کاربر آن‌وقت به مجموعه‌ای می‌روند که نام ورودیِ محل آمدنشان را آورده، یا به `dns.servers`. |
 | `traffic` | شمارنده‌های طول عمر: `up_bytes`، `up_packets`، `down_bytes`، `down_packets`. up یعنی از دستگاه به گره. |
 | `devices` | برای هر دستگاه: `name`، `public_key`، `addresses`، `handshake_age_secs` (ثانیه‌های گذشته از ساخته‌شدن نشستش، بدون نشست `null`). |
 

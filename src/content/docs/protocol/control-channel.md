@@ -4,7 +4,7 @@ description: The authenticated API a client reaches inside the tunnel, at the ga
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by anyone outside the project, and nothing in it is implemented.
+This page is a draft specification. It has had three rounds of internal adversarial review, and its node side has been implemented and that implementation reviewed against this page. It has not been reviewed by anyone outside the project. The node side exists on `veilway` inbounds with the `udp` transport. No client exists yet. Do not rely on any property described here.
 :::
 
 The control channel is what plain WireGuard lacks: a way for a connected client to check its addresses and resolver for IPv4 and IPv6, find a working MTU, see the exits it may use and pick one, see its usage and quota, and receive operator notices. It is a small binary protocol on one port of the gateway address, inside the tunnel. Read [Protocol overview](../overview/) first for the terms and the keys.
@@ -40,8 +40,8 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Authenticated connections per device | 2. A third replaces the oldest. |
 | Client message | `length` at most 4,096 |
 | Node message | `length` at most 65,535 |
-| Messages from one device | 10 at once, then 1 a second |
-| `set_exit` from one device | 3 at once, then 1 every 5 s |
+| Messages from one device, of every type | 10 at once, then 1 a second. Over it: `error` code 1. |
+| `set_exit` from one device | 3 at once, then 1 every 5 s. Over it: `exit_result` status 2. |
 | Exits in a catalogue | at most 256, at most 64 per message |
 | Notices | at most 4, each shown cut to 280 bytes |
 | Hints | at most 16 |
@@ -53,7 +53,7 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Remembered MTU on the client | per network and transport, 7 days |
 | MTU re-confirmation | one probe in each direction after a time drawn uniformly from 300 to 900 s, for as long as the session lasts |
 | Wait after `bye` | see "Being cut off" |
-| Device MTU on the node | kept until the client sets another, or until the device has had no WireGuard session for 180 s |
+| Device MTU on the node | kept until the client sets another, or until the device has had no WireGuard session for 180 s. One value per device, also for a device with addresses in two inbounds. |
 
 ## Who can use it
 
@@ -110,7 +110,7 @@ node_mac   = HMAC-SHA-256(key = k_ctl, message = 0x02 || transcript)
 - `hello` and `hello_reply` are the whole messages as sent, from the first length byte to the last body byte. The transcript therefore covers `max_version`, the chosen `version` and both random numbers, so nobody in between can change the version that was offered or chosen.
 - Both numbers are 32 fresh random bytes, so a credential is good for this connection only.
 - `k_ctl` depends on the device's and the inbound's WireGuard public keys. The node computes it for the device the connection came from. One device's secret therefore does not authenticate from another device's tunnel, even another device of the same user.
-- A device may have two transport secrets during a rotation. The node checks the client's MAC against both, always both, and answers with the one that matched.
+- A device may have two transport secrets during a rotation. The node checks the client's MAC against both, always both, and answers with the one that matched. So that an operator who removes one of two secrets can tell which one stays, the control API shows a secret in its config read as `<redacted:xxxxxxxx>`, where the digits are a short fingerprint that is different in every run of the node (see the [control API reference](../../reference/api/)).
 - The credential is sent once per connection, not per message. A message cannot be put into an established TCP connection by a browser or by another device behind the client.
 
 ### Versions
@@ -134,8 +134,8 @@ Client to node:
 | `0x10` | `refresh` | Empty | After `auth_ok` |
 | `0x11` | `set_exit` | Exit tag. An empty tag clears the selection. | After `auth_ok` |
 | `0x12` | `probe_start` | Empty | After `auth_ok` |
-| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | Only after a `probe_token` was received on this connection and while that token is live. At any other time the node answers `error` code 2. |
-| `0x14` | `set_mtu` | `mtu` (2) | After `auth_ok` |
+| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | Only after a `probe_token` was received on this connection and while that token is live. At any other time the node answers `error` code 2. A `size` outside 1280 to `max_size`, or a `port` of 0, is a malformed body: the node closes the connection with no message. |
+| `0x14` | `set_mtu` | `mtu` (2) | After `auth_ok`. A value outside 1280 to the inbound's `mtu` is not malformed: it changes nothing and is answered with `mtu_result` carrying the value in force. |
 
 Node to client:
 
@@ -162,8 +162,10 @@ An `exits` entry:
 | Tag | 1 + up to 64 | The exit's tag |
 | Name | 2 + its length | The exit's display name, shown cut to 64 characters |
 | Country | 2 | Two uppercase ASCII letters, or two zero bytes for none |
-| Flags | 1 | Bit 0: carries every IP protocol. Bit 1: this device's selection. Bit 2: the user's configured exit. Bit 3: working, as far as the node last measured. Other bits zero. |
-| Load | 1 | 0 unknown, 1 low, 2 medium, 3 high |
+| Flags | 1 | Bit 0: carries every IP protocol. Bit 1: this device's selection. Bit 2: the user's configured exit. Bit 3: working. Other bits zero. |
+| Load | 1 | 0 unknown, 1 low, 2 medium, 3 high. It is 0 until something on the node measures load. |
+
+"The user's configured exit" is the exit a device without a selection leaves through: the user's `exit`, or `routing.default` when the user has none. "Working" is always set for a `netstack` exit, set for an `l3` exit while its interface is up, and never set for a `block` exit.
 
 A catalogue is one or more `exits` messages, the last with bit 0 of `flags` set. `refresh` asks for the snapshot again.
 
@@ -182,18 +184,23 @@ A catalogue that breaks any of these is dropped whole, nothing of it is shown, a
 |---|---|
 | A wrong preface, an unknown type, a malformed body, a `length` of 0 or over the limit, a type that is not allowed in the current state | Closes the connection with no message, and counts it |
 | A failed `auth` | Closes the connection with no message, and counts it. There is no lockout. |
-| A message over the rate limit | Answers `error` with code 1 (rate limited) and ignores the message |
+| A message of any type over the limit for all messages | Answers `error` with code 1 (rate limited) and ignores the message. An ignored `set_exit` does not count against the `set_exit` limit. |
+| A `set_exit` that is within the limit for all messages and over the `set_exit` limit | Answers `exit_result` with status 2 and the tag in force, and changes nothing |
+| A `probe_down` with a `size` outside 1280 to `max_size` or a `port` of 0 | Malformed body: closes the connection with no message |
+| A `set_mtu` outside 1280 to the inbound's `mtu` | Changes nothing and answers `mtu_result` with the value in force |
 | `probe_start` on a transport where it does not apply, or `probe_down` without a live token | Answers `error` with code 2 (not applicable) |
 | `probe_start` while a run is open or too soon after one | Answers `error` with code 3 (busy) |
 | `set_exit` for a tag that does not exist, or one the user is not entitled to | Answers `exit_result` with status 1. Both cases look the same, so the channel does not reveal which tags exist. |
 
 `error` answers only the requests a client may send after the opening: `refresh` (`0x10`), `set_exit` (`0x11`), `probe_start` (`0x12`), `probe_down` (`0x13`) and `set_mtu` (`0x14`). A bad `hello` or `auth` is never answered with `error`: the connection is closed. A client that receives an `error` naming any other type closes the connection.
 
-`exit_result` statuses: 0 selected, 1 refused, 2 rate limited. A client treats a message it cannot read the same way a node does: it closes the connection and applies nothing from that message.
+`exit_result` statuses: 0 selected, 1 refused, 2 rate limited by the `set_exit` limit. Both limits apply to `set_exit`: the limit for all messages is checked first. A client treats a message it cannot read the same way a node does: it closes the connection and applies nothing from that message.
 
 ### Being cut off
 
-When the node is about to cut a device off, it first sends, on every authenticated connection of that device, a last `usage` if the cause is quota, and then `bye` with the reason. It does this on a best effort: the cut-off does not wait for it.
+When the node is about to cut a device off, it first sends, on every authenticated connection of that device, a last `usage` if the cause is quota, and then `bye` with the reason. It does this on a best effort: the cut-off does not wait for it. The `bye` is one TCP segment written at the node's next sequence number on that connection. It is not sent again if it is lost.
+
+No `bye` is sent to a device that is cut off because its addresses or its preshared key changed. None of the four reasons is true of it, and it can connect again with its new values.
 
 A client that received `bye` knows the tunnel was ended on purpose. It shows the reason, does not treat any transport or candidate as failed, and does not run transport fallback. When it tries again depends on the reason:
 
@@ -250,7 +257,9 @@ A probe is sent like any data packet of the transport, with fragmentation prohib
 7. The client remembers the result per network and transport, and next time confirms it with one probe in each direction. After every reconnect and every change of network it sends `set_mtu` again.
 8. **A path that shrinks later.** Because nothing is fragmented, a path whose MTU drops in the middle of a session would lose every full-size packet from then on. The client therefore confirms the current size again with one probe in each direction on the timer in the table of numbers, and at once when its system reports an ICMP "fragmentation needed" or "packet too big" for the transport's outer packets. Such a report is only a reason to probe. The size in it is never used, because anyone on the path can forge one. A confirmation that fails starts a walk down the table.
 
-Bounds: the node accepts a `size` from 1280 to `max_size` and nothing else. `set_mtu` is accepted from 1280 to the inbound's `mtu`. The client never raises its MTU above the signed profile's, whatever the node says.
+Bounds: a `probe_down` with a `size` outside 1280 to `max_size` is malformed and closes the connection. A `set_mtu` outside 1280 to the inbound's `mtu` changes nothing and gets `mtu_result` with the value in force. The client never raises its MTU above the signed profile's, whatever the node says.
+
+A probe run belongs to the gateway it was started at: its token, its probes and its `probe_down` requests all use that gateway's address, also for a device with addresses in two inbounds.
 
 ### What the node does with a device's MTU
 
@@ -258,8 +267,8 @@ The value from `set_mtu` is the MTU of the tunnel towards that one device. It la
 
 | Packet headed to the device, larger than its MTU | What the node does |
 |---|---|
-| TCP that the node itself ends (a `netstack` exit) | Does not arise: the node's stack uses segments that fit. |
-| UDP that the node itself builds (a `netstack` exit) | Fragments it as the sending host: IPv4 fragments, or IPv6 fragments made at the source. |
+| TCP that the node itself ends (a `netstack` exit) | Does not arise for connections opened after the MTU was lowered: the node honours the segment size the device announces when it opens a connection. A connection that was open before is fragmented by the node as the sending host. |
+| UDP that the node itself builds (a `netstack` exit) | Fragments it as the sending host: IPv4 fragments, or IPv6 fragments made at the source. The fragment identification is counted per device and starts at a random value. |
 | IPv4 that the node forwards (an `l3` exit), fragmentation allowed | Fragments it. |
 | IPv4 that the node forwards with fragmentation prohibited, and any forwarded IPv6 | Drops it and sends the sender the ICMP error "fragmentation needed" or "packet too big" with the device's MTU, within the node's ICMP rate limits. |
 
@@ -269,8 +278,9 @@ The client's own MTU setting covers the other direction: it limits what the devi
 
 A device may choose which exit the action `"user"` means for it. The meaning of exits, entitlement and that action is that of the [config reference](../../reference/config/). This section adds only the selection.
 
-1. **Scope.** The selection belongs to one device. Another device of the same user is not affected, so one stolen device does not reroute the user's other devices.
-2. **Where it lives.** It is runtime state, kept in the usage state file next to the user's counters, keyed by the device's public key. It is never written into the config document, so a reload does not revert it.
+1. **Scope.** The selection belongs to one device. Another device of the same user is not affected, so one stolen device does not reroute the user's other devices. A device with addresses in two `veilway` inbounds is still one device: it has one selection, one MTU (applied in each inbound as the lower of it and that inbound's `mtu`) and one set of connection pools and rate limits, whichever gateway it talks to.
+2. **Where it lives.** It is runtime state, kept in the usage state file, keyed by the device's public key. It is never written into the config document, so a reload does not revert it. The state file keeps its version 1: selections are an added `devices` key that older builds ignore, so going back to an older build loses no usage. A selection is written at the next regular write of the state file, not at once, so a crash within about 10 s of a `set_exit` loses that selection and nothing else. When a node has more selections than fit beside its users in the file, the rest are kept in memory only and the node warns.
+   Selection and MTU belong to the device under its user. They do not follow a public key that is moved to another user: the key then starts without either.
 3. **Validity.** `set_exit` is accepted only when the tag is in the user's `exits` at that moment. On every reload each stored selection is checked again, and one that is no longer in the user's `exits` is removed and logged at info. A device with no selection uses the user's `exit`, then `routing.default`, as today.
 4. **What it changes.** Only flows that the rules send to `"user"`, or that match no rule. A rule that names an exit is not affected, and entitlement still applies to every flow.
 5. **Live flows.** On a successful `set_exit` the node ends the flows of that device whose decision came from `"user"`, the way it ends flows on a cut-off (a reset for TCP, an ICMP error for UDP). Their next packets are decided again and leave through the new exit. A TCP connection cannot move to another exit address, so it is broken on purpose and not left to hang. The tunnel itself does not reconnect.
@@ -339,6 +349,7 @@ The opening exchange is the same for every client: a TCP handshake inside the tu
 - **Mutual, so that a misrouted connection cannot feed the client.** If the gateway address ever led somewhere other than the node, that party could not produce `node_mac`, and the client applies nothing before it has checked it.
 - **The channel configures nothing on the client's network.** It can lower the MTU inside a bound. Every other value is shown or compared, and the list is closed.
 - **Fixed layouts, not a general encoding.** Both parsers handle hostile input: the node's from a hostile client, the client's from a hostile node. Each gets a fuzz target in the same change as the parser (`fuzz_control_server`, `fuzz_control_client`), with the assertion that no message changes the rating, the kill switch, the resolver setting, the addresses or the routes.
+- **Stated gaps of the first node implementation.** The node does not yet prohibit fragmentation of its own outer UDP packets, so a probe can be confirmed over a path that fragments it, and the size it confirms may then be one that data packets only pass in pieces. This is to be closed before any client probes. The `l3` path that answers a packet above a device's MTU with an ICMP error has not been verified against a live kernel.
 - **Keys in memory.** In the first implementation, key material (`k_ctl` and the keys it comes from) is held in the cryptographic library's own types and is not wiped from memory when a session ends. This is a stated limit of that implementation. A compromised device or node is outside what Veilway defends, and this limit makes such a compromise worth slightly more.
 - **A lost channel is not a lost tunnel, and never a leak.** If the channel fails, the tunnel keeps working with the profile's values, and the client says the channel is unavailable.
 
@@ -369,5 +380,5 @@ Each is listed with the default this draft takes.
 | May a hint name an address that is not in the signed profile? (threat model Q6) | No. |
 | Is `bye` worth what it tells a device about its account? | Yes. The device learns only what its own user could ask the provider. |
 | Where notices come from | A proposed top-level `notices` key in the config. Not in the config reference yet. |
-| The usage state file gains a selection per device | A new state file version. Not in the config reference yet. |
+| The usage state file gains a selection per device | An added `devices` key under the file's version 1, which older builds ignore. Not in the config reference yet. |
 | The port number | 47873, the same for every installation. Inside the tunnel it is not visible to the path. |

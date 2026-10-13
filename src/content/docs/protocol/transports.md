@@ -847,7 +847,7 @@ On a plain connection the frames are high-entropy binary, which ordinary WebSock
 
 **The decoy is not changed by it.** A stranger on a `ws-plain` path never gets an upgrade, so there is nothing of an appearance for a stranger to see. The `ws-plain` rule stands as it is: a stranger gets what any other path of that plain listener gets. An appearance must not make the origin's answers on that path differ from its answers elsewhere.
 
-**Form (a), "media": a container whose payload is high-entropy by nature.** It is an interface and a set of requirements. No container is named in version 1. A container may be named only when all of these are met:
+**The media appearance: a container whose payload is high-entropy by nature.** It is an interface and a set of requirements. No container is named in version 1. A container may be named only when all of these are met:
 
 - **What "a decoder accepts" means.** The writer's output passes a named validator of a named version for that container, at the level of the container's structure. That is the claim. Decoding one frame of the content finds noise at once, because the content is sealed bytes, and no claim is made that it does not.
 - **Both directions.** The requirement covers what dresses the client's frames as well as the node's. A download has no upload, so a container that only makes sense one way does not qualify.
@@ -859,23 +859,7 @@ On a plain connection the frames are high-entropy binary, which ordinary WebSock
 
 What an observer still sees, whatever the container: the sizes, the timing and the direction are the tunnel's. A stream that carries a tunnel uploads about as much as it downloads, has no real duration or bitrate, never ends and never repeats, and lives exactly as long as the tunnel. Media over a plain WebSocket is itself uncommon.
 
-**Form (b), "text": the bytes carried as ordinary-looking text.** For a path where only text passes. This section states its cost, how it is told apart, and the conditions under which it may be built. It gives no encoding.
-
-- **The cost.** A scheme that carries about one bit per word expands the data about fifty times, at about six bytes a word. One that carries about one bit per sentence expands it several hundred times. Schemes that carry a few bits per word drive a language model, and they need the same model and the same arithmetic, bit for bit, on the device and on the node, which this project cannot ship or keep in step. So the realistic form is the first: about fifty times. One full-size tunnel packet is then about 70 KB of text and the first handshake message about 7 KB.
-- **How it is told apart.** Text made to carry data is what simple statistics, and a language model more so, separate from real writing most easily. It is also a long, two-way stream of text at a steady rate, which no reader produces.
-- **Recommendation.** It is not part of version 1's default set, and this page recommends against building it: the cost is certain and large, and the benefit rests on an observer that passes text and never tests it.
-
-It exists as an option of last resort for a provider and a user who choose it knowingly. If it is built, all of these hold:
-
-1. `ws-plain` only. Never a default, never chosen automatically, never reached by fallback, never the remembered candidate.
-2. Its own consent, which shows a measured speed in plain numbers and says that it can be recognised by simple statistics.
-3. The generator and its word lists ship in the signed client release and in the node, under a versioned identifier. Nothing is fetched, and nothing comes from the provider.
-4. The codec is integer-only and fully specified, so that two implementations agree byte for byte. No model.
-5. The cover text is never shown to the user, stored or logged.
-6. Every length is bounded before it is read, a frame that does not decode ends the session, and both sides have fuzz targets.
-7. Padding and the transport's time limits get values of their own for this form. The values of the other transports were not set for a fifty-fold expansion.
-8. The operator is told plainly that a front or a CDN in the path carries about fifty times the tunnel's volume, and the node caps it. That is the one cost this option puts on a third party.
-9. The rating stays Detectable and the label says "experimental disguise".
+**Considered and not adopted: a text appearance.** Dressing the sealed bytes as ordinary-looking text, for a path where only text passes, was considered and is not part of this design. A scheme of that kind carries about one bit per word, which is roughly fifty times the volume: about 70 KB of text for one full-size tunnel packet. Any front or CDN in the path would carry that volume, which is a cost put on a third party. And of the two ideas it is the easier to tell apart, since text made to carry data is what simple statistics separate from real writing, in a long two-way stream that no reader produces.
 
 **Rules for any appearance.**
 
@@ -889,9 +873,8 @@ It exists as an option of last resort for a provider and a user who choose it kn
 **Open questions.**
 
 - Whether an appearance has any value while the request that opens the connection is unchanged.
-- Which container form (a) could name, under the requirements above. None is named.
+- Which container could be named, under the requirements above. None is named.
 - Whether any appearance is worth its cost before it is measured against the test that "The Parrot is Dead" describes.
-- Whether form (b) should be built at all. The recommendation here is no. The conditions above are what it would take.
 
 ### What `tls` and `ws` do not hide
 

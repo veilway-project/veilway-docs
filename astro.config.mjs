@@ -1,8 +1,10 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
-// Set `site` (and `base` if served from a subpath such as /veilway-docs/) before the first deploy, or CSS, scripts and links break.
+// Served by GitHub Pages under /veilway-docs. Change both when the site moves to a domain of its own, or CSS, scripts and links break.
 export default defineConfig({
+	site: "https://veilway-project.github.io",
+	base: "/veilway-docs",
 	integrations: [
 		starlight({
 			title: { en: "Veilway Docs", fa: "مستندات Veilway" },

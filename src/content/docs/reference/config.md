@@ -3,10 +3,6 @@ title: Config reference
 description: Every option of the Veilway server configuration, version 1.
 ---
 
-:::caution[Draft]
-This is config version 1 as designed for Phase 1 of the plan. `veilway check` validates it. The engine still runs on the older single-tunnel file and switches to this format in the next step, so nothing here is enforced by `veilway run` yet. Sections marked "engine" describe behaviour the engine must have when it does.
-:::
-
 The core reads one JSON document. It is the source of truth: the panel changes it through the control API, never by editing the file.
 
 ```json
@@ -70,6 +66,9 @@ Engine:
 
 - A forwarded query is a flow from that user to the chosen server on port 53. It is routed by the rules like any flow, with `domain` conditions matched against the queried name, it must pass the destination gate of the exit it leaves through, and a `block`, `reject` or not-entitled result answers `REFUSED`.
 - The node remembers, per user, which names it resolved to which addresses: at most 4096 entries per user, each kept for the answer's TTL clamped to between 60 and 3600 seconds. Only answers the node's own resolver obtained are recorded, and answers that contain pool, gateway, loopback or link-local addresses are not. Nothing is cached across users.
+- The node sends each upstream query under an id it picks itself and accepts the answer only under that id. The first server whose rules refuse the query ends it with `REFUSED`; only a silent server moves on to the next.
+- A query name that is not a valid rule domain (for example one with an underscore label) is still forwarded, but no `domain` condition matches it and it is not remembered. A memory entry is one name with one address.
+- At most 64 queries of one user wait at once; more are answered `SERVFAIL`. Over TCP a query may be 1500 bytes and a connection carries at most 128 queries.
 - With `hijack` on, rules with `port: [53]` never see tunnel DNS, and port 53 traffic that is not DNS is dropped. DNS over TLS and DNS over HTTPS pass untouched, and `domain` rules cannot see names resolved that way.
 
 ## `inbounds`
@@ -102,6 +101,8 @@ Who may use an inbound is decided by addresses alone: a device belongs to the in
 
 `path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`.
 
+Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped, and one source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once. This also applies to a reverse proxy in front of a plain `ws` listener, whose connections all come from one source.
+
 Listen conflicts, across all inbounds:
 
 - IPv6 sockets are always IPv6-only, so `0.0.0.0:443` and `[::]:443` do not conflict. A wildcard address conflicts with every address of its own family on the same port.
@@ -119,7 +120,7 @@ An outbound is a way for the userspace stack to open TCP and UDP flows.
 
 Every outbound also has a `tag`.
 
-Engine: a `server` host name is resolved by the system resolver at start, on reload and after a failed dial, never through a tunnel exit. The UDP relay address a proxy returns is used only if it is the address the control connection is connected to.
+Engine: a `server` host name is resolved by the system resolver each time the node dials the proxy, never through a tunnel exit. The UDP relay address a proxy returns is used only if it is the address the control connection is connected to. A relay address on another host means the proxy counts as having no UDP.
 
 ## `exits`
 
@@ -140,9 +141,15 @@ An exit is a named way out that users are routed to.
 | `l3` | every IP protocol | `interface` (matching `[a-z][a-z0-9_-]{0,14}`, default `veilway0`, unique across exits), `masquerade` (bool, default `true`). Linux only, needs `CAP_NET_ADMIN`: on another system `run` refuses to start. `check` does not look at the system it runs on. |
 | `block` | nothing | none. Every packet is dropped silently. |
 
+Engine, `l3`:
+
+- Only one `l3` exit can run on a node for now; a second is refused at start. The host needs `ip` (iproute2) and `nft` (nftables).
+- With `masquerade` true the node turns on forwarding for the whole host if it is off and sets it back when it stops (it stays on if the node is killed). With `masquerade` false the node still loads a small nftables table named `veilway_<interface>` that keeps tunnel traffic away from the host itself.
+- Return traffic is delivered only when it belongs to a live flow that left through that exit. Flows through an `l3` exit idle out after 7200 seconds for TCP and 60 for UDP.
+
 ### The destination gate
 
-Every exit refuses these destinations, whatever the config says: every address inside an inbound pool (traffic between users never leaves through an exit, see below), the node's own addresses, loopback, link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, unspecified, `0.0.0.0/8`, and IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused.
+Every exit refuses these destinations, whatever the config says: every address inside an inbound pool (traffic between users never leaves through an exit, see below), the node's own addresses, loopback, link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, unspecified, `0.0.0.0/8`, and IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused. Every IPv4-mapped IPv6 destination (`::ffff:a.b.c.d`) is refused outright.
 
 Private networks are not part of that fixed list. They are ordinary destinations, and routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
 
@@ -185,6 +192,13 @@ Three things hold whatever the rules say. A device can only send from its own ad
 
 Engine: `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start. The `udp` policy is decided once per flow at its first packet and the flow never moves between the proxy and the other path. A destination sent by `direct` or `via` must pass the gate of both exits. A `via` target that cannot carry the packet rejects it. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
 
+More engine behaviour of `unsupported`:
+
+- A flow sent by `via` needs the user to be entitled to both exits. A UDP flow the proxy has carried is never moved to `direct` or `via` later; it is refused if the proxy loses UDP.
+- `reject` answers are rate limited per device (burst 20, then 10 a second).
+- ICMP codes used: administratively prohibited for rules, the gate, entitlement and a rejected ping; host unreachable for a tunnel address nobody holds; port unreachable for `unsupported.udp`; protocol unreachable on IPv4 and prohibited on IPv6 for `unsupported.other`.
+- `icmp_echo: direct` allows 16 ping identifiers per device, 32 per user and 1024 in total.
+
 ## `routing`
 
 The first packet of a flow is matched against `rules` in order. The first match decides, and the whole flow keeps that decision.
@@ -214,7 +228,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 
 A domain is lowercase ASCII (punycode for other scripts), at most 253 bytes with labels of 1 to 63, no trailing dot, not an IP address in any spelling (a last label that is all digits, or `0x` followed by hex digits, is refused). `*` may only be the whole first label and needs at least two labels after it.
 
-`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool; those are `tunnel:users`. No other `geoip:` name is accepted yet, and a `tunnel:` name must be `users` or the tag of an inbound. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
+`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool; those are `tunnel:users`. A network in a rule, and `geoip:private`, also match an IPv6 destination that embeds a matching IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo). No other `geoip:` name is accepted yet, and a `tunnel:` name must be `users` or the tag of an inbound. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
 
 ```json
 {"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"},
@@ -242,6 +256,10 @@ Validation:
 - Warning, best effort: a rule is completely covered by a single earlier rule. `check` does this within a fixed budget; a reload does not.
 
 Engine: `protocol` is the upper-layer protocol after walking IPv6 extension headers. Fragments are reassembled before routing, within a per-user bound, or dropped. A packet whose headers cannot be parsed is dropped and counted.
+
+For flows between users, only an echo reply counts as the answer to a delivered echo request; every other ICMP message is decided by the rules for its own direction.
+
+The flow table holds at most 65536 flows in total, 1024 per user and 512 per device. Refused flows are remembered apart from these limits (4096, the oldest gives way).
 
 ## `users`
 
@@ -288,8 +306,9 @@ After a commit:
 ## Commands
 
 ```
+veilway run --config config.json
 veilway check --config config.json
 veilway schema
 ```
 
-`check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.
+`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.

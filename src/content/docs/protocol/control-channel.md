@@ -29,11 +29,13 @@ This changes one sentence of the [config reference](../../reference/config/) ("A
 
 ## Numbers that are judgement calls
 
+Every range written "a to b" is inclusive at both ends, and a time drawn from a range is drawn in whole milliseconds.
+
 | Name | Value |
 |---|---|
 | Port | 47873. Not registered with any authority. |
 | Delay before opening the channel | uniform 0 to 2000 ms after the WireGuard handshake |
-| Time to finish authentication | 10 s from the TCP accept |
+| Time to finish authentication | 10 s from the TCP accept on the node, and 10 s from the TCP connection being open on the client |
 | Connections per device that have not authenticated | 4. A fifth replaces the oldest. |
 | Authenticated connections per device | 2. A third replaces the oldest. |
 | Client message | `length` at most 4,096 |
@@ -76,7 +78,10 @@ Every message after the preface is:
 
 - Every body has a fixed layout. There is no self-describing encoding, no optional field and no nesting. A body shorter or longer than its layout is malformed.
 - A string is a length followed by UTF-8 bytes. A tag has a 1 byte length of at most 64. Display text has a 2 byte length and the limit its field states.
+- A tag on the wire follows the tag rule of the [config reference](../../reference/config/) exactly, in both directions: it matches `[a-z0-9][a-z0-9_-]{0,63}` and is not one of the words that rule reserves (`all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`). Anything else is a malformed body. An exit's tag is never empty. The only empty tags are the one in `set_exit` that clears the selection and the one in `exit_result` that says nothing is selected. Because a tag can hold only these characters, it needs no filter before it is shown.
+- Display text (an exit's name, a notice) is filtered for display and then cut to its limit, in that order, see "What a malicious node can do". Text that is longer than its limit is cut. It is never a malformed body and never a reason to close the connection. The size of a message as a whole is still bounded by `length`.
 - An address is a family byte (`4` or `6`) followed by 4 or 16 bytes.
+- Reserved bits and reserved bytes are zero. A message with one set is malformed.
 
 ## Opening a connection
 
@@ -88,7 +93,7 @@ Every message after the preface is:
 6. The client verifies the node's credential in constant time. On failure it closes the connection, applies nothing it received, and tells the user the control channel could not be verified. The tunnel stays up.
 7. The node sends the snapshot, unasked: one `session`, the `exits` messages, one `usage`, one `notices` and one `hints`.
 
-Steps 2 to 5 must finish within the time limit, or the node closes the connection.
+Steps 2 to 5 must finish within the time limit, or the node closes the connection. The client has the same limit, counted from the moment its TCP connection is open to the moment it has verified `auth_ok`. When it passes, the client closes the connection and treats the channel as unavailable, so a node cannot hold the opening exchange open forever.
 
 ### The credential
 
@@ -112,9 +117,10 @@ node_mac   = HMAC-SHA-256(key = k_ctl, message = 0x02 || transcript)
 
 This page defines version 1.
 
+0. Before it sends anything, a client whose signed profile has a `min_control_version` above the highest version the client speaks does not open the channel. It tells the user that the app needs an update. Here the app is too old, not the node.
 1. `hello` carries the highest version the client speaks.
 2. The node answers with the lower of that and the highest it speaks. If that would be 0 it closes the connection.
-3. The client closes the connection, and tells the user the node is too old, when the answer is below `min_control_version` of its signed profile or above what it sent. It does not try again with a lower version.
+3. When the answer is below `min_control_version` of its signed profile, the client closes the connection and tells the user the node is too old. When the answer is above what the client offered, or is 0, the node has broken the protocol: the client closes the connection and reports a protocol error, not an old node. In neither case does it try again with a lower version.
 4. Version 1 never grows. A new message type, a new field or a new enum value is a new version.
 
 ## Messages
@@ -128,7 +134,7 @@ Client to node:
 | `0x10` | `refresh` | Empty | After `auth_ok` |
 | `0x11` | `set_exit` | Exit tag. An empty tag clears the selection. | After `auth_ok` |
 | `0x12` | `probe_start` | Empty | After `auth_ok` |
-| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | After `probe_token` |
+| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | Only after a `probe_token` was received on this connection and while that token is live. At any other time the node answers `error` code 2. |
 | `0x14` | `set_mtu` | `mtu` (2) | After `auth_ok` |
 
 Node to client:
@@ -137,8 +143,8 @@ Node to client:
 |---|---|---|
 | `0x81` | `hello_reply` | `version` (1), `node_nonce` (32) |
 | `0x82` | `auth_ok` | `node_mac` (32) |
-| `0x90` | `session` | `node_time` (8, Unix seconds), `mtu` (2), family count (1, 1 or 2), then per family: the device's address and the gateway address |
-| `0x91` | `exits` | `flags` (1: bit 0 set on the last message of a catalogue), entry count (1, at most 64), entries |
+| `0x90` | `session` | `node_time` (8, Unix seconds), `mtu` (2), family count (1, 1 or 2), then per family: the device's address and the gateway address. Families appear in the order IPv4 then IPv6, each at most once, and both addresses of an entry are of the same family. Anything else is malformed. |
+| `0x91` | `exits` | `flags` (1: bit 0 set on the last message of a catalogue, every other bit zero), entry count (1, at most 64), entries |
 | `0x92` | `exit_result` | `status` (1), the tag now selected (empty when none) |
 | `0x93` | `usage` | `used_bytes` (8), `quota_bytes` (8, 0 for none), `period` (1: 0 none, 1 daily, 2 weekly, 3 monthly), `period_start` (8, Unix seconds), `expires_at` (8, Unix seconds, 0 for none), lifetime `up_bytes` (8), lifetime `down_bytes` (8) |
 | `0x94` | `notices` | Count (1, at most 4), then per notice: `severity` (1: 0 information, 1 warning), text (at most 280 bytes) |
@@ -147,7 +153,7 @@ Node to client:
 | `0x97` | `probe_ack` | `seq` (1), `size` (2) |
 | `0x98` | `mtu_result` | `mtu` (2): the value now in force for this device |
 | `0x99` | `bye` | `reason` (1): 1 quota used up, 2 expired, 3 disabled or removed, 4 the node is stopping |
-| `0x9F` | `error` | `code` (1), the `type` of the message it answers (1) |
+| `0x9F` | `error` | `code` (1), the `type` of the message it answers (1). The type is one of `0x10` to `0x14`. |
 
 An `exits` entry:
 
@@ -161,6 +167,15 @@ An `exits` entry:
 
 A catalogue is one or more `exits` messages, the last with bit 0 of `flags` set. `refresh` asks for the snapshot again.
 
+A catalogue has exactly one encoding, and the client checks it as a whole:
+
+- Every message that is not the last carries exactly 64 entries. The last carries 1 to 64, or 0 only when it is the only message and the user has no exits.
+- No tag appears twice.
+- At most one entry has the "this device's selection" bit, and at most one has the "user's configured exit" bit.
+- At most 256 entries in all.
+
+A catalogue that breaks any of these is dropped whole, nothing of it is shown, and the client closes the connection.
+
 ### Errors
 
 | Condition | What the node does |
@@ -171,6 +186,8 @@ A catalogue is one or more `exits` messages, the last with bit 0 of `flags` set.
 | `probe_start` on a transport where it does not apply, or `probe_down` without a live token | Answers `error` with code 2 (not applicable) |
 | `probe_start` while a run is open or too soon after one | Answers `error` with code 3 (busy) |
 | `set_exit` for a tag that does not exist, or one the user is not entitled to | Answers `exit_result` with status 1. Both cases look the same, so the channel does not reveal which tags exist. |
+
+`error` answers only the requests a client may send after the opening: `refresh` (`0x10`), `set_exit` (`0x11`), `probe_start` (`0x12`), `probe_down` (`0x13`) and `set_mtu` (`0x14`). A bad `hello` or `auth` is never answered with `error`: the connection is closed. A client that receives an `error` naming any other type closes the connection.
 
 `exit_result` statuses: 0 selected, 1 refused, 2 rate limited. A client treats a message it cannot read the same way a node does: it closes the connection and applies nothing from that message.
 
@@ -218,7 +235,9 @@ A probe is one UDP datagram between the device's address and the gateway's probe
 |---|---|---|
 | 0 | 8 | `token` |
 | 8 | 1 | `seq` |
-| 9 | rest | Zero bytes, up to the size probed |
+| 9 | rest | Filler, zero bytes, up to the size probed. A receiver refuses a probe with any other byte in the filler. |
+
+`size` is the length of the whole inner IP packet, which has no IP options and no extension headers. The headers are 20 + 8 = 28 bytes on IPv4 and 40 + 8 = 48 bytes on IPv6, so the UDP payload is `size` - 28 or `size` - 48 bytes, and the filler is `size` - 37 or `size` - 57 bytes. A probe whose packet has options or extension headers, or whose length is not the `size` it was sent for, is refused.
 
 A probe is sent like any data packet of the transport, with fragmentation prohibited as always, and on `udp-obfs` with no transport padding.
 
@@ -275,10 +294,10 @@ A compromised node is a malicious provider. This table is the whole list of valu
 | `mtu` in `session` and `mtu_result` | 1280 to the `mtu` of the signed profile | Lowers the tunnel MTU to it. A value outside the bound is ignored. |
 | Addresses and gateways | None needed | Compares them with the profile and reports a difference. Applies nothing. |
 | `node_time` | None needed | Shows a warning. Sets no clock. |
-| Exit catalogue | At most 256 entries. Names at most 64 characters after removing control, bidirectional formatting, zero-width and other invisible characters. | Shows it. A later catalogue replaces the earlier one. Entries beyond the limit close the connection. |
+| Exit catalogue | At most 256 entries, and the checks under "Messages". A name is first filtered (control, bidirectional formatting, zero-width and other invisible characters are removed) and then cut to 64 characters. A name that is too long for the screen is cut, never a reason to close the connection. Tags need no filter. | Shows it. A later catalogue replaces the earlier one. A catalogue that fails a check is dropped whole and closes the connection. |
 | Selected exit | Must be a tag in the catalogue | Shows it. |
 | Usage | Integers, clamped to 9007199254740991 | Shows it. |
-| Notices | At most 4, each at most 280 bytes | Shows them as plain text in the area for provider content, apart from the app's own interface. Nothing in a notice is a link and nothing in it can be opened. The same characters are removed as from names. |
+| Notices | At most 4, each at most 280 bytes | Shows them as plain text in the area for provider content, apart from the app's own interface. Nothing in a notice is a link and nothing in it can be opened. The text is filtered as names are and then cut to its limit. |
 | Hints | At most 16, each index inside the profile's lists | May try a hinted candidate before others of the same transport. An index outside the lists is ignored. |
 | Probe results | Sizes from the table only | Lowers the MTU. A node that lies makes the tunnel slower or sends the client to another transport of the profile. It cannot raise the MTU. |
 | `bye` | Four known reasons | Shows the reason and waits before trying again. |
@@ -320,6 +339,7 @@ The opening exchange is the same for every client: a TCP handshake inside the tu
 - **Mutual, so that a misrouted connection cannot feed the client.** If the gateway address ever led somewhere other than the node, that party could not produce `node_mac`, and the client applies nothing before it has checked it.
 - **The channel configures nothing on the client's network.** It can lower the MTU inside a bound. Every other value is shown or compared, and the list is closed.
 - **Fixed layouts, not a general encoding.** Both parsers handle hostile input: the node's from a hostile client, the client's from a hostile node. Each gets a fuzz target in the same change as the parser (`fuzz_control_server`, `fuzz_control_client`), with the assertion that no message changes the rating, the kill switch, the resolver setting, the addresses or the routes.
+- **Keys in memory.** In the first implementation, key material (`k_ctl` and the keys it comes from) is held in the cryptographic library's own types and is not wiped from memory when a session ends. This is a stated limit of that implementation. A compromised device or node is outside what Veilway defends, and this limit makes such a compromise worth slightly more.
 - **A lost channel is not a lost tunnel, and never a leak.** If the channel fails, the tunnel keeps working with the profile's values, and the client says the channel is unavailable.
 
 Tests this page needs before it leaves Draft:

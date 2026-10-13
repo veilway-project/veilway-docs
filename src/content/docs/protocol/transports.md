@@ -29,7 +29,7 @@ A transport carries WireGuard datagrams between a client and a node. The tunnel 
 
 Every number on this page that was chosen, not derived, is in these tables. None has a measurement behind it. Sizes that follow from a format (a 16 byte tag, a 148 byte handshake message) are not listed.
 
-Wire and client numbers, the same on every installation unless a row says the profile may set it:
+Wire and client numbers, the same on every installation unless a row says the profile may set it. Every range written "a to b" is inclusive at both ends, and a time drawn from a range is drawn in whole milliseconds.
 
 | Name | Value | Used by |
 |---|---|---|
@@ -40,6 +40,7 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Pending sessions per device | 2 | every obfuscated transport |
 | Chunk plaintext | at most 16,000 bytes | every obfuscated transport |
 | Datagram inside a chunk | at most 1,600 bytes | every obfuscated transport |
+| Datagrams in one chunk | at most 470, which follows from the two sizes above and the smallest item | every obfuscated transport |
 | Wide padding | uniform from the session's base to an upper bound. The upper bound is 1023 unless the profile (client) or config (node) sets it, from 512 to 1023. | see "Padding" |
 | Normal padding | uniform 0 to an upper bound. 255 unless set, from 64 to 255. | every other chunk |
 | Session padding base | uniform 0 to 63 bytes, drawn once per session and direction | wide padding |
@@ -160,7 +161,7 @@ On every obfuscated transport, WireGuard datagrams travel inside chunks. A chunk
 
 | Offset | Size | Field |
 |---|---|---|
-| 0 | 2 | `length` of the first datagram, 1 to 1,600 |
+| 0 | 2 | `length` of the first datagram, 32 to 1,600, or 0 for "no more items" |
 | 2 | `length` | One WireGuard datagram, exactly as the WireGuard library produced it |
 | ... | ... | More `length` and datagram pairs |
 | ... | 0 or more | Padding. The sender writes zero bytes. The receiver ignores the content. |
@@ -168,7 +169,7 @@ On every obfuscated transport, WireGuard datagrams travel inside chunks. A chunk
 Reading rules:
 
 1. The receiver reads items until fewer than 2 bytes remain or it reads a `length` of 0. Everything after that point is padding.
-2. A `length` above 1,600, or one that runs past the end of the plaintext, makes the chunk invalid.
+2. A `length` from 1 to 31, a `length` above 1,600, or one that runs past the end of the plaintext, makes the chunk invalid. 32 bytes is the smallest WireGuard message, a keepalive. An item takes at least 2 + 32 = 34 bytes, so a chunk of 16,000 bytes holds at most 470 items.
 3. A plaintext with no item (empty, or all padding) is valid. It is the padding-only chunk.
 4. An invalid chunk, or one that does not decrypt, ends a stream session (see "Closing") and is dropped silently on `udp-obfs`.
 
@@ -218,7 +219,7 @@ The longest keepalive range a profile may set, 60 s, is well below the shortest 
 - **Datagram** (`udp-obfs`): one chunk per UDP packet. A chunk holds one WireGuard datagram or none. Nothing is retransmitted and nothing is reordered on purpose.
 - **Stream** (`tls`, `ws`, `fronted`): the sender puts every datagram that is waiting at the moment it writes into one chunk, up to the limit, and never waits for more. Under load chunks therefore grow towards 16,000 bytes. Without load a chunk holds one datagram.
 
-On stream transports the chunk nonce is a counter: 4 zero bytes followed by the 64 bit chunk number of that direction in little-endian, starting at 0. This is the layout WireGuard uses. Each direction has its own key, so no nonce is used twice under one key. A sender closes the session before chunk number 2^60.
+On stream transports the chunk nonce is a counter: 4 zero bytes followed by the 64 bit chunk number of that direction in little-endian, starting at 0. This is the layout WireGuard uses. Each direction has its own key, so no nonce is used twice under one key. A stream chunk is sealed with empty associated data, on `tls`, `ws` and `fronted` alike. A sender closes the session before it would send chunk number 2^60, and a receiver closes the session instead of accepting a chunk with that number.
 
 ### MTU
 
@@ -602,7 +603,7 @@ It never accepts an extension and never selects a subprotocol. Behind a front we
 
 After the upgrade:
 
-1. One binary WebSocket message is one sealed chunk: the ChaCha20-Poly1305 ciphertext and tag of a chunk plaintext, under `k_c2s` or `k_s2c` with the counter nonce.
+1. One binary WebSocket message is one sealed chunk: the ChaCha20-Poly1305 ciphertext and tag of a chunk plaintext, under `k_c2s` or `k_s2c` with the counter nonce and empty associated data.
 
    | Offset | Size | Field |
    |---|---|---|

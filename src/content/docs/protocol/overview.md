@@ -82,7 +82,7 @@ Two more adversaries shape the control channel: a node that lies to its clients 
 | AEAD | Authenticated encryption with associated data: encryption that also detects any change to the message. Here always ChaCha20-Poly1305. |
 | HPKE | Hybrid Public Key Encryption, RFC 9180: a standard way to encrypt a message to the holder of a public key. |
 
-Integers on the wire are big-endian unless a row says otherwise. Sizes are in bytes.
+Integers on the wire are big-endian unless a row says otherwise. Sizes are in bytes. Every range written "a to b" is inclusive at both ends, and a time drawn from a range is drawn in whole milliseconds. Reserved bits and bytes are zero, and a receiver refuses a message in which one is set.
 
 ## What each transport gives and does not give
 
@@ -239,9 +239,9 @@ Each is listed with the default this draft takes. The pages are written to the d
 |---|---|---|
 | Tunnel (WireGuard) | Built | Nothing on these pages changes it. |
 | `udp`, legacy `ws` | Built | The gaps the threat model lists for them. |
-| Control channel: framing, opening exchange, credential, messages, exit selection | Settled enough to implement | The wording of threat model invariant 13a. What the node does with a packet above a device's MTU needs engine work in both exit backends. |
-| Chunk framing and padding: the chunk format, the nonce layout, the padding rules | Settled enough to implement | The ranges are unmeasured. |
-| Session activity and timers | Settled enough to implement | One definition and one table on the transports page. Two items on the list to measure concern the WireGuard library. |
+| Control channel: framing, opening exchange, credential, messages, exit selection | Settled enough to implement. A first implementation exists and an internal review found no deviation from this page. | The wording of threat model invariant 13a. What the node does with a packet above a device's MTU needs engine work in both exit backends. |
+| Chunk framing and padding: the chunk format, the nonce layout, the padding rules | Settled enough to implement. A first implementation exists, as above. | The ranges are unmeasured. |
+| Session activity and timers | Settled enough to implement. A first implementation exists, as above. | One definition and one table on the transports page. Two items on the list to measure concern the WireGuard library. |
 | Replay rule and replay file | Pending | The design was judged sound. The outage after a node clock fault and the cost of the reset are stated, and one open question would remove both. |
 | Stream proof | Pending | The binder was changed in this revision to cover the hello, and that change has not been reviewed. |
 | Stream listener: pools, accept state machine, proxy path, decoy handoff, upgrade answer | Pending | The proxy path and the upgrade answer were changed in this revision and not reviewed. Several rules depend on the list to measure. |

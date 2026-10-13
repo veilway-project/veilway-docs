@@ -277,7 +277,7 @@ The address a device connects from is not part of a session. It is never put in 
 | `user_restored` | `user`. |
 | `usage_reset` | `user` and `totals` (whether the lifetime counters were zeroed too). Sent for every usage reset. |
 | `exit_udp_changed` | `exit` and `udp` (the new state). |
-| `stats` | The snapshot of `/v1/stats`, once a second. Only made while somebody reads the stream. |
+| `stats` | The snapshot of `/v1/stats`, once a second. Only made while somebody reads the stream. A snapshot counts as one event in the buffer of a slow reader, and a reader that is behind is sent the newest snapshot there is for each one it has not yet taken, not the one of that second. |
 | `lagged` | `missed`. Has no `id`. |
 
 ```
@@ -286,7 +286,7 @@ id: 42
 data: {"user":"alice","reason":"quota"}
 ```
 
-- **Slow readers.** The node never buffers without bound. A reader that falls behind loses the oldest events and is sent `lagged` with the number it missed, counted from the gaps in the ids. That covers events the node itself could not keep as well as events this reader was too slow for. The `lagged` event comes just before the next event that was kept.
+- **Slow readers.** The node never buffers without bound. A reader that falls behind loses the oldest events and is sent `lagged` with the number it missed, counted from the gaps in the ids. On a node with many users a snapshot is large, and a reader that needs longer than a second for each falls behind on snapshots alone and then loses other events too. That covers events the node itself could not keep as well as events this reader was too slow for. The `lagged` event comes just before the next event that was kept.
 - **Keep-alive.** A comment line (`: keepalive`) is sent every 15 seconds.
 - **Slow connection.** A connection whose reader takes nothing for 30 seconds while the node has something to send is closed.
 - **After a gap.** There is no replay. A client that reconnects should read the state again from the routes.

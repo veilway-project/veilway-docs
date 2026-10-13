@@ -321,8 +321,10 @@ description: همه گزینه‌های پیکربندی سرور Veilway، نس
 ```
 veilway run --config config.json
 veilway run --config config.json --state veilway-state.json
+veilway run --config config.json --api /run/veilway/veilway.sock
+veilway run --config config.json --no-api
 veilway check --config config.json
 veilway schema
 ```
 
-`run` فایل پیکربندی‌ای را که گروه یا دیگران بتوانند بخوانند رد می‌کند، مگر با `--allow-readable-config` اجرا شود. `run --state <file>` مسیر فایل state مصرف را تعیین می‌کند، که به‌طور پیش‌فرض `veilway-state.json` کنار فایل پیکربندی است. `check` همهٔ خطاها و هشدارها را چاپ می‌کند و اگر خطایی باشد با کد خروج غیرصفر تمام می‌شود. روی هر سیستم‌عاملی همین پاسخ را می‌دهد. `schema` طرح JSON Schema این قالب را چاپ می‌کند.
+`run` فایل پیکربندی‌ای را که گروه یا دیگران بتوانند بخوانند رد می‌کند، مگر با `--allow-readable-config` اجرا شود. `run --state <file>` مسیر فایل state مصرف را تعیین می‌کند، که به‌طور پیش‌فرض `veilway-state.json` کنار فایل پیکربندی است. `run --api <path>` مسیر سوکت یونیکس API کنترل را تعیین می‌کند، که به‌طور پیش‌فرض `veilway.sock` کنار فایل پیکربندی است، و `run --no-api` گره را بدون API راه می‌اندازد؛ این دو را نمی‌شود با هم داد. هر که بتواند سوکت را باز کند مدیر گره است، مرجع API کنترل را ببینید. هر دو پرچم فقط روی یونیکس وجود دارند. `check` همهٔ خطاها و هشدارها را چاپ می‌کند و اگر خطایی باشد با کد خروج غیرصفر تمام می‌شود. روی هر سیستم‌عاملی همین پاسخ را می‌دهد. `schema` طرح JSON Schema این قالب را چاپ می‌کند.

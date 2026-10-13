@@ -27,6 +27,7 @@ export default defineConfig({
 					],
 				},
 				{ label: "Config reference", translations: { fa: "مرجع پیکربندی" }, slug: "reference/config" },
+					{ label: "Control API reference", translations: { fa: "مرجع API کنترل" }, slug: "reference/api" },
 				{
 					label: "SDK guides",
 					translations: { fa: "راهنمای SDK" },

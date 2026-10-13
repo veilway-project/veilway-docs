@@ -92,15 +92,27 @@ Every text that a provider or a node wrote goes through one filter before it is 
 **The two joiners.** U+200C (zero width non-joiner) and U+200D (zero width joiner) are invisible, and they are also part of correct spelling: standard Persian uses U+200C inside words, and several scripts of South Asia need one or the other. So they are kept in exactly the places where the contextual rules of RFC 5892 (appendix A, the rules for these two characters) keep them, narrowed to one script, and removed everywhere else. The rule is applied to the text after everything else above has been removed. It uses three Unicode properties of the neighbouring characters: Joining_Type, Canonical_Combining_Class and Script.
 
 1. A joiner that stands directly next to another joiner is removed, and so is the other.
-2. **After a virama.** U+200C or U+200D is kept when the character directly before it has Canonical_Combining_Class 9 (a virama), and the first character after it is a letter (General_Category L) whose Script is the Script of the letter that the virama follows.
+2. **After a virama.** U+200C or U+200D is kept when the character directly before it has Canonical_Combining_Class 9 (a virama), and the first character after it is a letter (General_Category L) whose Script is the Script of the letter that the virama follows, and the virama's own Script is that same Script. The letter that the virama follows is the character directly before the virama. With a nukta or any other mark between them, the joiner is removed. The condition on the virama's own Script is a rule the first implementation does not have yet: as built, a Latin letter, a Devanagari virama, a joiner and a Latin letter are kept as written. The implementation must gain it.
 3. **Between joining letters.** U+200C is kept when all of these hold. Going backwards from it over characters of Joining_Type T (marks), the first other character has Joining_Type L or D. Going forwards from it over characters of Joining_Type T, the first other character has Joining_Type R or D. Both of those characters are letters with the same Script.
 4. In every other position a joiner is removed. That includes the start and the end of a text, a position next to a space, a digit, punctuation or a symbol, a position between letters of two different scripts, U+200D anywhere but after a virama, and U+200C after a letter that does not join forwards, where it would change nothing.
+5. A letter whose Script is Common or Inherited shares a Script with no letter, so no joiner is kept next to it by rule 2 or 3.
+6. **The cut.** A kept joiner counts as a character toward a display limit. When the cut removes the letter, or the marks and the letter, that a joiner was kept for, that joiner is removed too. A cut text therefore never ends in a joiner, and the filter gives the same result when it is applied twice.
 
 "Between" in this rule therefore means: the nearest character on each side that is not a combining mark, not across any other kind of character.
 
+**How this differs from RFC 5892.** The rule was checked against the text of appendix A.1 and A.2. It is stricter than the RFC everywhere and looser nowhere. The RFC keeps either joiner after any virama, and this page also requires a letter of the same Script after it and a virama of that Script. The RFC's rule for U+200C between joining characters has no condition that they be letters or share a Script. The RFC has no rule about two joiners side by side.
+
+**Correct spellings the rule drops.** These are known costs of version 1, stated so that nobody takes them for bugs. In each the text stays readable and only the fine shaping is lost:
+
+- A joiner after a virama that follows a letter with a nukta or another mark, by rule 2.
+- Bengali ya-phala forms in which the joiner comes before the virama, not after it.
+- The Persian abbreviation form that writes U+200D after the letter heh.
+
+**Unicode data.** The first implementation carries its own generated tables for the three properties, from one Unicode version, 17.0.0, so that a character has one classification everywhere the filter runs. A client built on another implementation must use the same Unicode version, or accept small differences at the edges of scripts that were added recently.
+
 What this costs: a joiner that is kept is invisible in itself. Under this rule it is kept only where it changes how the letters around it are drawn, so two names that differ by one joiner are drawn differently. A reader who does not know the script may still take them for the same name, and so may anyone in a font that draws the two forms alike. Look-alike names remain possible in every script, with or without joiners. A provider is identified by the fingerprint of its key, never by its name.
 
-As built today, the filter in the code removes both joiners everywhere. That is a defect for Persian text and is to be changed to this rule.
+As built, the filter in the code follows this rule, except for the one condition marked under rule 2.
 
 **How filtered text is shown.** These are requirements on every screen of a client and of the panel:
 
@@ -327,7 +339,7 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 
 The channel carries one string for an exit's name and one for a notice's text, and that does not change. Translations come from the signed subscription, which already holds them (see "Text in several languages" on the subscription format page). The client joins the two by one rule: **a translation from the subscription is used only when the subscription's `default` is, byte for byte, the text the node sent.** The comparison is on the raw UTF-8 bytes as they arrived on the channel and the raw `default` as decoded from the document, before any filter or cut, with no normalisation.
 
-- **An exit's name.** The node sends the exit's tag and its name. When the subscription's catalogue for this profile has an exit with the same tag whose name has that same `default`, the app shows the subscription's name, picked for the app's language. In every other case it shows the name the node sent. A signed label that has gone stale must not sit on an exit whose meaning the operator has changed.
+- **An exit's name.** The node sends the exit's tag and its name. When the subscription's catalogue for this profile has an exit with the same tag whose name has that same `default`, the app shows the subscription's name, picked for the app's language. In every other case it shows the name the node sent. A signed label that has gone stale must not sit on an exit whose meaning the operator has changed. The node's config judges an exit's name with the display filter of this page: a name that the filter would change is refused when the config is validated. A correctly spelled Persian name with U+200C is therefore accepted, and a joiner between Latin letters is not. The config reference still states the older rule for an exit's `name` and is to be brought in line.
 - **A notice.** The node sends its text. The client looks for a notice with that same `default`, first in the `notices` of the profile it is connected through and then in the subscription's own `notices`, and shows that notice's text in the app's language. With no match it shows the text the node sent, which is in the node's default language.
 - **Severity** is always the one the node sent.
 - **A matched notice is shown once.** When a node's notice matches one of the subscription's own notices, the two are one notice on the screen, not two.

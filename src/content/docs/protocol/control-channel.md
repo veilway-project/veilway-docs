@@ -79,9 +79,37 @@ Every message after the preface is:
 - Every body has a fixed layout. There is no self-describing encoding, no optional field and no nesting. A body shorter or longer than its layout is malformed.
 - A string is a length followed by UTF-8 bytes. A tag has a 1 byte length of at most 64. Display text has a 2 byte length. Bytes that are not valid UTF-8 are a malformed body.
 - A tag on the wire follows the tag rule of the [config reference](../../reference/config/) exactly, in both directions: it matches `[a-z0-9][a-z0-9_-]{0,63}` and is not one of the words that rule reserves (`all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`). Anything else is a malformed body. An exit's tag is never empty. The only empty tags are the one in `set_exit` that clears the selection and the one in `exit_result` that says nothing is selected. Because a tag can hold only these characters, it needs no filter before it is shown.
-- Display text (an exit's name, a notice) has no limit of its own on the wire: any length that fits the message is a valid body. Its limit is a display limit. The receiver filters the text for display and then cuts it to that limit, in that order, on a character boundary so that no character is split (see "What a malicious node can do"). Text over its display limit is cut. It is never a malformed body and never a reason to close the connection. The size of a message as a whole is still bounded by `length`. The filter removes control characters, bidirectional formatting characters, zero-width and other invisible characters, and also U+2800, U+FFF0 to U+FFF8, U+FFFC, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, private use characters and noncharacters. The same filter serves the subscription format.
+- Display text (an exit's name, a notice) has no limit of its own on the wire: any length that fits the message is a valid body. Its limit is a display limit. The receiver filters the text for display and then cuts it to that limit, in that order, on a character boundary so that no character is split (see "What a malicious node can do"). Text over its display limit is cut. It is never a malformed body and never a reason to close the connection. The size of a message as a whole is still bounded by `length`. The filter and the rules for showing such text are under "The display filter" below. The same filter serves the subscription format.
 - An address is a family byte (`4` or `6`) followed by 4 or 16 bytes.
 - Reserved bits and reserved bytes are zero. A message with one set is malformed.
+
+### The display filter
+
+Every text that a provider or a node wrote goes through one filter before it is shown, in the client and in the panel.
+
+**What it removes.** Control characters, bidirectional formatting characters, zero-width and other invisible characters, and also U+2800, U+FFF0 to U+FFF8, U+FFFC, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, private use characters and noncharacters.
+
+**The two joiners.** U+200C (zero width non-joiner) and U+200D (zero width joiner) are invisible, and they are also part of correct spelling: standard Persian uses U+200C inside words, and several scripts of South Asia need one or the other. So they are kept in exactly the places where the contextual rules of RFC 5892 (appendix A, the rules for these two characters) keep them, narrowed to one script, and removed everywhere else. The rule is applied to the text after everything else above has been removed. It uses three Unicode properties of the neighbouring characters: Joining_Type, Canonical_Combining_Class and Script.
+
+1. A joiner that stands directly next to another joiner is removed, and so is the other.
+2. **After a virama.** U+200C or U+200D is kept when the character directly before it has Canonical_Combining_Class 9 (a virama), and the first character after it is a letter (General_Category L) whose Script is the Script of the letter that the virama follows.
+3. **Between joining letters.** U+200C is kept when all of these hold. Going backwards from it over characters of Joining_Type T (marks), the first other character has Joining_Type L or D. Going forwards from it over characters of Joining_Type T, the first other character has Joining_Type R or D. Both of those characters are letters with the same Script.
+4. In every other position a joiner is removed. That includes the start and the end of a text, a position next to a space, a digit, punctuation or a symbol, a position between letters of two different scripts, U+200D anywhere but after a virama, and U+200C after a letter that does not join forwards, where it would change nothing.
+
+"Between" in this rule therefore means: the nearest character on each side that is not a combining mark, not across any other kind of character.
+
+What this costs: a joiner that is kept is invisible in itself. Under this rule it is kept only where it changes how the letters around it are drawn, so two names that differ by one joiner are drawn differently. A reader who does not know the script may still take them for the same name, and so may anyone in a font that draws the two forms alike. Look-alike names remain possible in every script, with or without joiners. A provider is identified by the fingerprint of its key, never by its name.
+
+As built today, the filter in the code removes both joiners everywhere. That is a defect for Persian text and is to be changed to this rule.
+
+**How filtered text is shown.** These are requirements on every screen of a client and of the panel:
+
+1. Every text that a provider or a node wrote is shown in its own directional isolate, so that right-to-left letters in it cannot reorder what stands next to it. No control character does that reordering. Ordinary letters do, and the filter cannot remove them.
+2. A fingerprint, a host name, a tag, an address, a port, a key and every number the app computes is always shown in a left-to-right isolate, whatever the language of the interface.
+3. Provider text never shares a run of text with any of those. Each stands in its own element.
+4. The direction of a provider text is taken from the first character in it that has a strong direction. A text with none, such as one of digits only, is left to right. No field sets the direction.
+
+Test: a right-to-left provider name next to a fingerprint and a host, in a right-to-left interface, shows the fingerprint and the host in their own order.
 
 ## Opening a connection
 
@@ -160,7 +188,7 @@ An `exits` entry:
 | Field | Size | Meaning |
 |---|---|---|
 | Tag | 1 + up to 64 | The exit's tag |
-| Name | 2 + its length | The exit's display name, shown cut to 64 characters |
+| Name | 2 + its length | The exit's display name, shown cut to 64 characters. One string, the default. See "Languages". |
 | Country | 2 | Two uppercase ASCII letters, or two zero bytes for none |
 | Flags | 1 | Bit 0: carries every IP protocol. Bit 1: this device's selection. Bit 2: the user's configured exit. Bit 3: working. Other bits zero. |
 | Load | 1 | 0 unknown, 1 low, 2 medium, 3 high. It is 0 until something on the node measures load. |
@@ -295,6 +323,22 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 - **Notices.** They come from the operator's config (the proposed `notices` key). The node writes none of its own. A notice is plain text.
 - **Hints.** A hint tells a client which of the candidates in its signed profile this node also answers on. It is two indices into the profile's own lists and can name nothing that is not already there. In version 1 the node may always send an empty list.
 
+### Languages
+
+The channel carries one string for an exit's name and one for a notice's text, and that does not change. Translations come from the signed subscription, which already holds them (see "Text in several languages" on the subscription format page). The client joins the two by one rule: **a translation from the subscription is used only when the subscription's `default` is, byte for byte, the text the node sent.** The comparison is on the raw UTF-8 bytes as they arrived on the channel and the raw `default` as decoded from the document, before any filter or cut, with no normalisation.
+
+- **An exit's name.** The node sends the exit's tag and its name. When the subscription's catalogue for this profile has an exit with the same tag whose name has that same `default`, the app shows the subscription's name, picked for the app's language. In every other case it shows the name the node sent. A signed label that has gone stale must not sit on an exit whose meaning the operator has changed.
+- **A notice.** The node sends its text. The client looks for a notice with that same `default`, first in the `notices` of the profile it is connected through and then in the subscription's own `notices`, and shows that notice's text in the app's language. With no match it shows the text the node sent, which is in the node's default language.
+- **Severity** is always the one the node sent.
+- **A matched notice is shown once.** When a node's notice matches one of the subscription's own notices, the two are one notice on the screen, not two.
+- A notice that an operator adds while users are connected is in its default language until each client has refreshed its subscription, which a connected client does on its interval. This is a stated limit of version 1.
+- The client never tells the node which language it uses. Nothing in the opening exchange or in any message names a language, so a node learns nothing about its user from this.
+- A node can make a client show any text of its provider's own subscription this way, and nothing else. Both come from the same provider. Any difference, from an edit, a stale subscription or a panel that changed the text on the way, fails safe: the node's own text is shown.
+
+A notice is limited to 280 bytes, which is 280 Latin letters, about 140 Persian ones and about 93 Chinese ones. A limit in characters would treat languages alike. It is in bytes because that is what the implemented message has, and it is a point for the next version of that message.
+
+Two other designs were weighed. A notice could carry all its translations, or an id, on the wire: that tells the node nothing either, translates a new notice at once and survives an edit, at the cost of a new layout for a message that is already implemented. Or the client could state its language once and the node send only that one: that tells every node the user's language, and it would add a field to the opening exchange, which is fixed and covered by the credential. See "Open questions".
+
 ## What a malicious node can do
 
 A compromised node is a malicious provider. This table is the whole list of values a client takes from the channel. Nothing else is applied.
@@ -379,6 +423,7 @@ Each is listed with the default this draft takes.
 | Should the catalogue carry load and whether an exit works, as the plan lists? | Yes, coarsely: one bit and four levels. What "working" means for each backend is not defined yet. |
 | May a hint name an address that is not in the signed profile? (threat model Q6) | No. |
 | Is `bye` worth what it tells a device about its account? | Yes. The device learns only what its own user could ask the provider. |
-| Where notices come from | A proposed top-level `notices` key in the config. Not in the config reference yet. |
+| Where notices come from | A proposed top-level `notices` key in the config. Not in the config reference yet. A notice's `text`, and an exit's `name`, may be a string or a map of language tags to strings with a `default`. The node sends the default, and the panel puts the whole map in the subscription. |
+| Should a notice carry its translations on the wire, so that a new notice is translated at once? | Not in version 1. Matching the default text against the subscription needs no change on the wire. It leaves a new notice in its default language until the next refresh, and it depends on the node and the subscription holding the same text. If that proves too weak, carrying the translations in `notices` is the change to make, in a new control version. Stating the client's language to the node is not, because it tells the node something about the user. |
 | The usage state file gains a selection per device | An added `devices` key under the file's version 1, which older builds ignore. Not in the config reference yet. |
 | The port number | 47873, the same for every installation. Inside the tunnel it is not visible to the path. |

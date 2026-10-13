@@ -34,6 +34,9 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 | JSON nesting depth | at most 8 |
 | JSON values in a document | at most 20,000 |
 | Any string without its own limit | at most 1,024 bytes |
+| Languages of one text | the default and at most 8 more |
+| A language tag | at most 11 characters |
+| Notices of one profile, for translating what its node sends | at most 4 |
 | Profiles | 1 to 64 |
 | Transports per profile | 1 to 8 |
 | Candidates or endpoints per transport | 1 to 16 |
@@ -295,6 +298,7 @@ The cost: recovery from a filled account needs the provider.
 ### How a fetch is made
 
 - `https` only, with normal certificate validation, TLS 1.2 or later, and the client's browser-like TLS where the build has it. The certificate protects the token on the way. The document is protected by its signature.
+- No `Accept-Language` field.
 - `Accept-Encoding: identity`. An answer with a `Content-Encoding` field is refused, which removes the decompression bomb as a case.
 - No redirect is followed. A request that is redirected is a failed fetch.
 - The timeouts and the size limit in the table of numbers. The body is read up to the limit and no further.
@@ -349,6 +353,57 @@ When a refresh leaves out or refuses a profile the client had, the app tells the
 
 **Display text.** Every string that is shown to the user is filtered and cut by the rule of the control channel page ("Framing", display text): control, bidirectional formatting, zero-width and other invisible characters are removed, then the text is cut to its limit on a character boundary. It is shown as plain text. Nothing in it is a link, markup or a command. A limit such as "1 to 64 characters" is judged after the filter. Text of any raw length is cut, never refused for being long. A name that must have at least one character must have one that is neither white space nor a combining mark. The filter itself, with the full list of what it removes, is defined on the control channel page, and one filter serves both.
 
+### Text in several languages
+
+A provider may write for readers of more than one language. Every member that this page types as "display text" may be given in several languages, with these exceptions: a device's name, which the user typed, and the legacy `profile-title`. That covers `provider.name`, the `name` of a profile and of an exit, the `label` of a support link, the `text` of a notice, and in cards the `label`, `value`, `unit` and `text`. Nothing else is ever translated: not a URL, a tag, an id, a host, a number or a refusal. A refusal is a code, and the app shows its own words for it.
+
+**The form.** A text is either a JSON string or a JSON object:
+
+```json
+"name": "Frankfurt"
+"name": {"default": "Frankfurt", "fa": "فرانکفورت", "de": "Frankfurt am Main"}
+```
+
+- A string is the default and nothing else.
+- In an object, `default` is required and is a string. Every other member is a language tag with a string.
+- **Only `default` can make a text wrong.** A text whose `default` is missing or is not a string is a member of the wrong type, with the result the rule for wrong types gives for its place.
+- **A bad translation is dropped and nothing else is touched.** A member whose name is not a legal tag (a tag in another case, a longer tag, any other form), or whose value is not a string, is dropped. Of the legal tags, the first 8 in the order they appear in the document are kept and the rest are dropped. `default` and the other translations stay. A translation never refuses a profile or a document.
+- The same tag twice is a duplicate key, which strict JSON already refuses for the whole document.
+
+**The tags.** A small, strict subset of the language tags of BCP 47 (RFC 5646), in one spelling only:
+
+| Part | Form | Example |
+|---|---|---|
+| Language, required | 2 or 3 lowercase letters | `fa`, `en`, `ckb` |
+| Script, optional | `-`, then one uppercase and three lowercase letters | `-Arab`, `-Latn` |
+| Region, optional | `-`, then two uppercase letters | `-IR`, `-AF` |
+
+A tag is at most 11 characters, such as `zh-Hant-TW`. Nothing else is a tag: no other subtags, no other case, no underscore. The client does not check a tag against a registry. A tag it has never heard of simply matches no app language. That includes `und`, which fits the grammar and can never match, and a three-letter code for a language that has a two-letter one. A panel should warn a provider who writes either.
+
+**Each translation is held to what the default is held to.** The same display filter (defined on the control channel page, "The display filter"), the same limit, and for a name the same requirement that one visible character is left. A translation that fails that requirement, or is empty after the filter, is dropped and the others stay. A `default` that fails is a failed text, as before. Every translation is a JSON value and counts toward the document's limits on values and on size, which are unchanged, so a provider that translates everything fits fewer exits.
+
+**How the client picks.** The app has one display language, and the user may set fallback languages. Both are chosen from the languages the app ships. For each of its own languages the app knows the script and the usual region from its own table, so that a language it knows by region only still finds a translation tagged by script. For the display language, and then for each fallback in order, the client tries these four tags in turn and takes the first that the text has:
+
+1. language, script and region;
+2. language and script;
+3. language and region;
+4. the language alone.
+
+If none of them is there, it shows `default`. The client never guesses what language `default` is in, never picks a "similar" language, and never translates by machine. What the provider did not write, the user does not see.
+
+**Where a translation is shown, and where it is not.** A text that is shown in a translation carries a small mark of its language on the surface where it is read, with a way to see `default` from there. On every screen where the user decides something (an import, a replacement, the consent to a lower class, the question about a private address), a provider's name and a profile's name are shown in `default`, with the picked translation beside it when there is one, both marked as the provider's own words. Without this a provider could show one identity in `default` and another to readers of one language, at the moment trust is decided.
+
+**Direction and shaping.** How a provider's text is laid out is fixed by the rules under "The display filter" on the control channel page: its own directional isolate, direction from the first character with a strong direction, for a translation as for `default`. The language tag does not set the direction, since a text tagged `fa` may be written in Latin letters. The tag of the picked translation is passed to the renderer as the text's language, for shaping and the choice of font only: the same characters are drawn differently for Persian and for Arabic.
+
+**What translations can and cannot do.** A provider can write anything in any one language, and with several it can say different things to different readers: a calm notice in one language and a false one in another. Nobody who reads only one of them will notice. The format does not stop this and cannot. What it does keep true:
+
+- Everything that carries a warning is the app's own text in the app's own language: ratings, classes, the wording of the import and consent screens, key fingerprints, hosts, and the message for every refusal. Where a provider's name or a profile's name appears on such a screen, `default` is always there.
+- A link has one `url`, whatever language its label is in, and the screen that asks before it is opened shows the host. A translation cannot change where a link goes.
+- A translation cannot change a tag, an exit, a profile's settings or a number the app computes.
+- The mark on a translated text, and the way from it to `default`, make a difference between the two something a user can find.
+
+**Languages and privacy.** The app's display language and the fallback list are read only by the app. They are never sent, logged or put in a diagnostic report. No request the client makes for a subscription carries an `Accept-Language` field. Where a transport copies a browser's header fields from the fingerprint pack and a browser would send that field, its value is the pack's fixed one, never the user's. A provider can still learn a reader's language in two ways the format does not control: the browser that opens a support link or a card's link sends its own languages, and a device name is typed in the user's script.
+
 **The provider's labels in the app's own lists.** A profile's name and an exit's name appear in the app's lists, outside the provider's area. They are always shown as the provider's labels, next to part of the key's fingerprint so that two subscriptions with one name can be told apart, and never in the place where the app shows a rating or a class.
 
 **Keys.** A WireGuard key, a transport key and a transport secret are written as in the config reference: standard base64 with padding, 44 characters, 32 bytes. An Ed25519 public key in a document is written the same way. An all-zero key is an error. An `inbound_public_key`, a `transport_public_key` or a `device.public_key` of small order refuses the profile, as a device key of small order is refused in a request.
@@ -395,7 +450,8 @@ A profile is what one device needs to reach one inbound.
 | `padding` | object | no | `wide_max` (512 to 1023, default 1023), `normal_max` (64 to 255, default 255), `keepalive` (a list of two integers, seconds, the lower and the upper bound, each from 10 to 60, the upper at least 10 above the lower, default 20 and 40). |
 | `min_control_version` | integer, 1 to 255 | no | Default 1. |
 | `rating_cap` | `"detectable"` or `"unsafe"` | no | The provider's statement that something the client cannot see lowers the rating, such as another service on the node's address. It can only lower. There is no value that raises. |
-| `exits` | list of at most 256 | no | See below. Default empty. |
+| `exits` | list of at most 256 | no | See below. Default empty. An exit's `name` may be translated. |
+| `notices` | list of at most 4 | no | The notices of this profile's node, each with `severity` and `text` as at the top level. They exist so that what the node sends on the control channel can be shown in the reader's language (see "Languages" on the control channel page). The app does not show them by themselves. Default empty. |
 
 What a profile does not have, on purpose: routes, a resolver other than the gateway, a setting of the kill switch, a rating, a fingerprint pack, a certificate authority, an "allow insecure" switch, and the cookie name of the upgrade answer, which the client ignores anyway. In version 1 a native profile always carries all of the device's traffic. A provider cannot ask for less or for more.
 
@@ -534,7 +590,7 @@ Nothing is sent, generated or stored by the app before the user continues. A dee
 
 **Step 3: the confirmation.** From the verified document the app shows:
 
-- the provider's name as the document gives it, marked as the provider's own claim;
+- the provider's name, in `default` and with the picked translation beside it when there is one, marked as the provider's own claim;
 - the fingerprint again, and the hosts in `refresh_urls`;
 - how many profiles it holds, and the lowest class and the lowest rating among them;
 - whether the device's key was made on this device or issued by the provider;
@@ -572,13 +628,14 @@ A client also reads the unsigned formats that other apps use, so that a user can
 - The rating is computed by the core from the settings in the link. It is Unsafe when there is no encryption, when certificate checking is switched off, or when the cipher is one the core lists as weak. Otherwise it is Detectable. A legacy profile is never rated higher. Until the core has its own list of strong ciphers, the implementation's list is a placeholder, and a cipher it does not know counts as weak.
 - Connecting to a legacy profile needs the optional compatibility add-on, which the app offers to install at that moment. Such a profile is marked "TCP and UDP only".
 - A legacy subscription follows the same rules for when a fetch happens as a native one.
-- Provider content does not exist in the legacy format. Only the title, the usage numbers and the support link are shown.
+- Provider content does not exist in the legacy format. Only the title, the usage numbers and the support link are shown. Legacy formats have no translations: every legacy text is one string.
 
 **The panel side.** A provider's panel can serve the legacy format, at a different URL from the native endpoint, for users on other apps. What such a link reveals and protects is whatever those formats provide.
 
 ## Versioning
 
-- `v` is the format version of the payload. This page defines 1. The `v1` of a link's fragment is the form of the link and is separate.
+- `v` is the format version of the payload. This page defines 1.
+- Display text as a string or an object of translations is part of version 1 from its first release. It is not growth that an older parser has to tolerate: no client is released that reads only strings, and the first implementation's parser is to be changed before anything ships. The `v1` of a link's fragment is the form of the link and is separate.
 - Version 1 grows only by new optional members and by new names for `critical`. An older client ignores a member it does not know, and refuses a document that marks a feature it does not know as critical. A provider puts a name in `critical` only when ignoring the feature would be unsafe or would leave a profile unusable.
 - A document with a `v` above what the client knows is refused. The client keeps the last good document and tells the user that the app needs an update to read this provider's subscription.
 - A new kind of profile or transport is a new `type`. An older client refuses that profile and keeps the others, so a provider can list a new transport in a new profile next to the old ones.
@@ -595,8 +652,8 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 - Point its own profiles at any public address, which the client will then dial when the user connects. With many users, that can be a third party's address, which then receives their connection attempts.
 - Choose the server name a client sends in clear when it connects. A name that is dangerous to be seen asking for is the user's risk, and the user does not see it unless they look at the profile's details.
 - List up to four more endpoints that the app will send the token to when it refreshes, once the user has seen and confirmed their hosts.
-- Show false names, numbers, notices and cards in its own area, and false names on its own profiles and exits.
-- See the time of every refresh, and tell users and devices apart.
+- Show false names, numbers, notices and cards in its own area, and false names on its own profiles and exits. With translations it can show different text to readers of different languages.
+- See the time of every refresh, and tell users and devices apart. It may also learn a reader's language from the browser that opens one of its links and from the script of a device's name.
 - Give different users different documents.
 - With provider-issued keys: keep a copy of the device's private key.
 - Stop serving, or serve a document that fails, which leaves the user on the last good one.
@@ -659,3 +716,5 @@ Each is listed with the default this draft takes. The first five are the ones a 
 | Where the signing key lives, and whether the panel may sign online (threat model Q9) | The provider's decision. Device-made keys need a document per device, signed when the device enrols, so an offline key means provider-issued keys or devices registered ahead of time. |
 | Should a profile be able to carry routes (split tunnelling chosen by the provider)? | No, not in version 1. Routes from a provider are a way to move traffic outside the tunnel. |
 | Should a legacy link be refreshed outside a tunnel at all, since it cannot be verified? | Only when the user asks, as for a native one. |
+| Translations repeat in every profile's exit catalogue. Should a catalogue be shared at the top level? | Not in this version. The limit on JSON values is what a large provider meets first. |
+| Should a text whose translations differ greatly be flagged? | No. The app cannot judge meaning. It marks a translated text and shows `default` on every screen where the user decides. |

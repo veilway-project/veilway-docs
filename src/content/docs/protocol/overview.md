@@ -181,11 +181,12 @@ These keys do not exist in the [config reference](../../reference/config/) yet. 
 | `transports[].trusted_proxies`, `client_address_header` | list of networks, header name | The reverse proxies or CDN ranges from which a `ws` or `fronted` listener accepts a forwarded client address. |
 | `transports[].limits` | object | Node capacity numbers: `sessions`, `undecided`, `undecided_per_source`, `relayed`, `proxy_connections`, `decoy_requests_per_source`, `fronted_sessions`. Defaults on the transports page. |
 | `replay` | object | Replay cache size and the accepted proofs per source. |
-| `notices` | list of at most 4 | Operator notices served on the control channel. |
+| `notices` | list of at most 4 | Operator notices served on the control channel. A notice's `text` is a string, or a map from language tags to strings with a required `default`. |
+| `exits[].name` as a map | string, or a map from language tags to strings with a required `default` | An exit's display name in several languages. The node sends the default on the control channel, and the panel puts the map in the subscription. The tags and limits are those of "Text in several languages" on the subscription format page. |
 
 Proposed commands and flags: `veilway run --replay <file>` for the replay file (by default next to the usage state file), `veilway replay reset` and its route on the control API, and `doctor` checks for the replay file and for a decoy origin that loops.
 
-A profile is defined on the [subscription format](../subscription-format/) page, with these member names: `inbound_public_key` (`inbound_pub`), `device` (its `public_key`, its `private_key` only when the provider issued the key, `addresses` and `transport_secrets`), `gateways`, `mtu`, `transport_public_key`, `transports` in order, each with its `endpoints` or its `path` and `candidates`, where a candidate may carry `pins` (see "Fronting options" on the transports page), `min_control_version`, `stream_first`, `parallel`, `padding`, and `rating_cap`, which can only lower the rating.
+A profile is defined on the [subscription format](../subscription-format/) page, with these member names: `inbound_public_key` (`inbound_pub`), `device` (its `public_key`, its `private_key` only when the provider issued the key, `addresses` and `transport_secrets`), `gateways`, `mtu`, `transport_public_key`, `transports` in order, each with its `endpoints` or its `path` and `candidates`, where a candidate may carry `pins` (see "Fronting options" on the transports page), `min_control_version`, `stream_first`, `parallel`, `padding`, `notices`, and `rating_cap`, which can only lower the rating. Display text in a subscription (names, labels, notices, card texts) may be given in several languages, as that page defines.
 
 ## Numbers that are judgement calls
 
@@ -253,5 +254,5 @@ Each is listed with the default this draft takes. The pages are written to the d
 | Fronting options, refusal handling, transport fallback | Settled enough to implement | Not built. |
 | Client TLS and HTTP fingerprint | Not yet | It waits for a measurement that has not been made. It does not block the rest. |
 | `faketls`, `quic` | Goals only | No wire format. `faketls` waits for a project decision on relaying to third parties. |
-| Subscription format: link grammar, envelope verification, payload schema, request, the client's state machine, legacy reading | Client-side reading built | Implemented as code with no input or output of its own, and reviewed once against the page. No client uses it yet. |
+| Subscription format: link grammar, envelope verification, payload schema, request, the client's state machine, legacy reading | Client-side reading built | Implemented as code with no input or output of its own, and reviewed once against the page. No client uses it yet. Not yet in the code: display text in several languages was designed and reviewed once after the parser was written, so the committed parser does not read the object form, and the shared display filter still removes both joiners everywhere. Both are to be changed in code. |
 | Subscription format: the import screens, fetching and refresh scheduling in a client, and the provider's endpoint | Settled enough to implement | Not built. The page's text for these parts was revised after its second review and has not been reviewed again. |

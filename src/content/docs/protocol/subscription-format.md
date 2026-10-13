@@ -1,16 +1,652 @@
 ---
 title: Subscription format
-description: The format in which a provider delivers profiles to a client.
+description: The signed document in which a provider delivers profiles to a client, the link that leads to it, how it is fetched, imported and checked, and what a client refuses.
 ---
 
-:::caution[Not written yet]
-This page is a stub. The subscription format is not specified here yet.
+:::caution[Draft]
+This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. The revision has not been reviewed again, and nobody outside the project has reviewed it. Nothing in it is implemented. Do not rely on any property described here.
 :::
 
-This page will specify:
+A subscription is how a provider gives a user what the app needs to connect: one or more profiles, the list of exits, and a little content of the provider's own. Read [Protocol overview](../overview/) first for the terms. This page defines every profile field that [Transports](../transports/) and [Control channel](../control-channel/) rely on.
 
-- the native subscription document and how it is signed and verified
-- profile links and QR codes
-- which existing link and subscription formats clients can also read
-- response headers a client understands
-- limits a client enforces when parsing, since subscription data is untrusted input
+Four rules shape the page:
+
+- **Everything in a subscription is hostile input.** A provider can be malicious, and so can a link on a wall. Every byte is checked against a limit before it is used.
+- **The link carries the provider's key.** A document is verified against a key the user already holds, from the first fetch on. No key is ever accepted because a server sent it.
+- **A subscription is data inside a box.** It can describe how to reach the provider's nodes and what to show in the provider's area of the screen. It cannot run anything, open anything, change a setting of the app, or touch another subscription.
+- **A document that fails any check changes nothing.** The last good document stays in force.
+
+Related things that are not subscriptions: a supporter token is a separate signed file with its own format, and a pairing code that links two nodes is exchanged between panels and is never imported into a client.
+
+## Numbers that are judgement calls
+
+Every range written "a to b" is inclusive at both ends. None of these numbers has a measurement behind it. A limit on display text is in characters unless it says bytes, and a character is one Unicode code point after the filter of the control channel page.
+
+| Name | Value |
+|---|---|
+| Link token | 16 bytes, 22 base64url characters |
+| Device secret | 16 bytes, 22 base64url characters |
+| Key ids in a request | 1 or 2 |
+| Subscription URL without its fragment | at most 256 characters |
+| Response body, and a document in a file | at most 1,048,576 bytes |
+| Document in a link or a QR code | at most 2,048 bytes |
+| JSON nesting depth | at most 8 |
+| JSON values in a document | at most 20,000 |
+| Any string without its own limit | at most 1,024 bytes |
+| Profiles | 1 to 64 |
+| Transports per profile | 1 to 8 |
+| Candidates or endpoints per transport | 1 to 16 |
+| Pins per candidate | at most 4 |
+| Exits per profile | at most 256 |
+| Devices listed | at most 64 |
+| Signing keys listed | 1 or 2 |
+| Refresh URLs | at most 4 |
+| Support links | at most 4 |
+| Cards | at most 6 |
+| Notices | at most 4 |
+| Logo | at most 65,536 bytes, at most 512 by 512 pixels |
+| `update_interval` | 900 to 604,800 s, default 3,600. Each wait is multiplied by a number drawn uniformly from 0.8 to 1.2. |
+| Refresh by the user's request | at most 1 in 60 s, held by the client |
+| Endpoint limit for an enrolled device | 1 request in 60 s per token and device |
+| Endpoint limit for device keys it has not seen | 1 request in 600 s per token, counted apart from enrolled devices |
+| Pending device places per account | at most 2 |
+| A retired signing key kept for signed refusals | 365 days after it was retired, then destroyed |
+| Refresh after a failure | the interval, doubled per failure up to 86,400 s |
+| Document lifetime (`expires_at` minus `issued_at`) | at most 90 days |
+| Clock tolerance for `issued_at` | 300 s into the future |
+| Age of a signed refusal | at most 86,400 s |
+| Grace after expiry | 30 days |
+| An enrolment the user has not confirmed | released by the provider after 600 s |
+| Width of the keepalive range in `padding` | at least 10 s |
+| Fetch timeouts | 10 s to connect, 30 s in all |
+| Redirects | none |
+| Legacy list | at most 256 links, each at most 4,096 bytes |
+
+The limits cannot all be reached at once. A large provider meets the limit on JSON values first: 64 profiles with a handful of transports and a few dozen exits each fit, 64 profiles with 256 exits each do not.
+
+## The link
+
+### Form
+
+A native subscription link has one of two forms with the same content:
+
+```
+veilway://sub/sub.example.com/s#v1.<key>.<token>
+https://sub.example.com/s#v1.<key>.<token>
+```
+
+| Part | Meaning |
+|---|---|
+| `sub.example.com/s` | The provider's subscription endpoint: a host, an optional port, and a path. It is the same for all of a provider's users and holds no secret. The client always reaches it over `https`. |
+| `v1` | The form of the fragment. Anything else is not a native link. |
+| `<key>` | The provider's Ed25519 public key, 32 bytes, base64url without padding, 43 characters |
+| `<token>` | The user's token, 16 bytes, base64url without padding, 22 characters |
+
+The exact grammar, which the client checks before it does anything else:
+
+- The `veilway` form is `veilway://sub/`, then a host name with an optional `:` and port, then `/` and a path, then `#v1.`, 43 base64url characters, `.`, and 22 base64url characters. Nothing else, and no query.
+- The `https` form is the same with `https://` in place of `veilway://sub/`.
+- A whole document is `veilway://doc#v1.`, 43 base64url characters, `.`, and the document, or in a file the same without `veilway://doc#`. The content is split at the first two dots, because the document has two dots of its own.
+- Anything that begins with `veilway://` and matches none of these is refused at once.
+
+The fragment is 70 characters with its `#`. A link to a short host name is about 100 characters. It fits a QR code of version 6 (41 by 41 modules) at the lowest error correction level, or version 8 at the medium level.
+
+A web server and a proxy never receive the fragment of a URL. That is why the key and the token are there. The token is not in the path, so it does not land in access logs.
+
+**Providers hand out the `veilway` form.** It is what a panel shows for copying and puts in a QR code. The app also reads the `https` form when a user pastes or scans it, because links get rewritten on the way. The difference matters when a link is tapped:
+
+- A tapped `https` link opens in a browser, not in the app. The browser looks up the host and requests the endpoint from the user's own network, before the app has shown anything. The link, fragment included, lands in the browser's history and in its history sync. A messenger may fetch a preview of the link, sometimes from its own servers. None of these send the fragment to the endpoint, and all of them show the host to someone.
+- The endpoint answers a `GET` exactly as an unknown path and never serves a page, so no script of the provider's or anyone else's ever runs with the fragment in reach.
+- The app is never tied to the `https` host by an app link or universal link. The file such a tie needs would sit on the host and name it as a subscription host.
+- A tapped `veilway` link opens whichever app has claimed the scheme. On a platform where another app can claim it, that app receives the key and the token. The app cannot prevent this. It says so in its help, and pasting the link or scanning the code inside the app are the ways in that no other app sees. An app that took a token this way could enrol a device, which the user would see in the device list.
+
+**The form of the link decides what it is.** A link with a `v1` fragment is native. Any other `https` URL is a legacy link (see "Native and legacy"). The answer of a server never changes which of the two a link is. A link is never upgraded or downgraded without the user importing another link.
+
+### What the key in the link means
+
+The client verifies every document of a subscription, the first one included, against keys it holds, and the first of those came with the link. So whoever answers the fetch, be it the provider's host, a mirror, a content delivery network in front of it, or someone who holds a certificate the device trusts, can refuse to answer or serve an older valid document. It cannot make the client accept a document of its own.
+
+The limit, stated plainly: **whoever gave the user the link is trusted for the key.** A link from the provider's own channel is the provider's. A link from a stranger is a stranger's provider, with the stranger's key in it, and everything about it will verify. The app cannot tell these apart. It shows the host and the key's fingerprint before it does anything, and the user's check is where the link came from.
+
+The fingerprint of a key is the first 16 bytes of its SHA-256, shown as 8 groups of 4 hexadecimal digits.
+
+### The token is a bearer secret
+
+Whoever has the link is that user to the provider, until the provider resets it. There is no second factor in the format. What follows:
+
+- The client stores the link, the documents and its device keys in the operating system's secret storage where the platform has one, and otherwise in a file encrypted under a key kept there. It never shows the token after import, writes it to a log or includes it in a diagnostic report.
+- The token is sent only in the body of a request to the endpoint of the link, or to an endpoint in `refresh_urls` of an accepted document, which the provider signed. It is never put in a URL or a header, and never sent to a URL from provider content or to anything the project runs. The project runs no service that sees subscription links.
+- Whoever ends TLS for the endpoint sees the token: the provider's host, and any content delivery network or reverse proxy the provider puts in front of it. Each of them is a holder of the link.
+- A request carries no cookie, no referrer and no identifier of the device other than what "Fetching" lists.
+
+**Reset.** A provider resets a user's link in the panel. From then on the old token is unknown. The provider gives the user a new link. Importing it replaces the stored token when the key and the subscription id are the same.
+
+## The signed document
+
+### Envelope
+
+A native subscription document is one JWS in compact serialisation (RFC 7515) with the EdDSA algorithm over Ed25519 (RFC 8037, RFC 8032). It is three base64url parts joined by dots:
+
+```
+BASE64URL(header) . BASE64URL(payload) . BASE64URL(signature)
+```
+
+The signature covers the ASCII bytes of the first two parts and the dot between them, exactly as they were delivered. Nothing is re-serialised, so no rule for a canonical form of JSON is needed and none is invented.
+
+**The header is one exact byte string per key.** For a key with key id `<kid>` it is these bytes, with the members in this order and no white space:
+
+```
+{"alg":"EdDSA","typ":"veilway-sub+jws","kid":"<kid>"}
+```
+
+`<kid>` is the first 8 bytes of the SHA-256 of the public key, in base64url, 11 characters. The client does not parse the header. It computes this string for each key it holds for the subscription and compares the first part of the document with the base64url of each. No match refuses the document. Nothing named in a header is ever fetched, and no JOSE library is needed.
+
+**Encoding.** Every base64url part has no padding and no white space, and its unused trailing bits are zero. A part that breaks this refuses the document. The signature part is 86 characters.
+
+**Verification.** The strict rule of RFC 8032: the second half of the signature must be below the group order, encodings of points must be canonical, and a public key of small order is refused. A key of small order is also refused in a link and in `signing_keys`.
+
+### What is checked, in order
+
+1. The body is within the size limit and has exactly three parts, each well encoded.
+2. The first part equals the header for a key held for this subscription. On a first import the only key held is the one from the link.
+3. The signature verifies under that key. No byte of the payload has been parsed before this point.
+4. The payload is strict JSON within the parsing limits.
+5. `v`, `critical`, `subscription_id`, `serial`, `issued_at` and `expires_at` pass "Versioning", "Identity" and "Rollback and expiry".
+6. Every field passes its own rule in "Contents".
+
+A failure at any step refuses the whole document. The client keeps the last good one, shows that the refresh failed and why, and tries again as the table of numbers says.
+
+### Identity
+
+A subscription is identified by two things together: the provider's signing key and `subscription_id`, a required signed member that is stable for one account at that provider.
+
+- A document replaces a stored subscription only when it verifies under a key held for that subscription and has the same `subscription_id`.
+- The same key with another id is a second subscription beside the first, which is how two accounts at one provider live side by side. A document of someone else's account can therefore never replace the user's own, even though the same provider signed both.
+- Another key is always another subscription, whatever name or id it carries.
+
+### Keys held for a subscription
+
+- **At import** the client holds the key from the link.
+- **Rotation.** Each accepted document has `signing_keys`, a list of 1 or 2 keys, which must include the key that signed it. After accepting a document the client holds exactly the keys in that list. A provider that wants a new key first lists both, signed with the old one, and later signs with the new one and lists only that. This is how The Update Framework rotates a root key: the new key is introduced by a document that the old key signed. The client notes "the provider renewed its signing key" with the date in the subscription's details. It does not ask the user anything.
+- **An unknown key.** A document that verifies under no key held is a failed refresh and nothing more. There is no button that accepts it. The client keeps the last good document and shows: "The answer was not signed by this provider's key. If your provider has changed its key, ask it for a new link. If not, something between you and your provider answered in its place." A client that was offline through a whole rotation is in this state and needs a new link.
+- **A new link.** A link with another key is a new subscription. The user imports it and removes the old one.
+- **Which key the endpoint signs with.** A request names the key ids the client holds (`kids`, see "The request"). The endpoint signs with a current key that is among them. During an overlap the provider has two current keys, so a client that holds only the old one and a user who imports a new link, which carries only the new one, are both served. A client that holds only a key the provider has retired gets the signed refusal `"key_retired"`, signed with that retired key, and is told plainly that it needs a new link.
+- **Retired keys.** A provider keeps a retired signing key for the time in the table of numbers, for the single purpose of signing that refusal, and then destroys it. This is unlike a retired transport key, which is destroyed at once. If the provider no longer has the key, it signs with a current one, and the client shows the unknown-key message above.
+
+A routine rotation and an interception therefore look different: the first is a quiet note, the second is a failed refresh with no way to say yes.
+
+A signing key that is stolen cannot be revoked for clients that still hold it. The provider can only rotate, and get a document that drops the stolen key to each client before the thief gets one to it.
+
+### Rollback and expiry
+
+| Field | Type | Rule |
+|---|---|---|
+| `serial` | integer, 1 to 9007199254740991 | Must be greater than the serial of the last accepted document of this subscription. An equal serial is accepted only when the body is byte for byte the same, and then changes nothing. A lower one is refused. Providers should use the time of signing as the serial, so that a lost counter cannot go backwards. |
+| `issued_at` | integer, Unix seconds | Refused when it is more than the clock tolerance ahead of the device's clock. |
+| `expires_at` | integer, Unix seconds | Must be later than `issued_at` by no more than the document lifetime. A freshly fetched document that is already expired is refused. |
+
+The serial stops an old document from being served over a newer one. The expiry bounds how long that can be tried at all: whoever can answer the fetch can hold a client on its current document until that document expires, and no longer without the warnings below.
+
+**A fresh import by the user** of a link for a subscription that is already stored (same key, same id) takes a different rule: the document is accepted when its `issued_at` is later than the stored document's, whatever its serial, and the stored serial is set to the new one. This lets a provider that lost its counter recover, through an action only the user can take.
+
+### Offline, and when a refresh fails
+
+A subscription host that is blocked must not take the user's connection away. So:
+
+- The last good document stays in force when a refresh fails for any reason.
+- The client shows the time of the last successful refresh at all times.
+- When the last good document has passed `expires_at`, the client shows "this subscription is out of date" on the profile list and on the connect screen, and keeps working.
+- When it is more than 30 days past `expires_at`, every connect needs one explicit confirmation, because the addresses, keys and fronts in it may no longer belong to the provider. A device set to connect when it starts stays disconnected until the user has confirmed.
+- A new document takes effect for a profile at its next connect. A refresh never disconnects a tunnel that is up, also when it removes or changes the profile in use.
+- The kill switch is not affected by any of this.
+
+## Fetching
+
+### The request
+
+A native fetch is a `POST` to the endpoint, with `Content-Type: application/json` and this body:
+
+| Member | Type | Rule |
+|---|---|---|
+| `v` | integer | 1 |
+| `token` | string | The token from the link |
+| `kids` | list of 1 or 2 strings | The key ids of the signing keys the client holds for this subscription. On a first import, the id of the key in the link. |
+| `device_public_key` | key | The public half of the WireGuard key the client made for this subscription |
+| `device_secret` | string, 22 base64url characters | 16 random bytes the client made together with the device key. Sent on every request. |
+| `op` | string | `"fetch"`, `"confirm"` or `"release"` |
+| `device_name` | display text, at most 32 characters | Only with `"confirm"`, and only what the user typed. The client never fills it from the system. Absent when the user typed nothing. |
+
+A legacy fetch is a plain `GET` and carries none of this.
+
+**The device secret.** A WireGuard public key is not a secret: it is in the provider's panel, and users paste it into support chats. Without something more, anyone with the link and that public key could fetch that device's document, transport secrets included. So the client makes a random secret with the device key and sends both at its first fetch. The provider stores the secret with the device and requires it on every later request for that device key. It is a stored random value compared in constant time, not a cryptographic construction. The client keeps it where it keeps the link. A client that loses it cannot fetch that device's document again: it gets `"device_mismatch"`, makes a new key and a new secret, and enrols as a new device, which takes a new place.
+
+**What `kids` reveals.** The endpoint, and whoever ends TLS for it, sees which of the provider's own keys this client holds, which says roughly how recently it refreshed. It is at most two ids of 8 bytes, and they name the provider's keys, not the device.
+
+### The answer
+
+| Request | Answer |
+|---|---|
+| An unknown or reset token, a body that is not this JSON object, a `GET`, or a source over its limit | Exactly what the host answers on any path it does not serve: the same status, headers and body, in the same time. A prober who guesses tokens learns nothing, and a host cannot be recognised as a subscription host by asking it. |
+| A valid token | Always a signed document: the subscription, or a signed refusal that says why there is none. |
+
+What each `op` does, for a valid token:
+
+| `op` | The device key is | Result |
+|---|---|---|
+| `"fetch"` | Enrolled, with the right secret | The document. |
+| `"fetch"` | Not seen before | Takes a pending place and answers the document, or `"device_limit"` or `"rate_limited"`. |
+| `"confirm"` | Pending or enrolled, with the right secret | Makes the place permanent, stores the name if one is sent (a later `"confirm"` with another name replaces it), and answers the document. |
+| `"confirm"` | Not known, because the pending place has lapsed | Enrols again as a `"fetch"` and a `"confirm"` in one, if a place is free. |
+| `"release"` | Pending, with the right secret | Frees the place and answers `"released"`. |
+| `"release"` | Enrolled | Changes nothing and answers the document. `"release"` never removes a confirmed device. |
+| `"release"` | Not known | Answers `"released"`. |
+| any | Known, with a wrong or missing secret | `"device_mismatch"`. Nothing about the device is released. |
+
+A **signed refusal** is a document in the same envelope whose payload has `v`, `subscription_id`, `issued_at` and `refusal`, and may have nothing else:
+
+| `refusal` | Meaning | What the client shows |
+|---|---|---|
+| `"device_limit"` | Every device place of this account is taken, or its pending places are, and this device has none. | The limit, and that a device must be removed in the provider's panel or the link reset. |
+| `"disabled"` | The account is switched off. | That the provider has switched the account off. |
+| `"expired"` | The account's time is over. | That the account has expired. |
+| `"rate_limited"` | This device, or this token for new devices, has asked too often. | That it will try again later. It counts as a failed refresh with the ordinary backoff. |
+| `"device_mismatch"` | The device key is known and the secret is not the stored one. | That this device has to be enrolled again. |
+| `"key_retired"` | The client holds only a signing key the provider has retired. | That the provider has renewed its key and a new link is needed. |
+| `"released"` | A pending place was freed, or there was none. | Nothing. |
+| `"bad_request"` | A member was missing or malformed, or the device key was all zero or of small order. | A fault in the app. |
+
+A refusal is verified like any document. On a refresh it must carry the stored `subscription_id`, or it is a failed refresh. It is never stored as the last good document and changes no profile. One that is older than the limit in the table of numbers is treated as a failed refresh, so that an old refusal cannot be replayed for long. The requester has already shown a valid token, so naming the state protects nobody's secret, and the real user needs to know.
+
+**When the answer is not a subscription at all.** A native fetch that gets anything but a signed document (the host's not-found answer, a page, an error) is a failed fetch. The client shows "the endpoint did not answer as a subscription: the link may have been reset, or something else answered in its place", keeps the last good document, and backs off as after any failure.
+
+### The endpoint
+
+What the endpoint owes, as the threat model requires of it:
+
+- Tokens of at least 128 bits from a secure random source, compared in constant time. The check costs the same whether the token is known or not.
+- No session cookie read or set, and nothing else served at that path.
+- **One answer for everything that is not a valid request.** The endpoint is one path behind the operator's own web server. For an unknown token it does not compose a not-found answer of its own, which would differ from the web server's. Either the web server is set up so that the endpoint hands the request back and the web server answers as it does for any unknown path, or the endpoint learns that answer by one request to the web server for a path that does not exist, at start and on reload, and repeats its status, header fields and body, in the way the transports page has a listener learn its decoy's header fields. The first way is exact and is preferred.
+- **Limits per source** are applied by the web server to every path alike, so that reaching one says nothing about this path.
+- **Limits that a link holder cannot turn on the user.** An enrolled device is recognised by its key and secret and has its own allowance, per token and device. Requests with device keys the endpoint has not seen share a separate, tighter allowance per token, and an account has at most 2 pending places. A holder of the link can use up those two things. It cannot use up the allowance of the user's enrolled device, so the user's refreshes go on.
+- The request body is hostile input to the panel. `device_name` is stored and shown as text only, after the same filter the client applies to display text.
+
+### Devices and their places
+
+The same device key and secret always name the same device, so a fetch is idempotent. A key the provider has not seen takes a pending place, which becomes permanent with `"confirm"` and is freed by `"release"` or when the time in the table of numbers passes.
+
+A holder of a leaked link can enrol devices of its own while places are free. The format does not stop that with a second secret in the link. It makes it visible and recoverable:
+
+- Every document lists the account's devices in `devices`, pending ones included and marked, with the name the user gave each, when it was enrolled, and which one is this device. A device the user does not know is a sign that the link has leaked, and the app says so when the list grows.
+- A device that finds every place taken gets `"device_limit"`, not silence.
+- A device is removed in the provider's panel. The format has no request that removes a confirmed device, because a bare link would then let its holder remove the user's devices. A provider that resets a link should offer to remove the devices that were enrolled with it.
+- The client keeps its device key and secret where a reinstall can find them again, where the platform allows, so that reinstalling the app does not take a new place. That makes them an identifier that outlives the app's removal. Removing a subscription in the app deletes its key, secret and link, and the app has one action that deletes everything it has stored.
+- A name typed for a device is shown to anyone who holds the link, in the device list. The app says so where the name is typed.
+
+The cost: recovery from a filled account needs the provider.
+
+### How a fetch is made
+
+- `https` only, with normal certificate validation, TLS 1.2 or later, and the client's browser-like TLS where the build has it. The certificate protects the token on the way. The document is protected by its signature.
+- `Accept-Encoding: identity`. An answer with a `Content-Encoding` field is refused, which removes the decompression bomb as a case.
+- No redirect is followed. A request that is redirected is a failed fetch.
+- The timeouts and the size limit in the table of numbers. The body is read up to the limit and no further.
+- The endpoint's host name is looked up once per fetch, by the resolver in force: the tunnel's when the fetch goes through a tunnel, the system's when it does not. The address that was checked is the address that is dialled. An address that is loopback, link-local, private, unspecified or multicast is refused, for the endpoint and for every entry of `refresh_urls`.
+
+### When a fetch happens
+
+A fetch outside a tunnel tells the local network that this device talks to this provider's subscription host. On a hostile network that marks the user even while they are not connected. So:
+
+| Situation | What the client does |
+|---|---|
+| A tunnel of one of this subscription's own profiles is up | Refreshes automatically, on the interval, through that tunnel. |
+| No tunnel is up | Does not refresh by itself. The user can ask for a refresh. Before it goes out, the app names every host it may contact (the endpoint and the accepted `refresh_urls`) and says what the network will see: a lookup of each name and a TLS connection to it. |
+| A tunnel of another subscription is up | Does not refresh this subscription by itself. When the user asks, the app offers the two ways below. |
+| First import | The request leaves only after the user's first yes, by the same choice of ways. |
+
+**When another subscription's tunnel is up,** a request for this subscription can go two ways, and each shows something to someone. The app shows both and lets the user choose:
+
+| Way | Who sees what |
+|---|---|
+| Disconnect, and fetch from the device's own address. This is the default. | The local network sees a lookup of this provider's host and a connection to it. The other provider sees nothing. With the kill switch on, the user has to disconnect or switch it off first. |
+| Fetch through the tunnel that is up. Only when the user chooses it, each time. | The other provider sees a lookup of this provider's host and a connection to it. The local network sees nothing new. This provider's host sees the other provider's exit address, not the user's. |
+
+On a network the user is hiding from, the second way is often the safer one, and the app says that in plain words. It is never taken without the user choosing it.
+
+Automatic refresh can be switched off per subscription. A provider cannot ask for refreshes more often than every 15 minutes, and it still sees the time of every refresh and the node address it came from.
+
+### When nothing works
+
+A user whose profiles have all stopped working can refresh only by asking. With the kill switch on, nothing leaves the device outside a tunnel, the fetch included: the user has to switch the kill switch off, or disconnect, to refresh from the device's own address. The fetch is not an exception to the kill switch.
+
+If the subscription host is blocked as well, the format has two partial answers and no complete one:
+
+- `refresh_urls`: the provider can list other endpoints for the same subscription. The client tries them in order after the first fails. Because every document is verified against a key held, a mirror needs no trust beyond seeing the token.
+- A whole document can be carried in a link, a QR code or a file (see "Import"), so a provider can send a new one over any channel the user still has.
+
+Fetching a subscription through the fronting options of the transports is not specified in this draft. See "Open questions".
+
+## Contents
+
+The payload is one JSON object. JSON is strict, as in the [config reference](../../reference/config/): duplicate keys, a byte order mark, data after the document, invalid UTF-8 and a NUL inside a string are errors, and where an integer is expected only an integer token is accepted.
+
+**Unknown members.** A client ignores a member it does not know, at any level, so that the format can grow. Three things are never ignored, because guessing at them would be unsafe:
+
+- A name in `critical` that the client does not know refuses the document.
+- A profile with an unknown `type`, or with a transport of an unknown `type`, is refused as a whole profile and shown as "not supported by this version of the app". The other profiles of the document are kept.
+- An unknown value in any field that this page gives a closed set of values (a card type, a severity, a rating cap, a refusal) refuses the object that holds it: the card, the notice, the profile, or for a refusal the document.
+
+When a refresh leaves out or refuses a profile the client had, the app tells the user which profile was dropped and why, at the latest when the user next opens the profile list.
+
+**Wrong type, out of range, missing.** A member of the wrong JSON type or outside its range, or a required member that is missing, refuses the document when it is a top-level member, refuses the profile when it is part of a profile, and drops the object when it is a card, a notice, a support link, a listed device or an exit. A document in which every profile was refused is refused. A missing optional member takes the default its row gives. No value is clamped into range, with two stated exceptions: display text is cut, and the accent colour is adjusted for contrast.
+
+**Display text.** Every string that is shown to the user is filtered and cut by the rule of the control channel page ("Framing", display text): control, bidirectional formatting, zero-width and other invisible characters are removed, then the text is cut to its limit on a character boundary. It is shown as plain text. Nothing in it is a link, markup or a command.
+
+**The provider's labels in the app's own lists.** A profile's name and an exit's name appear in the app's lists, outside the provider's area. They are always shown as the provider's labels, next to part of the key's fingerprint so that two subscriptions with one name can be told apart, and never in the place where the app shows a rating or a class.
+
+**Keys.** A WireGuard key, a transport key and a transport secret are written as in the config reference: standard base64 with padding, 44 characters, 32 bytes. An Ed25519 public key in a document is written the same way. An all-zero key is an error.
+
+### Top level
+
+| Member | Type | Required | Rule and default |
+|---|---|---|---|
+| `v` | integer | yes | The format version, 1. See "Versioning". |
+| `critical` | list of strings | no | Names of extensions the client must understand. Default empty. Version 1 defines none, so any entry refuses the document. |
+| `subscription_id` | string matching `[A-Za-z0-9_-]{16,64}` | yes | See "Identity". |
+| `serial`, `issued_at`, `expires_at` | integers | yes | See "Rollback and expiry". |
+| `signing_keys` | list of 1 or 2 Ed25519 public keys | yes | See "Keys held for a subscription". |
+| `refusal` | string | no | Makes the document a signed refusal. See "The answer". |
+| `provider` | object | yes | `name`: display text, 1 to 64 characters. Nothing else. It is shown as the provider's own claim, next to the fingerprint. |
+| `update_interval` | integer | no | Seconds between automatic refreshes. |
+| `refresh_urls` | list of at most 4 URLs | no | Other endpoints of the same subscription. Each follows the URL rules below and has no fragment. Their hosts are shown on the import confirmation. A host that a later document adds is not contacted until the user has confirmed it: the app notes "the provider added a refresh host" in the subscription's details, as it notes a renewed key, and asks at the next refresh the user starts. Until then the client uses the hosts it already had. |
+| `profiles` | list of 1 to 64 | yes | See "A profile". |
+| `devices` | list of at most 64 | no | Each: `name` (display text, at most 32 characters, may be empty), `enrolled_at` (Unix seconds), `this` (boolean, true for the asking device), `pending` (boolean, default `false`). See "Devices and their places". |
+| `usage` | object | no | See "Usage". |
+| `support` | list | no | See "Provider content". |
+| `cards`, `logo`, `accent` | | no | See "Provider content". |
+| `notices` | list | no | See "Provider content". |
+
+In a signed refusal only `v`, `subscription_id`, `issued_at` and `refusal` are required, and the other members are not read.
+
+### A profile
+
+A profile is what one device needs to reach one inbound.
+
+| Member | Type | Required | Rule and default |
+|---|---|---|---|
+| `id` | string matching `[a-z0-9][a-z0-9_-]{0,63}` | yes | Unique in the document. It is how the client keeps the user's own settings and consents for a profile across refreshes. A profile whose `id` is new is a new profile, with no consent. |
+| `name` | display text, 1 to 64 characters | yes | |
+| `type` | `"veilway"` | yes | An unknown value refuses the profile. A plain `wireguard` inbound is not delivered in this format. |
+| `inbound_public_key` | key | yes | `inbound_pub` of the protocol pages. |
+| `device` | object | yes | See "Device keys". |
+| `gateways` | list of 1 or 2 IP addresses | yes | The gateway address per family. One per family of `device.addresses`, in the same order, inside the ranges the config reference allows for a pool. They are the resolver and the control channel address. |
+| `mtu` | integer, 1280 to 1500 | yes | The inbound's `mtu`. |
+| `transport_public_key` | key | when a `tls`, `ws` or `fronted` transport is listed | The node transport public key. |
+| `transports` | list of 1 to 8 | yes | In the provider's order. See "Transports of a profile". |
+| `stream_first` | boolean | no | Default `false`. See "Transport fallback" on the transports page. The user may set it too, and the user's setting wins. |
+| `parallel` | integer, 1 to 4 | no | Default 1. Connections per tunnel on `tls` and `ws`. |
+| `padding` | object | no | `wide_max` (512 to 1023, default 1023), `normal_max` (64 to 255, default 255), `keepalive` (a list of two integers, seconds, the lower and the upper bound, each from 10 to 60, the upper at least 10 above the lower, default 20 and 40). |
+| `min_control_version` | integer, 1 to 255 | no | Default 1. |
+| `rating_cap` | `"detectable"` or `"unsafe"` | no | The provider's statement that something the client cannot see lowers the rating, such as another service on the node's address. It can only lower. There is no value that raises. |
+| `exits` | list of at most 256 | no | See below. Default empty. |
+
+What a profile does not have, on purpose: routes, a resolver other than the gateway, a setting of the kill switch, a rating, a fingerprint pack, a certificate authority, an "allow insecure" switch, and the cookie name of the upgrade answer, which the client ignores anyway. In version 1 a native profile always carries all of the device's traffic. A provider cannot ask for less or for more.
+
+**The cap the client computes itself.** Apart from `rating_cap`, the client compares the dial addresses of all transports of all profiles of the subscription. A cover transport whose address is also the address of a `udp` or `udp-obfs` endpoint is capped at Detectable, as the transports page requires. What the provider runs on an address and does not list, the client cannot see.
+
+An entry of `exits`:
+
+| Member | Type | Rule |
+|---|---|---|
+| `tag` | string matching the config's tag rule, `[a-z0-9][a-z0-9_-]{0,63}`, not a reserved word | Unique in the list. |
+| `name` | display text, 1 to 64 characters | |
+| `country` | two uppercase ASCII letters | Optional. |
+| `full_ip` | boolean | Whether the exit carries every IP protocol. Default `false`. |
+
+The catalogue in a subscription is what the user sees before connecting. Once connected, the catalogue from the control channel replaces it for that session.
+
+### Device keys
+
+| Member of `device` | Type | Required | Rule |
+|---|---|---|---|
+| `public_key` | key | yes | The device's WireGuard public key, `device_pub`. |
+| `private_key` | key | no | Present only when the provider made the key. Its public half must equal `public_key`, or the profile is refused. |
+| `preshared_key` | key | no | WireGuard's optional preshared key for this device, when the node's config has one. |
+| `addresses` | list of 1 or 2 IP addresses | yes | At most one IPv4 and one IPv6, IPv4 first, inside the ranges the config reference allows for a pool. |
+| `transport_secrets` | list of 1 or 2 keys | yes | This device's transport secrets. The client uses the first. The second exists so that a rotation can be staged. |
+
+There are two ways for a device to get its WireGuard key, and the format supports both.
+
+| | The device makes the key | The provider makes the key |
+|---|---|---|
+| How | The client generates a key pair before its first fetch and sends the public half. The document names that public key and has no `private_key`. | The panel generates the pair and puts the private half in the document. |
+| What the provider holds | The public key. It holds nothing that works anywhere else. | The private key, for as long as it keeps it. |
+| What a holder of the link gets | The right to enrol a device of its own while a place is free. That device gets its own addresses and its own transport secrets. It does not get the key or the secrets of the user's device. | The private key and the secrets of the user's device, and with them everything. |
+| What it needs | A provider whose endpoint enrols devices. | Nothing. It also works for a whole document in a link, where there is no endpoint to enrol with. |
+
+The default is the first. The client always sends its own public key.
+
+- A document that names the client's public key and has no `private_key` is the default case.
+- A first document that carries a `private_key` is the second case. The first confirmation says "key issued by the provider", in words that say it is the weaker choice: the private key travels in every fetch and sits in the provider's database.
+- A document without `private_key` that names another public key than the client's is refused.
+- **No silent change.** On a refresh, a `device.public_key` that differs from the stored one, or a `private_key` where there was none, fails the refresh. Moving to another key or to a provider-issued key takes a new import by the user, with its confirmation.
+
+In both cases the device's transport secret is in the document, so whoever holds a copy of that device's document can recognise that device's `udp-obfs` traffic (see the transports page).
+
+### Transports of a profile
+
+Every transport has a `type`. An unknown `type` refuses the profile. The class of each type (cover, no cover, plain) is fixed by the transports page and is never a field.
+
+| `type` | Members | Rule |
+|---|---|---|
+| `udp`, `udp-obfs` | `endpoints`: list of 1 to 16 | Each an IP address and port, `192.0.2.10:51820` or `[2001:db8::10]:51820`. |
+| `tls` | `path`, `candidates` | Every candidate must have `pins`. |
+| `ws` | `path`, `candidates` | A candidate may have `pins`. |
+| `fronted` | `path`, `candidates` | No candidate has `pins`: the certificate is a content delivery network's and changes. |
+
+- `path` follows the path rule of the config reference and is at least 12 characters.
+- A candidate is an object with the members of "Fronting options" on the transports page: `address` (IP address and port, required), `sni` (a host name, or empty for none), `host` (a host name, required), `verify_name` (a host name, required when `sni` is empty and not allowed otherwise), `ech` (an Encrypted Client Hello configuration in standard base64, optional, at most 1,024 bytes when decoded), and `pins`.
+- `pins` is a list of 1 to 4 pins and belongs to one candidate, because one transport can list a candidate that reaches the operator's own server and another that goes through a content delivery network. A pin is the SHA-256 of a certificate's SubjectPublicKeyInfo, in standard base64, 44 characters. A candidate with pins is a "pinned candidate" on the transports page.
+- A host name is lowercase ASCII, at most 253 bytes, by the domain rule of the config reference, without the wildcard.
+- A hint on the control channel names a transport by its position in `transports` and a candidate by its position in that transport's `candidates`, or in its `endpoints` for `udp` and `udp-obfs`.
+
+**Where a client may be told to connect.** The transport's own connection is the one thing that leaves the device outside the tunnel, so its destination is restricted.
+
+- Every address a client dials is an IP address. A profile has no host name that the client would have to look up before the tunnel is up, because that lookup would name the provider to the local network.
+- Refused when the document is parsed, with the profile: an address that is loopback, link-local, unspecified, multicast or broadcast, an IPv4-mapped IPv6 address, and port 0.
+- Skipped at each connect: an address inside one of the device's own networks. Those are the networks of every address the device holds on an interface that is not a tunnel, at the moment it connects, with the prefix the interface has, and the address of its default gateway. A profile must not be able to point the device at its own router or at a neighbour. The check is made again at every connect, because the device's networks change when it moves.
+- Asked about once per profile: any other private or shared address (the private IPv4 ranges, `100.64.0.0/10`, `fc00::/7`). Such a profile is a lab or an office set-up, and the app says "this profile connects to a private address" before the first connect.
+- The same check covers the tunnel side: when a `device` address or a gateway falls inside one of the device's own networks, the profile cannot be used on that network, and the app says why instead of connecting.
+
+### Usage
+
+| Member of `usage` | Type | Meaning |
+|---|---|---|
+| `used_bytes`, `quota_bytes` | integers, 0 to 9007199254740991 | The names and meanings of the control channel's `usage`. `quota_bytes` of 0 means no limit. |
+| `period` | `"none"`, `"daily"`, `"weekly"` or `"monthly"` | |
+| `period_start`, `expires_at` | integers, Unix seconds | 0 for none. |
+| `device_limit` | integer, 0 to 65,535 | 0 for none. |
+
+Usage in a subscription is information for the screen, as old as the document. It decides nothing. The node enforces quota and expiry, and what the control channel reports while connected is shown in its place. A client never refuses to connect because of these numbers.
+
+### Provider content
+
+All of it is data. It is shown in an area that is visibly the provider's, apart from the app's own interface, and the user can hide that area.
+
+| Member | Type | Rule |
+|---|---|---|
+| `support` | list of at most 4 | Each: `label` (display text, at most 32 characters) and `url`. |
+| `cards` | list of at most 6 | See below. |
+| `logo` | object | `type`: `"png"` or `"jpeg"`. `data`: standard base64 of at most 65,536 bytes. The client decodes it with size limits, refuses more than 512 by 512 pixels or anything that is not a plain still image, and re-encodes it before it is shown. A logo that fails is left out. |
+| `accent` | string `#rrggbb` | One colour. The client adjusts it until text on it meets the app's contrast rule. |
+| `notices` | list of at most 4 | Each: `severity` (`"info"` or `"warning"`) and `text` (display text, cut to 280 bytes). |
+
+A card has a `type` and, by type:
+
+| `type` | Members |
+|---|---|
+| `stat` | `label` (at most 32 characters), `value` (at most 16 characters), `unit` (at most 8 characters, optional) |
+| `progress` | `label`, `used` and `total` (integers, 0 to 9007199254740991, `used` not above `total`, `total` above 0) |
+| `notice` | `severity`, `text` (cut to 280 bytes) |
+| `link` | `label`, `url` |
+
+Every `url` in `support`, in a `link` card and in `refresh_urls`:
+
+- is an `https` URL with a host name, no user or password part, at most 512 characters;
+- is shown with its host in ASCII form, with the registrable domain marked so that a long name cannot hide whose it is;
+- in `support` and in a card, is opened only after the user confirms a screen that shows that host, in the system's browser, never inside the app, and is never fetched by the app;
+- in `refresh_urls`, is fetched by the app under the rules of "Fetching" and only those.
+
+There are no icons, images, fonts or styles in provider content other than the one logo and the one colour.
+
+## Import
+
+A subscription enters the app in one of these ways. Every one of them goes through the same three steps.
+
+| Way | What is accepted |
+|---|---|
+| A link typed or pasted | A native link, or a legacy `https` URL |
+| The clipboard | The same, read only when the user presses "paste". The app never reads the clipboard by itself. |
+| A QR code | A native link in either form, or a whole document |
+| A deep link | A native link in the `veilway` form, or `veilway://doc#v1.<key>.<document>` |
+| A file | `v1.<key>.<document>` |
+
+**A whole document in a link, a code or a file.** A single profile, or a few, can be given without a server. The content is the provider's key and the signed document, joined by dots after `v1`. It is the same JWS, checked by the same rules against that key. It has no endpoint, so it cannot refresh, and the app says so. It carries a provider-issued device key, since there is nothing to enrol with. Such a link holds a private key and transport secrets: wherever the link goes (a chat history, a browser history, a screenshot), they go too. The app says this on the confirmation, and a provider should prefer an ordinary link wherever it has an endpoint.
+
+**Step 1: before any request.** The app shows, from the link alone:
+
+- the host of the endpoint, with its registrable domain marked, or "a document in a link" or "a file";
+- the fingerprint of the key in the link;
+- what will be sent if the user continues: the link's token and a new key for this device, to that host, from the device's own address, outside any tunnel;
+- that the link is native, or that it is a legacy link that cannot be verified. For a legacy link the screen adds: "this link has no key part. If your provider gave you a Veilway link, part of it was lost on the way."
+- when another subscription's tunnel is up, the two ways the request can go, as "When a fetch happens" lists them.
+
+Nothing is sent, generated or stored by the app before the user continues. A deep link, a QR code or a file can bring the user to this screen and can do nothing else. It cannot cause a request, an enrolment or a used device place.
+
+**Step 2: the fetch.** One request with `op` `"fetch"`. A native link expects a signed document under the link's key, and anything else is a failure. A legacy link gets a `GET`. A whole document needs no fetch.
+
+**Step 3: the confirmation.** From the verified document the app shows:
+
+- the provider's name as the document gives it, marked as the provider's own claim;
+- the fingerprint again, and the hosts in `refresh_urls`;
+- how many profiles it holds, and the lowest class and the lowest rating among them;
+- whether the device's key was made on this device or issued by the provider;
+- whether this adds a new subscription or replaces a stored one (same key and same id), and which;
+- the account's devices, as the document lists them.
+
+The user may type a name for the device, and the screen says that the name will be visible to anyone who holds the link. If the user accepts, the client stores the subscription and sends `"confirm"`, with the name if one was typed. If the user declines, the client sends `"release"`, so that the device place is freed, and keeps nothing: not the document, not the link, not the key it made.
+
+**Rules that hold for every way in.**
+
+- An import never connects. Connecting is a separate action by the user.
+- A web page that opens a `veilway` link learns nothing from the app, and the app makes no request because of it. The host in the link learns nothing from the app unless the user continues at step 1. What a browser or a messenger does with an `https` link before the app sees it is outside the app's control, see "Form".
+- The consent to use a lower class of transport (see the transports page) is stored per subscription and profile `id`. It is not carried over to a profile with a new `id` or to another subscription.
+- A link over a size limit, or one that is not exactly one of the forms above, is refused at once.
+
+## Native and legacy
+
+A client also reads the unsigned formats that other apps use, so that a user can bring an existing subscription along. This page does not specify those protocols. It says only what is accepted and how it is treated.
+
+**Which is which.** A link with a `v1` fragment is native. Every other link is legacy, and must be `https`. Nothing a server answers changes that:
+
+- A native link that is answered with anything but a signed document under its key is a failed fetch, on the first import as on every refresh. It is never read as a legacy list.
+- A legacy link is fetched with a `GET`, never with a device key. If it is answered with a signed document, the app says "this provider offers a native subscription, ask it for the full link" and imports nothing from that answer.
+
+**What is accepted from a legacy link.**
+
+- A body that is a list of links, one per line, plain or in base64. Links with the schemes `vless://`, `vmess://`, `trojan://` and `ss://` are read. Every other line is skipped and counted.
+- The response headers `subscription-userinfo` (upload, download, total and expiry as integers), `profile-title` (display text, at most 64 characters), `profile-update-interval` (hours, within the bounds of `update_interval`) and `support-url` (a URL under the rules above). A header that does not parse is ignored.
+- The limits in the table of numbers. A list over the count limit is cut at the limit and the app says so.
+
+**How it is treated.**
+
+- Each link is parsed into a typed profile. A field that is not on the parser's list of known fields is dropped. A link that does not parse is skipped. Nothing from a link is ever copied into a configuration as raw text, a path or a URL.
+- Step 1 of the import says "this link cannot be verified". Every legacy profile is marked "unsigned", and the subscription is marked "unsigned: it can be changed on the way at every fetch".
+- The rating is computed by the core from the settings in the link. It is Unsafe when there is no encryption, when certificate checking is switched off, or when the cipher is one the core lists as weak. Otherwise it is Detectable. A legacy profile is never rated higher.
+- Connecting to a legacy profile needs the optional compatibility add-on, which the app offers to install at that moment. Such a profile is marked "TCP and UDP only".
+- A legacy subscription follows the same rules for when a fetch happens as a native one.
+- Provider content does not exist in the legacy format. Only the title, the usage numbers and the support link are shown.
+
+**The panel side.** A provider's panel can serve the legacy format, at a different URL from the native endpoint, for users on other apps. What such a link reveals and protects is whatever those formats provide.
+
+## Versioning
+
+- `v` is the format version of the payload. This page defines 1. The `v1` of a link's fragment is the form of the link and is separate.
+- Version 1 grows only by new optional members and by new names for `critical`. An older client ignores a member it does not know, and refuses a document that marks a feature it does not know as critical. A provider puts a name in `critical` only when ignoring the feature would be unsafe or would leave a profile unusable.
+- A document with a `v` above what the client knows is refused. The client keeps the last good document and tells the user that the app needs an update to read this provider's subscription.
+- A new kind of profile or transport is a new `type`. An older client refuses that profile and keeps the others, so a provider can list a new transport in a new profile next to the old ones.
+- A change to the envelope (another algorithm, another serialisation) is a new `typ`, a new form of link and a new page, never a new meaning of this one.
+- A client never falls back from a newer format to an older one for the same link.
+
+## What a provider can and cannot do
+
+A provider that is malicious, or whose panel or signing key is in someone else's hands, signs whatever it wants. The format does not stop it from being a bad provider. It keeps it inside its box.
+
+**It can, and the format cannot change that:**
+
+- See and alter everything the user sends through its nodes that is not encrypted end to end, and see destinations, names, volume, timing and the client's address. It runs the node.
+- Point its own profiles at any public address, which the client will then dial when the user connects. With many users, that can be a third party's address, which then receives their connection attempts.
+- Choose the server name a client sends in clear when it connects. A name that is dangerous to be seen asking for is the user's risk, and the user does not see it unless they look at the profile's details.
+- List up to four more endpoints that the app will send the token to when it refreshes, once the user has seen and confirmed their hosts.
+- Show false names, numbers, notices and cards in its own area, and false names on its own profiles and exits.
+- See the time of every refresh, and tell users and devices apart.
+- Give different users different documents.
+- With provider-issued keys: keep a copy of the device's private key.
+- Stop serving, or serve a document that fails, which leaves the user on the last good one.
+
+**It cannot:**
+
+- Run code, or show markup, remote images or its own interface elements. Content is typed data and plain text.
+- Open a URL without the user confirming a screen that shows the host, or make the app fetch anything other than its own subscription endpoints.
+- Make the app connect to the device itself, to its router or its neighbours, or to a private address without the user being asked.
+- Change a setting of the app: the kill switch, the resolver setting, routes, the theme, the language, the update channel, the fingerprint pack.
+- Raise a rating, or hide the class of a transport. It can only lower a rating with `rating_cap`. A lower-class transport in its list is still used only with the user's consent.
+- Switch off certificate checking. The format has no such field.
+- Send traffic outside the tunnel. A profile has no routes, and the kill switch is the app's.
+- Touch, replace or read another subscription, including another account of its own, or learn from the app that another provider's subscription exists. Its subscription is never fetched through another provider's tunnel, nor another's through its own, without the user choosing that for one request.
+- Replace its own earlier document with an older one, or move a device to a provider-issued key without a new import.
+- Import, enrol or connect without the user.
+
+**Someone who is neither the provider nor the user,** and can answer the fetch in the provider's place, can refuse to answer, can serve a document it has seen that is still valid and no older than the stored one, and can replay a signed refusal it has seen for up to a day, which shows the user a wrong message and changes nothing. On a first import of a link with provider-issued keys there is no stored document, so it can serve any older valid document of that account until that document expires. Nothing else.
+
+**A holder of a leaked link can:**
+
+- With provider-issued keys: fetch the user's document, with every address, name, path, key and secret in it, act as the user's device, and recognise that device's `udp-obfs` traffic in recordings.
+- With device-made keys: enrol a device of its own while a place is free, and use the account from there, with its own addresses and secrets. It learns the node's addresses, names, paths and public keys, the account's usage numbers and the names of the account's devices. It does not get the user's device key. It does not get the user's transport secrets either, even if it learns the device's public key, because the device's document is released only with the device secret.
+- Fill the account's device places, which the user sees in the device list and in a `"device_limit"` refusal.
+- Block everything in the document, if it controls a network.
+
+It cannot read what the user sent, change what the user's app holds, or sign anything. It ends when the provider resets the link and removes the devices the holder enrolled, and, with provider-issued keys, rotates the device's keys and secrets. A reset alone does not undo what the holder already copied.
+
+## Security considerations
+
+- **The link is the root of trust.** It carries the key, so the fetch needs no trust. In exchange, a link from the wrong hands is a complete, valid subscription to the wrong provider. Providers should hand links over a channel the user already trusts and publish their fingerprint somewhere else as well.
+- **The link is the account.** There is no password behind it. Leaked links are the ordinary way a subscription is lost, and screenshots of QR codes are the ordinary way links leak. A whole document in a link is worse, because it holds the device's keys themselves.
+- **The signature protects against the path, not against the provider.** It says nothing about whether the provider deserves trust.
+- **A signing key that sits on the panel is as safe as the panel.** If the panel signs online, whoever takes the panel signs documents for every user, and a stolen key cannot be revoked. Enrolment needs a document per device, which pushes providers towards signing online. Where the signing key lives is the provider's largest decision (threat model Q9).
+- **Stale documents.** A client that cannot refresh keeps working on old addresses and keys. Whoever can answer the fetch can keep it there for up to a document's lifetime before any warning shows. The warnings and the 30 day rule limit how quietly that continues.
+- **Presence.** An automatic refresh happens only inside the provider's own tunnel, where the provider already sees the device. A refresh the user asks for outside a tunnel is visible to the local network, and the app says so first.
+- **Every parser here needs a fuzz target** in the same change as the parser: the link and the deep link, the envelope, the payload, the Encrypted Client Hello configuration as it is handed to the TLS library, the legacy list, the legacy headers, cards, and the logo decoder (the threat model names them `fuzz_deeplink`, `fuzz_subscription`, `fuzz_links`, `fuzz_sub_headers`, `fuzz_cards`, `fuzz_card_logo`). Each asserts that no input changes stored state unless every check passed. The panel's parser of the request body needs one too (`fuzz_sub_request`).
+- **Nothing here is invented cryptography.** The envelope is JWS with EdDSA as published, verified by the strict rule of RFC 8032. The rules around it (the key in the link, rotation, identity, enrolment) are policy, and they have been reviewed once, inside the project.
+
+Tests this page needs before it leaves Draft: a document with another header, a badly encoded part, a signature that only a lax verifier accepts, a lower serial, an equal serial and other bytes, another `subscription_id`, already expired, or under a key that is not held, is refused and changes nothing; a native link answered with a legacy list imports nothing; opening a deep link or scanning a code sends no packet until the user continues; declining an import frees the device place; a refresh that changes the device key or adds a private key fails; an unknown token and an unknown path get identical bytes and timing from the panel, while a valid token always gets a signed answer; no refresh leaves the device outside the subscription's own tunnel unless the user asked; a profile that dials loopback is refused and one that dials the device's own network is not dialled; one subscription's document cannot change another; no field of any document changes the kill switch, the resolver setting, the routes or a rating upward; the token appears in no log line, no URL and no request to a host the provider did not sign; a hostile corpus of text, URLs and logos is shown as plain text, refused or left out.
+
+## Open questions
+
+Each is listed with the default this draft takes. The first five are the ones a reviewer should attack first.
+
+| Question | Default |
+|---|---|
+| The key in the link makes the giver of the link the root of trust. Is there anything better that needs no central party? | No. The project runs no directory of providers, and will not. |
+| Device places can be filled by a holder of the link, and only the provider can clear them. Should a device be able to remove another, and how would it prove it is the older one? | Not in version 1. WireGuard keys cannot sign, so it would need a second key per device. The device list and the signed refusal make the state visible. |
+| The first fetch enrols a pending device before the user has seen the document. Is a separate request that only previews the document worth a second kind of answer? | No. The place is pending, is released on a decline, and expires by itself. |
+| Keeping a retired signing key for a year, to tell late clients that they need a new link | Kept. A key that was retired because it was stolen signs nothing the thief could not sign already. The alternative is that late clients see the message for an interception. |
+| Can the endpoint really give the web server's own answer for an unknown path, in bytes and in time? | Required. Handing the request back to the web server is exact. Repeating a learned answer is an imitation that must be measured. |
+| Can "an unknown token answers like an unknown path" hold in timing, when a valid token leads to a signature and an unknown one does not? | Required of the panel. Not shown. The check of the token must cost the same either way, and the difference in what follows is visible only to someone who already holds a valid token. |
+| Is no automatic refresh outside the subscription's own tunnel too strict? A user whose profiles all die gets no new ones until they ask. | Kept. The app tells the user to refresh when every profile of a subscription has failed. |
+| May a fetch use the fronting options of the transports? (threat model Q15) | Not specified. `refresh_urls` and a whole document in a link are the only answers here. Candidates for the fetch would have to be in the link. |
+| Should a document over 30 days past its expiry stop working, not only ask? | It asks. Stopping would let whoever blocks the subscription host take the user's working connection away after a month. |
+| Dial addresses are IP addresses only | Yes. It avoids a lookup before the tunnel. It costs providers whose fronts change address often, who must reissue documents. |
+| Certificate pins behind a content delivery network (threat model Q22) | None. Such candidates rely on ordinary validation, and the tunnel inside does not depend on it. |
+| Where the signing key lives, and whether the panel may sign online (threat model Q9) | The provider's decision. Device-made keys need a document per device, signed when the device enrols, so an offline key means provider-issued keys or devices registered ahead of time. |
+| Should a profile be able to carry routes (split tunnelling chosen by the provider)? | No, not in version 1. Routes from a provider are a way to move traffic outside the tunnel. |
+| Should a legacy link be refreshed outside a tunnel at all, since it cannot be verified? | Only when the user asks, as for a native one. |

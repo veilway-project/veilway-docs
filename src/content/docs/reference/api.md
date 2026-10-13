@@ -45,7 +45,7 @@ The host name in the URL is never looked up over a unix socket, so any name work
 | `message` | One plain sentence, for people. |
 | `details` | List of `{"path", "message"}`. For a refused config, every error with the path of its field. Empty when there is nothing to add. |
 
-No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `username`, `password`), only paths. A `details` entry never holds a value from the document.
+No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `transport_secrets`, `username`, `password`), only paths. A `details` entry never holds a value from the document.
 
 ### Error codes
 
@@ -120,9 +120,9 @@ Body: a config document. Nothing changes. The answer holds `valid`, `report` as 
 | `diff` field | Meaning |
 |---|---|
 | `inbounds`, `outbounds`, `exits`, `rules`, `users` | `{"added", "changed", "removed"}`, each a list of tags (names for users). |
-| `dns`, `log`, `routing_default`, `rules_reordered` | `true` when that part changed. |
-| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). |
-| `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed` (devices by public key) and `lost_access`. |
+| `dns`, `log`, `routing_default`, `rules_reordered`, `notices` | `true` when that part changed. |
+| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type` alone changed is listed with `restart` false and both lists empty. |
+| `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed`, `devices_secrets_changed` (devices by public key) and `lost_access`. `devices_secrets_changed` lists the kept devices whose `transport_secrets` are not the ones they were; a control connection that proved a secret that is gone is closed. |
 
 An outbound whose `username` or `password` is written out in the document, instead of left as the marker, is listed as changed whatever the values are. Otherwise "not changed" would tell whoever guessed a password that the guess was right.
 
@@ -164,15 +164,16 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 
 ## Editing a config without seeing secrets
 
-`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username` and `password` hold the string `"<redacted>"`. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
+`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username` and `password` hold the string `"<redacted>"`, and every entry of `transport_secrets` holds a marker that names it, `"<redacted:1a2b3c4d>"` with eight hex digits. The digits tell the secrets of one device apart and say nothing about either. They are made anew by every node process, so a document read before a restart has to be read again. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
 
 | Field | Taken from |
 |---|---|
 | inbound `private_key` | the running inbound with the same `tag` |
 | device `preshared_key` | the running device with the same `public_key` |
+| an entry of a device's `transport_secrets` | the secret that this marker names, of the running device with the same `public_key`, wherever either stands in its list. An entry that is left out is removed: to end a rotation, drop the marker of the old secret and keep the other. To begin one, write the new secret out next to the marker of the one that stays. |
 | outbound `username` and `password` | the running `socks5` outbound with the same `tag` and the same `server` |
 
-A marker that finds no such object is a validation error at the path of that field. That includes an outbound whose `server` changed: the document must then spell out its username and password. A `username` or `password` that is the marker in a config file read from disk is a validation error as well.
+A marker that finds no such object is a validation error at the path of that field. That includes an outbound whose `server` changed: the document must then spell out its username and password. It also includes a marker in `transport_secrets` that names no secret of that device, such as the plain `"<redacted>"` or the marker of another device's secret. A `username` or `password` that is the marker in a config file read from disk is a validation error as well.
 
 ## Users, stats, sessions, exits
 
@@ -239,10 +240,11 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `flows` | Flows in the flow table right now. |
 | `ws_stalled`, `ws_refused` | WebSocket connections dropped because they never finished the upgrade, and refused at accept. |
 | `state_write_failures` | Writes of the usage state file that failed since start. |
+| `control` | What the control channel of the `veilway` inbounds did since start: `accepted` and `authenticated` connections, connections closed for `auth_failed`, `malformed`, `timed_out` (the opening took over 10 seconds) and `replaced` (a newer connection of the device took the place), requests answered `rate_limited`, `exits_selected`, `exits_refused` and `exits_dropped` (by a reload), `probe_runs`, `probes_confirmed`, `probes_sent`, `probes_refused`, `mtus_set`, `byes`, and `open`, the authenticated connections right now. All zero on a node without a `veilway` inbound. |
 
 ### `GET /v1/sessions`
 
-`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp` or `ws`, `null` when the transport the device came over is gone), `handshake_age_secs` and `flows` (the flows of the device across all its inbounds).
+`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp` or `ws`, `null` when the transport the device came over is gone), `handshake_age_secs`, `flows` (the flows of the device across all its inbounds), `selected_exit` (the exit the device chose on the control channel, `null` when it chose none and leaves through its user's exit), `control_connections` (its authenticated control connections) and `mtu` (the MTU the device set, `null` when it set none and its tunnel has the inbound's).
 
 The address a device connects from is not part of a session. It is never put in an answer, whatever `log.destinations` says.
 

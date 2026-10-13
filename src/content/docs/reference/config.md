@@ -19,7 +19,7 @@ The core reads one JSON document. It is the source of truth: the panel changes i
 }
 ```
 
-`version`, `dns`, `inbounds`, `outbounds`, `exits`, `routing` and `users` are required. `log` and `groups` are optional.
+`version`, `dns`, `inbounds`, `outbounds`, `exits`, `routing` and `users` are required. `log`, `groups` and `notices` are optional.
 
 ## Rules that apply everywhere
 
@@ -30,7 +30,7 @@ The core reads one JSON document. It is the source of truth: the panel changes i
 - **Lists.** A list never contains the same entry twice. Inside a routing rule, a condition that is present must not be an empty list.
 - **Canonical spelling.** Numbers inside strings (a port, a prefix length, a `lo-hi` range) have no sign and no leading zeros. A timestamp uses `T` between date and time.
 - **Addresses.** IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) and addresses with a zone (`%eth0`) are errors everywhere. A network written with host bits set (`10.7.0.5/24`) is an error, except in an inbound's `address`, where the host part is the gateway. Port 0 is an error everywhere.
-- **Secrets.** `private_key`, `preshared_key`, `username` and `password` are secrets. No error, warning, log line or API response contains a field's value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read unless started with `--allow-readable-config`; `veilway check` warns.
+- **Secrets.** `private_key`, `preshared_key`, `transport_secrets`, `username` and `password` are secrets. No error, warning, log line or API response contains a field's value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read unless started with `--allow-readable-config`; `veilway check` warns.
 - **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
 - **Paths.** A file path in the config is relative to the directory of the config file. Absolute paths and any `..` component are errors.
 - **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users and 16 devices per user.
@@ -129,7 +129,7 @@ An inbound is one tunnel: one key, one address pool, reached over one or more tr
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `tag` | tag | required | |
-| `type` | `wireguard` | required | Stock WireGuard peers. The `veilway` type arrives with the native protocol in Phase 2. |
+| `type` | `wireguard` or `veilway` | required | `wireguard`: stock WireGuard peers. `veilway`: the same tunnel, with the control channel at its gateway address, see "The control channel" below. Changing the type restarts nothing. |
 | `private_key` | key | required | The tunnel's static key. Secret. Unique across inbounds, compared by the public key derived from it. |
 | `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the address pool for this tunnel. |
 | `mtu` | integer 1280 to 1500 | `1420` | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path. |
@@ -143,12 +143,27 @@ Rules for `address`:
 
 Who may use an inbound is decided by addresses alone: a device belongs to the inbound whose pool contains its address.
 
+### The control channel
+
+Engine. On a `veilway` inbound the gateway address also answers the control channel of the [protocol](../../protocol/control-channel/): TCP port 47873, and UDP port 47873 for MTU probes. Only the node's side is built. No client speaks it yet.
+
+- **Who reaches it.** A device, from its own tunnel address, at the gateway of the inbound it is connected through. The gateway of any other inbound refuses the port, and so does every `wireguard` inbound. It is handled before the routing rules, like gateway DNS: no rule blocks, redirects or opens it, and `dns.hijack` does not touch it. Its bytes count as usage like any others.
+- **Who is let in.** A connection must prove one of the device's `transport_secrets` within 10 seconds, in an exchange that is bound to that device's and that inbound's keys. Anything else is closed with no answer. A device may have 4 connections that have not proven it and 2 that have; one more replaces the oldest.
+- **What it gives.** The device's addresses, gateway and MTU as the node holds them, the exits of its user's `exits` (tag, `name`, `country`, whether it carries every IP protocol, whether it is up), its user's usage and quota, and the `notices`. A reload sends again what it changed. Usage is sent again when it changed, at most once every 30 to 90 seconds, and never because of the channel's own traffic.
+- **Choosing an exit.** A device may choose which exit the action `"user"` means for it, among its user's `exits`. The choice belongs to that device only. It moves the flows that the rules send to `"user"` or that match no rule: those are reset and leave through the new exit from their next packet. A flow a rule sends to a named exit is not touched. A device without a choice leaves through `users[].exit`, then `routing.default`, as before. A choice goes into the state file at its next regular write, not at once: a node that is killed within those 10 seconds forgets it, and the device chooses again.
+- **MTU.** A device may probe which packet size its path carries and set the MTU of its own tunnel, from 1280 to the inbound's `mtu`. The node then sends that device nothing larger: TCP it ends itself keeps to the segment size the device announces, what else the node sends itself it fragments, IPv4 that it forwards and that allows it is fragmented, and the sender of anything else gets "fragmentation needed" or "packet too big". The value is forgotten when the device has had no session for 180 seconds. A device with addresses in two `veilway` inbounds has one MTU, one chosen exit and one set of limits for both. This version does not yet prohibit fragmentation of the outer UDP packets, so a probe can pass a path that fragments it.
+- **Being cut off.** Before a device is cut off (quota, expiry, disabled or removed, or the node stops) the node writes it the reason. The cut-off does not wait for that.
+- **Limits.** 10 requests at once and then one a second for a device, 3 exit changes and then one in 5 seconds, one probe run a minute. Over a limit a request is answered "rate limited" and does nothing.
+- **What is logged and counted.** A channel that opens or closes, an exit that is chosen or dropped and an MTU that is set are logged at info with the user and device name, at most 6 such lines at once for one device and then one in 30 seconds; the rest go to debug and the next line says how many. Nothing of it names a destination. Counters are in `control` of `/v1/stats`, and `/v1/sessions` shows each device's chosen exit, open control connections and MTU.
+
 ### `transports`
 
 | `type` | Keys | Meaning |
 |---|---|---|
 | `udp` | `listen` (`ip:port`) | Plain WireGuard datagrams. |
 | `ws` | `listen` (`ip:port`), `path`, optional `tls` with `cert` and `key` (both required) | One WireGuard datagram per binary WebSocket frame. Without `tls` it serves plain `ws` for a reverse proxy that terminates TLS; validation warns when such a listener is not on a loopback address. |
+
+A `veilway` inbound takes `udp` only in this version. The transports of the native protocol (`udp-obfs`, `tls`, its own `ws`, `fronted`) are not built, and the `ws` above is the format of a `wireguard` inbound, so validation refuses it on a `veilway` inbound and does not take it for the other.
 
 `path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`.
 
@@ -225,7 +240,7 @@ A shared network for games on one tunnel, with every other tunnel isolated, is o
 
 Users on `gaming` reach each other. They do not reach users of other tunnels, and users of other tunnels reach nobody.
 
-Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and nothing else. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
+Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and nothing else, and on a `veilway` inbound the control channel of that inbound. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
 
 ### `proxy_only` and `unsupported`
 
@@ -336,6 +351,7 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 | `name` | matching `[a-z0-9][a-z0-9._-]{0,63}` | required | Unique within the user. |
 | `public_key` | key | required | Unique across all devices of all users, and never equal to the public key of an inbound. |
 | `preshared_key` | key | none | Secret. |
+| `transport_secrets` | list of 1 or 2 secrets | none | Secret. Required for a device with an address in a `veilway` inbound, where the device proves one of them to the control channel. A secret is 32 random bytes written like a key, and `veilway gensecret` prints one. No two devices share one, and none is a WireGuard key of the config. Two are for rotation: add the new one, give it to the device, remove the old one later. On a device with no address in a `veilway` inbound the key is a warning. |
 | `addresses` | list of 1 to 16 host addresses, written without a prefix | required | The device's tunnel addresses. |
 
 Each address must lie in the pool of exactly one inbound and may not be that pool's gateway, network or IPv4 broadcast address. A device has at most one IPv4 and one IPv6 address per inbound. No address is used by two devices.
@@ -354,10 +370,25 @@ Engine. Usage never lives in the config document. It is kept in one state file (
 - **Without `quota_period`.** Any period start after the node's clock is set to `0` with `used_bytes` kept and one warning. Nothing resets by itself for such a user, so this costs nothing.
 - **Reset by the operator.** `veilway usage reset --user <name>`, or `POST /v1/users/{name}/usage/reset` on the control API, sets `used_bytes` to 0 and the period start to the start of the current period. A user who was over quota can connect again at once, without a reload. Lifetime totals are kept unless `--totals` (`"totals": true`) is given. See Commands and the control API reference.
 - **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. They are totals; rates are computed by whoever polls. Counters follow names and tags across reloads. Exit counters count inner IP packets and bytes where a packet is handed to or taken from the exit, and a flow that leaves by way of another exit (`via`) is counted on the exit that carries it and not on the exit the rule chose.
-- **State file.** Versioned JSON keyed by user name. Per user it holds the bytes used in the current quota period, the start of that period, and lifetime totals (up and down, bytes and packets).
+- **State file.** Versioned JSON keyed by user name. Per user it holds the bytes used in the current quota period, the start of that period, and lifetime totals (up and down, bytes and packets). Next to the users it holds `devices`: for each device that chose an exit on the control channel, its public key and that exit's tag. The version stays 1, because an older build passes that key over and still reads every user's count. The choices of at most 65,536 devices are kept, and no more than fit in the 16 MiB a state file may have next to its users (with 65,536 users that is about 1,500). A device whose choice is not kept has chosen no exit after a restart, and the node warns when that happens.
 - **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename. It is written at most once every 10 seconds and only when something changed, once more on shutdown, right after a user is cut off for quota, and right after a usage reset. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
-- **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended, logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not a valid entry is skipped and only that user starts from zero. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
-- **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it. Renaming a user is removing one and adding another, so it starts from zero.
+- **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended, logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not a valid entry is skipped and only that user starts from zero, or only that device has chosen no exit. No more than 65,536 users and 65,536 devices are read from a file, whatever it holds. An exit in the file is held against the config like one a device asks for: when it is not in the user's `exits` it is dropped at start and logged at info. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
+- **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it, and so is the entry of a device. Renaming a user is removing one and adding another, so it starts from zero.
+
+## `notices`
+
+A list of at most 4 notices that the control channel of every `veilway` inbound gives to every device. The node writes none of its own.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `severity` | `information` or `warning` | `information` | |
+| `text` | 1 to 280 bytes | required | Plain text. Control characters, line breaks, bidirectional formatting and zero-width or other invisible characters are refused, so a client shows it as it was written. A client shows no link in it. |
+
+```json
+"notices": [{"severity": "warning", "text": "Maintenance on Friday from 02:00 UTC"}]
+```
+
+Notices on a node with no `veilway` inbound are a warning.
 
 ## Reloading
 
@@ -373,6 +404,10 @@ After a commit:
 - Every live flow is checked again. It is reset when its exit is gone, its exit's backend or outbound changed, its destination no longer passes the gate, its user is no longer entitled to the exit, or the rules now decide differently for it.
 - Changing an inbound's `private_key`, `address` or `mtu` restarts that tunnel and drops its sessions. Changing one transport restarts that transport only. Changing a tag is removing one object and adding another.
 - Certificates are read again on every reload.
+- A device's chosen exit is kept across a reload while it is still in the user's `exits`. One that is not is dropped and logged at info, and the device leaves through the user's exit. It does not come back when the exit is given back.
+- A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. The device's tunnel stays up: on `udp` no secret opened it. Adding a second secret disturbs nothing.
+- An inbound whose `type` changes from `veilway` to `wireguard` loses its control channel: its connections are closed and the port is refused. The other way round the port starts to answer. Sessions stay.
+- Changed `notices` are sent to every open control connection.
 - DNS sets change without touching a tunnel or a session: a set can be added, removed, given other servers or given to other inbounds, groups and users. The next query of every user goes to the list the new config gives them.
 - A user whose queries go to other servers than before loses the names the node remembered for them, so that no `domain` rule keeps matching by the word of a resolver that is no longer theirs. This is logged at info. What counts is the servers of the list the user's queries go to, looked at for each inbound their devices are on: moving a user, a group or an inbound into, out of or between sets clears the memory, and so does changing the `servers` of the set they are on. The same holds for `dns.servers`: changing it clears the memory of every user who resolves through it, which earlier builds did not do. The same servers in another order, and another set with the same servers, are no change. `domain` rules match for that user again as their names are resolved again; open flows are checked like after any reload.
 - A query that is waiting for a server when the reload happens is answered by that server. Its answer is not remembered when the servers its user resolves through changed in the meantime.
@@ -390,9 +425,11 @@ veilway doctor --config config.json --json --timeout 3
 veilway usage reset --user alice
 veilway usage reset --user alice --totals --api /run/veilway/veilway.sock
 veilway schema
+veilway genkey
+veilway gensecret
 ```
 
-`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.
+`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key, and `gensecret` prints a new transport secret for one device of a `veilway` inbound.
 
 `doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
 

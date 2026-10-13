@@ -8,7 +8,7 @@ The obfuscation layer is not implemented yet. When it ships it will be experimen
 :::
 
 :::caution[Draft]
-This page is a draft. It describes a specification that has had two rounds of internal review, has not been reviewed by anyone outside the project, and none of which is implemented.
+This page is a draft. It describes a specification that has had three rounds of internal review, has not been reviewed by anyone outside the project, and none of which is implemented.
 :::
 
 This page is for readers who want to know what to expect, in plain words. The exact formats are on [Transports](../../protocol/transports/) and [Control channel](../../protocol/control-channel/), and the terms are on [Protocol overview](../../protocol/overview/).
@@ -118,7 +118,7 @@ Some of these techniques lean on people who did not ask to be involved. The spec
 - The app polls no faster than a fixed floor, tries only a few fronts per hour, and waits instead of trying other fronts when a server refuses it, so that a restart or a used-up quota does not turn into load on the CDN.
 - "Domain fronting" in the classic sense shows the network a name that belongs to someone else on the same CDN. Most CDNs forbid it, several have switched it off, and if it is noticed the owner of that name may be the one who is blocked. The app and the panel never set this up by themselves.
 
-**Borrowing another site's TLS (`faketls`).** The plan lists a transport that relays strangers to a third-party site so that the server appears to be that site. It is not specified. It would put every probe and every stranger's connection on a site whose owner has not agreed, under that site's name. Whether the project should ship it at all is an open question for the owner, not only a technical one.
+**Borrowing another site's TLS (`faketls`).** The plan lists a transport that relays strangers to a third-party site so that the server appears to be that site. It is not specified. It would put every probe and every stranger's connection on a site whose owner has not agreed, under that site's name. Whether the project should ship it at all is an open project question, not only a technical one.
 
 ## How a profile is rated
 
@@ -158,7 +158,7 @@ Nothing has been tested. There are no probe measurements, no length or timing ca
 
 | Review | Status |
 |---|---|
-| Adversarial review inside the project | Two rounds on the written text. The first found three critical and seven high findings, the second one high and several medium ones, and the text was revised against all of them. The last revision has not been reviewed again. |
+| Adversarial review inside the project | Three rounds on the written text. The first found three critical and seven high findings, the second and the third one high finding each and a number of medium ones, and the text was revised against all of them. The last revision has not been reviewed again. |
 | Review by anyone outside the project | Not done |
 
 Before any transport is described as more than Detectable, the results of the tests the threat model defines are published for that release.

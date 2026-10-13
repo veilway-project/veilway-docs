@@ -43,7 +43,7 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Messages from one device | 10 at once, then 1 a second |
 | `set_exit` from one device | 3 at once, then 1 every 5 s |
 | Exits in a catalogue | at most 256, at most 64 per message |
-| Notices | at most 4, each at most 280 bytes |
+| Notices | at most 4, each shown cut to 280 bytes |
 | Hints | at most 16 |
 | Usage push | not sooner than a time drawn uniformly from 30 to 90 s after the last one |
 | Pushed snapshot messages the client applies (`session`, `exits`, `usage`, `notices`, `hints`) | at most 1 of each kind every 5 s. A newer one replaces one that waits. Every other message is handled at once. |
@@ -77,9 +77,9 @@ Every message after the preface is:
 | 3 | `length` - 1 | Body, laid out as the type says |
 
 - Every body has a fixed layout. There is no self-describing encoding, no optional field and no nesting. A body shorter or longer than its layout is malformed.
-- A string is a length followed by UTF-8 bytes. A tag has a 1 byte length of at most 64. Display text has a 2 byte length and the limit its field states.
+- A string is a length followed by UTF-8 bytes. A tag has a 1 byte length of at most 64. Display text has a 2 byte length. Bytes that are not valid UTF-8 are a malformed body.
 - A tag on the wire follows the tag rule of the [config reference](../../reference/config/) exactly, in both directions: it matches `[a-z0-9][a-z0-9_-]{0,63}` and is not one of the words that rule reserves (`all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`). Anything else is a malformed body. An exit's tag is never empty. The only empty tags are the one in `set_exit` that clears the selection and the one in `exit_result` that says nothing is selected. Because a tag can hold only these characters, it needs no filter before it is shown.
-- Display text (an exit's name, a notice) is filtered for display and then cut to its limit, in that order, see "What a malicious node can do". Text that is longer than its limit is cut. It is never a malformed body and never a reason to close the connection. The size of a message as a whole is still bounded by `length`.
+- Display text (an exit's name, a notice) has no limit of its own on the wire: any length that fits the message is a valid body. Its limit is a display limit. The receiver filters the text for display and then cuts it to that limit, in that order, on a character boundary so that no character is split (see "What a malicious node can do"). Text over its display limit is cut. It is never a malformed body and never a reason to close the connection. The size of a message as a whole is still bounded by `length`.
 - An address is a family byte (`4` or `6`) followed by 4 or 16 bytes.
 - Reserved bits and reserved bytes are zero. A message with one set is malformed.
 
@@ -147,7 +147,7 @@ Node to client:
 | `0x91` | `exits` | `flags` (1: bit 0 set on the last message of a catalogue, every other bit zero), entry count (1, at most 64), entries |
 | `0x92` | `exit_result` | `status` (1), the tag now selected (empty when none) |
 | `0x93` | `usage` | `used_bytes` (8), `quota_bytes` (8, 0 for none), `period` (1: 0 none, 1 daily, 2 weekly, 3 monthly), `period_start` (8, Unix seconds), `expires_at` (8, Unix seconds, 0 for none), lifetime `up_bytes` (8), lifetime `down_bytes` (8) |
-| `0x94` | `notices` | Count (1, at most 4), then per notice: `severity` (1: 0 information, 1 warning), text (at most 280 bytes) |
+| `0x94` | `notices` | Count (1, at most 4), then per notice: `severity` (1: 0 information, 1 warning), text (shown cut to 280 bytes) |
 | `0x95` | `hints` | Count (1, at most 16), then per hint: transport index (1), candidate index (1), both positions in the lists of the signed profile |
 | `0x96` | `probe_token` | `token` (8), `max_size` (2) |
 | `0x97` | `probe_ack` | `seq` (1), `size` (2) |
@@ -160,7 +160,7 @@ An `exits` entry:
 | Field | Size | Meaning |
 |---|---|---|
 | Tag | 1 + up to 64 | The exit's tag |
-| Name | 2 + up to 256 | The exit's display name |
+| Name | 2 + its length | The exit's display name, shown cut to 64 characters |
 | Country | 2 | Two uppercase ASCII letters, or two zero bytes for none |
 | Flags | 1 | Bit 0: carries every IP protocol. Bit 1: this device's selection. Bit 2: the user's configured exit. Bit 3: working, as far as the node last measured. Other bits zero. |
 | Load | 1 | 0 unknown, 1 low, 2 medium, 3 high |
@@ -280,7 +280,7 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 ## Usage, notices and hints
 
 - **Usage.** The numbers are the node's own counters and the meaning of each is in "Usage and quota" of the [config reference](../../reference/config/).
-- **Push.** The client does not poll. The node sends a new `usage` when the numbers changed since the last one, and not sooner than the time in the table of numbers. Nothing is sent while nothing changes, so an idle tunnel carries no control traffic. A new `session`, `exits` or `notices` is sent when a reload changed it for this device.
+- **Push.** The client does not poll. The node sends a new `usage` when the numbers changed since the last one, and not sooner than the time in the table of numbers. Nothing is pushed while nothing changes. The one thing the channel does on a schedule is the MTU re-confirmation on a datagram transport, see "What shows through the transport". A new `session`, `exits` or `notices` is sent when a reload changed it for this device.
 - **Applying.** The client applies pushed snapshot messages no faster than the limit in the table of numbers, so that a node cannot make the interface flicker or keep the client busy. The limit covers `session`, `exits`, `usage`, `notices` and `hints` only. Answers to the client's own requests (`exit_result`, `probe_token`, `probe_ack`, `mtu_result`, `error`) and `bye` are handled as they arrive.
 - **Notices.** They come from the operator's config (the proposed `notices` key). The node writes none of its own. A notice is plain text.
 - **Hints.** A hint tells a client which of the candidates in its signed profile this node also answers on. It is two indices into the profile's own lists and can name nothing that is not already there. In version 1 the node may always send an empty list.
@@ -297,7 +297,7 @@ A compromised node is a malicious provider. This table is the whole list of valu
 | Exit catalogue | At most 256 entries, and the checks under "Messages". A name is first filtered (control, bidirectional formatting, zero-width and other invisible characters are removed) and then cut to 64 characters. A name that is too long for the screen is cut, never a reason to close the connection. Tags need no filter. | Shows it. A later catalogue replaces the earlier one. A catalogue that fails a check is dropped whole and closes the connection. |
 | Selected exit | Must be a tag in the catalogue | Shows it. |
 | Usage | Integers, clamped to 9007199254740991 | Shows it. |
-| Notices | At most 4, each at most 280 bytes | Shows them as plain text in the area for provider content, apart from the app's own interface. Nothing in a notice is a link and nothing in it can be opened. The text is filtered as names are and then cut to its limit. |
+| Notices | At most 4. Each is filtered as names are and then cut to 280 bytes, at a character boundary. A longer notice is cut, never a reason to close the connection. | Shows them as plain text in the area for provider content, apart from the app's own interface. Nothing in a notice is a link and nothing in it can be opened. |
 | Hints | At most 16, each index inside the profile's lists | May try a hinted candidate before others of the same transport. An index outside the lists is ignored. |
 | Probe results | Sizes from the table only | Lowers the MTU. A node that lies makes the tunnel slower or sends the client to another transport of the profile. It cannot raise the MTU. |
 | `bye` | Four known reasons | Shows the reason and waits before trying again. |
@@ -330,7 +330,7 @@ The opening exchange is the same for every client: a TCP handshake inside the tu
 - On an obfuscated transport every chunk that holds a control channel packet gets wide padding, by rule and not by position in the session, and the start is delayed by up to 2 s. That blurs the sizes and does not remove the exchange.
 - An MTU probe run is a handful of large packets of sizes from a fixed table, soon after connecting. A remembered result reduces this to two packets.
 - On plain `udp` nothing hides any of it. Plain `udp` is rated Detectable for larger reasons.
-- There is no periodic message, so there is no period to find. Usage pushes happen only while user traffic flows.
+- There is one periodic exchange, and only one: on `udp` and `udp-obfs` the client re-confirms the MTU with one probe in each direction after every 300 to 900 s, for as long as the session lasts, also on an idle tunnel. That is a pair of the largest packets the tunnel carries, at a varying interval, and it can be seen. On stream transports there is no periodic message at all. Usage pushes happen only while user traffic flows.
 
 ## Security considerations
 

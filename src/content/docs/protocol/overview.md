@@ -4,7 +4,7 @@ description: The layers of the Veilway protocol, what each one is responsible fo
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by anyone outside the project, and nothing in it is implemented except where a row says "built". Do not rely on any property described here.
+This page is a draft specification. It has had three rounds of internal adversarial review and was revised against each. It has not been reviewed by anyone outside the project, and nothing in it is implemented except where a row says "built". Do not rely on any property described here.
 :::
 
 Veilway is a VPN: the client has a virtual network interface, whole IP packets go into a tunnel, and the node at the other end sends them on. The native protocol has three layers. Only the outer two are new.
@@ -111,7 +111,7 @@ In version 1 every native profile is rated Detectable. `ws` and `fronted` are th
 | Key | Size | Held by | In a profile | Used for |
 |---|---|---|---|---|
 | Inbound WireGuard key | 32 | Node (private half), every device of the inbound (public half) | Public half | The tunnel. Called `inbound_pub` below. |
-| Device WireGuard key | 32 | Device (private half), node (public half) | Private half, for that device only | The tunnel. The public half, `device_pub`, is the device's identity. |
+| Device WireGuard key | 32 | Device (private half), node (public half) | The public half. The private half only when the provider issued the key. By default the device makes it and it never leaves the device. | The tunnel. The public half, `device_pub`, is the device's identity. |
 | Node transport key | 32 | Node (private half), every device of the inbound (public half) | Public half | Receiving the proof on `tls`, `ws` and `fronted`. An X25519 key, separate from every WireGuard key. |
 | Device transport secret `S` | 32 | Node and that device | Yes, for that device only | Names the device inside a proof, proves the device per proof, keys `udp-obfs`, authenticates the control channel. Uniformly random bytes from the system's secure random source. |
 
@@ -130,7 +130,7 @@ Rules:
 | Node transport key | An inbound may have two transport keys at once. The node tries a proof against both. Profiles carry the first. Rotate on a schedule, at least every 30 days, and destroy the retired key: a retired key still opens old tokens that were logged somewhere. | None while both are present. |
 | Inbound WireGuard key | By hand. A new key restarts the tunnel. | Every profile must be reissued. No overlap is possible, because WireGuard has one static key per tunnel. |
 | Device WireGuard key | By hand, as the config reference describes. | That device's sessions are dropped within one second. |
-| TLS certificate | By the operator. A profile may carry up to 4 pins, so the next key can be pinned before it is used. | None if the next pin was shipped first. Otherwise the client fails closed. |
+| TLS certificate | By the operator. A candidate in a profile may carry up to 4 pins, so the next key can be pinned before it is used. | None if the next pin was shipped first. Otherwise the client fails closed. |
 
 Revoking a device is removing it or its secret. From the next reload its proofs take the unauthenticated path, the same path as a stranger's, so a prober cannot tell a revoked device from an unknown one.
 
@@ -171,23 +171,23 @@ These keys do not exist in the [config reference](../../reference/config/) yet. 
 | `inbounds[].transport_keys` | list of 1 or 2 keys, secret | The node transport keys. Required when the inbound has a `tls`, `ws` or `fronted` transport. |
 | `inbounds[].padding` | object | The node's upper bounds for wide and normal padding, inside the spec's bounds. |
 | `inbounds[].upgrade_cookie` | cookie name, no default | The name of the cookie on the WebSocket upgrade answer. Required with a `tls` or `ws` transport. |
-| `inbounds[].upgrade_headers` | ordered list of header field names, default `Server`, `Date` | The fields the upgrade answer takes from the decoy origin, in this order. |
+| `inbounds[].upgrade_headers` | ordered list of header field names, default `Server`, `Date` on `tls` and empty on `ws` | The fields the upgrade answer takes from the decoy origin, in this order. |
 | `users[].devices[].transport_secrets` | list of 1 or 2 keys, secret | The device transport secrets. Required for a device with an address on a `veilway` inbound. |
 | `transports[].type` values `udp-obfs`, `tls`, `fronted` | enum values | See the transports page. On a `veilway` inbound, `ws` is the native format and has no `tls` key. A `ws` or `fronted` listener that is not on loopback or a unix socket is a warning. |
 | `transports[].tls` on a `tls` transport | `cert` and `key` files | As on the built `ws`. |
 | `transports[].decoy` | object with `origin` and optional `proxy_protocol` | The decoy origin of a `tls`, `ws` or `fronted` listener: the operator's own web server. There is no default. |
 | `transports[].trusted_proxies`, `client_address_header` | list of networks, header name | The reverse proxies or CDN ranges from which a `ws` or `fronted` listener accepts a forwarded client address. |
-| `transports[].limits` | object | Node capacity numbers: `sessions`, `undecided`, `undecided_per_source`, `relayed`, `proxy_connections`, `fronted_sessions`. Defaults on the transports page. |
+| `transports[].limits` | object | Node capacity numbers: `sessions`, `undecided`, `undecided_per_source`, `relayed`, `proxy_connections`, `decoy_requests_per_source`, `fronted_sessions`. Defaults on the transports page. |
 | `replay` | object | Replay cache size and the accepted proofs per source. |
 | `notices` | list of at most 4 | Operator notices served on the control channel. |
 
-Proposed commands and flags: `veilway run --replay <file>` for the replay file (by default next to the usage state file), `veilway replay reset`, and `doctor` checks for the replay file and for a decoy origin that loops.
+Proposed commands and flags: `veilway run --replay <file>` for the replay file (by default next to the usage state file), `veilway replay reset` and its route on the control API, and `doctor` checks for the replay file and for a decoy origin that loops.
 
-A profile carries, signed: `inbound_pub`, the device's WireGuard private key and addresses, the gateway addresses, the inbound `mtu`, the node transport public key, the device transport secret, an ordered list of transports each with its candidates (see "Fronting options" on the transports page), certificate pins, `min_control_version`, `stream_first`, the number of parallel connections, optional padding and keepalive ranges, and an optional rating cap that can only lower the rating. The byte format of a profile belongs to the subscription format page, which is not written.
+A profile is defined on the [subscription format](../subscription-format/) page, with these member names: `inbound_public_key` (`inbound_pub`), `device` (its `public_key`, its `private_key` only when the provider issued the key, `addresses` and `transport_secrets`), `gateways`, `mtu`, `transport_public_key`, `transports` in order, each with its `endpoints` or its `path` and `candidates`, where a candidate may carry `pins` (see "Fronting options" on the transports page), `min_control_version`, `stream_first`, `parallel`, `padding`, and `rating_cap`, which can only lower the rating.
 
 ## Numbers that are judgement calls
 
-This page chooses four numbers: at most 2 transport secrets per device and 2 transport keys per inbound at once, at most 4 certificate pins, at most 4 notices, and a transport key age of at most 30 days. Every other chosen number is in the table of that name on the transports page or on the control channel page.
+This page chooses four numbers: at most 2 transport secrets per device and 2 transport keys per inbound at once, at most 4 certificate pins per candidate, at most 4 notices, and a transport key age of at most 30 days. Every other chosen number is in the table of that name on the transports page or on the control channel page.
 
 ## To measure before implementing
 
@@ -199,7 +199,8 @@ These pages deliberately do not state how browsers, web servers, CDNs and librar
 | Whether the built `udp` transport sets "do not fragment" on outer packets today, on each platform | The "no outer fragmentation" rule and MTU discovery |
 | How common web servers treat a request line that is malformed, slow or never finished: at which byte they answer, and after how long | The request line rule of the stream listener and its timing residual |
 | How common web servers behave under many parallel connections from one source, and when their accept queue is full | The pools of the stream listener |
-| Which response header fields common web servers send on an upgrade answer, in which order, and whether a cookie on it is ordinary | The upgrade answer |
+| Which response header fields common web servers send on an upgrade answer, in which order, whether a cookie on it is ordinary, and which fields a front web server adds to an upgrade answer it passes on | The upgrade answer and the default of `upgrade_headers` |
+| How common web servers close a TLS handshake that is not finished in time | What a `tls` listener does with an unfinished handshake |
 | Whether the node's TLS library can pad records | An alternative to the cookie for varying the length of the upgrade answer |
 | What the node's TLS library answers in its handshake (versions, protocols offered, tickets, alerts), next to common web servers | The cap on `tls`, and whether it can ever be lifted |
 | Which protocols a mainstream browser offers in its ClientHello for a WebSocket connection, and which HTTP version it then uses | The fingerprint pack and the upgrade request |
@@ -214,7 +215,7 @@ These pages deliberately do not state how browsers, web servers, CDNs and librar
 - **Where the security comes from.** Tunnel content is protected by WireGuard and by nothing else on these pages. The outer layers are about recognisability and reachability, and the client's kill switch is what keeps traffic inside the tunnel.
 - **The outer layers are unreviewed.** They use only standard building blocks (X25519, HKDF-SHA-256, HMAC-SHA-256, ChaCha20-Poly1305, HPKE as in RFC 9180, TLS 1.3 from a mainstream library), each with a label that separates its use from every other. The way they are combined has had no outside review and has no proof. Each page lists what is unproven under "Open questions".
 - **A subscription is a secret and a map.** Whoever holds one can connect as that device, confirm that each node in it is a Veilway node, and block every address and name in it. No design can stop a user from recognising the service it uses. What the design does prevent is that one subscription lets its holder read, unwrap or name other users' traffic.
-- **The weakest listener decides.** If any service on a node's address identifies it (a plain `wireguard` inbound, a legacy `ws` transport, a `udp-obfs` or `udp` transport, a panel, a subscription endpoint), the address is identified, whatever the strongest transport on it does. The client applies this cap itself for everything it can see in its own subscription. For what it cannot see, it depends on the provider saying so.
+- **The weakest listener decides.** If any service on a node's address identifies it (a plain `wireguard` inbound, a legacy `ws` transport, a `udp-obfs` or `udp` transport, a panel, a subscription endpoint), the address is identified, whatever the strongest transport on it does. The client applies this cap itself for what it can see in its own subscription, which is a `udp` or `udp-obfs` endpoint on the address of a cover transport. Everything else on the list it cannot see, and for that it depends on the provider saying so.
 - **Third parties.** A decoy origin is the operator's own site, with no exception in version 1. `fronted` and `ws` behind a CDN put load and risk on the CDN. The transports page sets limits and the obfuscation page states the considerations in plain words.
 
 ## Open questions
@@ -229,7 +230,7 @@ Each is listed with the default this draft takes. The pages are written to the d
 | Does the first subscription fetch use the fronting options? (threat model Q15) | Not specified here. It belongs to the subscription format page. |
 | Should the client drop inner packets that belong to no flow it opened? (threat model Q7) | Not specified here. Nothing on these pages depends on it. |
 | Refusing clients by source country before authentication (threat model Q18) | Not specified. If it is added, a refused client must get exactly the unauthenticated path of its listener. |
-| Has anyone reviewed this text? | Two rounds of internal adversarial review, whose findings this revision answers. The revision itself has not been reviewed again. No review from outside the project. |
+| Has anyone reviewed this text? | Three rounds of internal adversarial review, whose findings this revision answers. The last revision has not been reviewed again. No review from outside the project. |
 
 ## Implementation status of this draft
 
@@ -239,14 +240,16 @@ Each is listed with the default this draft takes. The pages are written to the d
 |---|---|---|
 | Tunnel (WireGuard) | Built | Nothing on these pages changes it. |
 | `udp`, legacy `ws` | Built | The gaps the threat model lists for them. |
-| Control channel: framing, opening exchange, credential, messages, exit selection | Settled enough to implement. A first implementation exists and an internal review found no deviation from this page. | The wording of threat model invariant 13a. What the node does with a packet above a device's MTU needs engine work in both exit backends. |
+| Control channel: framing, opening exchange, credential, messages, exit selection | Node side built: wire formats in `veilway-proto`, and the listener, pools, limits, snapshot, exit selection, usage pushes, notices, `bye` and MTU handling in the engine, on `veilway` inbounds that carry the `udp` transport. The client side is not built. | The wording of threat model invariant 13a. The node does not prohibit fragmentation of outer packets yet, so a probe can be confirmed over a path that fragments it. On an `l3` exit the error for a packet above a device's MTU is written back through the interface and has no test on a live kernel. The node's stack keeps to the segment size a device announces, and fragments TCP only on a connection that announced more than the device's MTU now carries. The state file keeps version 1 and gains a `devices` key, where this page proposes a new version. Hints are always an empty list. |
 | Chunk framing and padding: the chunk format, the nonce layout, the padding rules | Settled enough to implement. A first implementation exists, as above. | The ranges are unmeasured. |
-| Session activity and timers | Settled enough to implement. A first implementation exists, as above. | One definition and one table on the transports page. Two items on the list to measure concern the WireGuard library. |
-| Replay rule and replay file | Pending | The design was judged sound. The outage after a node clock fault and the cost of the reset are stated, and one open question would remove both. |
-| Stream proof | Pending | The binder was changed in this revision to cover the hello, and that change has not been reviewed. |
-| Stream listener: pools, accept state machine, proxy path, decoy handoff, upgrade answer | Pending | The proxy path and the upgrade answer were changed in this revision and not reviewed. Several rules depend on the list to measure. |
-| `udp-obfs` | Pending | It was judged sound in review. It belongs to the same implementation step as the other transports and depends on the replay rule. |
-| `tls`, `ws`, `fronted` as whole transports | Pending | They depend on the three rows above. Certificate issuance for `tls` is a marked gap. |
-| Fronting options, transport fallback, client fingerprint | Pending | Refusal handling changed in this revision. The fingerprint depends on a measurement that has not been made. |
+| Session activity and timers | Settled enough to implement. A first implementation exists, as above, and must be read again against one change of this revision: the node now sends its first answer only when a session becomes established. | One definition and one table on the transports page. Two items on the list to measure concern the WireGuard library. |
+| Replay rule and replay file | Settled enough to implement | A first implementation of the wire format exists and is being revised against its review, which found the layouts, labels and numbers to match this page. That review changed two rules of the limit (it follows the clock, and nothing is derived from the floor after a start). The changes are in this revision and have not been reviewed again. |
+| Stream proof | Settled enough to implement | A first implementation of the wire format exists and is being revised against its review, which found the layouts, labels and numbers to match this page. The binder was confirmed to close the re-timing hole. The measured timing differences are recorded on the transports page. |
+| Stream listener: pools, accept state machine, proxy path, decoy handoff, upgrade answer | Settled enough to implement | The request line scanner has a first implementation, as above. The listener itself is not built. Several rules depend on the list to measure. |
+| `udp-obfs` | Settled enough to implement | A first implementation of the wire format exists and is being revised against its review, which found the layouts, labels and numbers to match this page. The transport around the packet formats is not built. |
+| `tls`, `ws`, `fronted` as whole transports | Settled enough to implement | The reading of `fronted` chunks has a first implementation, as above. The transports themselves are not built. Certificate issuance for `tls` is a marked gap and does not block. |
+| Fronting options, refusal handling, transport fallback | Settled enough to implement | The third review round judged it fit once its listed text fixes were made. They are made in this revision and have not been reviewed again. |
+| Client TLS and HTTP fingerprint | Not yet | It waits for a measurement that has not been made. It does not block the rest. |
 | `faketls`, `quic` | Goals only | No wire format. `faketls` waits for a project decision on relaying to third parties. |
-| Subscription and profile format | Not written | These pages assume fields that only that format can define. |
+| Subscription format: payload schema, envelope verification, legacy reading | Settled enough to implement | The second review round judged these fit as they stand. |
+| Subscription format: link form, import steps, keys held, the endpoint, refresh rules | Settled enough to implement | The second review round judged them fit once its listed text fixes were made. They are made in this revision and have not been reviewed again. Two of them added members to the request body (`kids`, `device_secret`). |

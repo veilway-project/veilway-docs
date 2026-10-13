@@ -45,7 +45,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | `message` | یک جملهٔ ساده، برای آدم‌ها. |
 | `details` | فهرستی از `{"path", "message"}`. برای پیکربندی ردشده، هر خطا با مسیر فیلدش. اگر چیزی برای افزودن نباشد خالی است. |
 
-هیچ پاسخ، رویداد یا خط لاگ API مقدار یک راز (`private_key`، `preshared_key`، `username`، `password`) را نشان نمی‌دهد، فقط مسیرها را. یک مورد `details` هرگز مقداری از سند را ندارد.
+هیچ پاسخ، رویداد یا خط لاگ API مقدار یک راز (`private_key`، `preshared_key`، `transport_secrets`، `username`، `password`) را نشان نمی‌دهد، فقط مسیرها را. یک مورد `details` هرگز مقداری از سند را ندارد.
 
 ### کدهای خطا
 
@@ -120,9 +120,9 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | فیلد `diff` | معنی |
 |---|---|
 | `inbounds`، `outbounds`، `exits`، `rules`، `users` | `{"added", "changed", "removed"}`، هرکدام فهرستی از تگ‌ها (برای کاربران نام‌ها). |
-| `dns`، `log`، `routing_default`، `rules_reordered` | وقتی آن بخش تغییر کرده `true` است. |
-| `inbound_changes` | برای هر ورودی تغییرکرده: `tag`، `restart` (تونل دوباره راه می‌افتد و نشست‌هایش قطع می‌شوند)، `transports_stopped` و `transports_started` (اندیس‌ها). |
-| `user_changes` | برای هر کاربر تغییرکرده: `name`، `devices_added`، `devices_removed`، `devices_readdressed`، `devices_rekeyed` (دستگاه‌ها با کلید عمومی) و `lost_access`. |
+| `dns`، `log`، `routing_default`، `rules_reordered`، `notices` | وقتی آن بخش تغییر کرده `true` است. |
+| `inbound_changes` | برای هر ورودی تغییرکرده: `tag`، `restart` (تونل دوباره راه می‌افتد و نشست‌هایش قطع می‌شوند)، `transports_stopped` و `transports_started` (اندیس‌ها). ورودی‌ای که فقط `type` آن عوض شده با `restart` برابر false و هر دو فهرست خالی می‌آید. |
+| `user_changes` | برای هر کاربر تغییرکرده: `name`، `devices_added`، `devices_removed`، `devices_readdressed`، `devices_rekeyed`، `devices_secrets_changed` (دستگاه‌ها با کلید عمومی) و `lost_access`. `devices_secrets_changed` دستگاه‌های مانده‌ای است که `transport_secrets` آن‌ها دیگر همان قبلی نیست؛ اتصال کنترلی که رازی را ثابت کرده که دیگر نیست بسته می‌شود. |
 
 outbound ای که `username` یا `password` آن در سند نوشته شده، و به‌جای نشانه نیامده، هر مقداری هم که باشد تغییرکرده فهرست می‌شود. وگرنه «تغییر نکرده» به کسی که رمزی را حدس زده می‌گفت حدسش درست بوده.
 
@@ -164,15 +164,16 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 
 ## ویرایش پیکربندی بدون دیدن رازها
 
-`GET /v1/config` هرگز رازی را برنمی‌گرداند: `private_key`، `preshared_key`، `username` و `password` رشتهٔ `"<redacted>"` را دارند. پنل این سند را ویرایش می‌کند و همان‌طور به `validate`، `diff` یا `PUT /v1/config` برمی‌گرداند. در سندی که به گره فرستاده می‌شود، نشانه یعنی «مقدار در حال اجرای همان شیء را نگه دار»:
+`GET /v1/config` هرگز رازی را برنمی‌گرداند: `private_key`، `preshared_key`، `username` و `password` رشتهٔ `"<redacted>"` را دارند، و هر مورد از `transport_secrets` نشانه‌ای دارد که همان راز را نام می‌برد: `"<redacted:1a2b3c4d>"` با هشت رقم hex. این رقم‌ها رازهای یک دستگاه را از هم جدا می‌کنند و چیزی دربارهٔ هیچ‌کدام نمی‌گویند. هر پردازهٔ گره آن‌ها را از نو می‌سازد، پس سندی که پیش از راه‌اندازی دوباره خوانده شده باید دوباره خوانده شود. پنل این سند را ویرایش می‌کند و همان‌طور به `validate`، `diff` یا `PUT /v1/config` برمی‌گرداند. در سندی که به گره فرستاده می‌شود، نشانه یعنی «مقدار در حال اجرای همان شیء را نگه دار»:
 
 | فیلد | از کجا گرفته می‌شود |
 |---|---|
 | `private_key` ورودی | ورودی در حال اجرا با همان `tag` |
 | `preshared_key` دستگاه | دستگاه در حال اجرا با همان `public_key` |
+| یک مورد از `transport_secrets` دستگاه | رازی که این نشانه نام می‌برد، از دستگاه در حال اجرا با همان `public_key`، هر جای فهرست که باشد. موردی که حذف شود برداشته می‌شود: برای پایان چرخش، نشانهٔ راز قدیمی را بردارید و دیگری را نگه دارید. برای شروع آن، راز جدید را کامل کنار نشانهٔ رازی که می‌ماند بنویسید. |
 | `username` و `password` خروجی | outbound از نوع `socks5` در حال اجرا با همان `tag` و همان `server` |
 
-نشانه‌ای که چنین شیئی پیدا نکند در مسیر همان فیلد خطای اعتبارسنجی است. این شامل outbound ای هم می‌شود که `server` آن عوض شده: آن‌وقت سند باید username و password را صریح بنویسد. `username` یا `password` برابر نشانه در فایل پیکربندیِ خوانده‌شده از دیسک هم خطای اعتبارسنجی است.
+نشانه‌ای که چنین شیئی پیدا نکند در مسیر همان فیلد خطای اعتبارسنجی است. این شامل outbound ای هم می‌شود که `server` آن عوض شده: آن‌وقت سند باید username و password را صریح بنویسد. نشانه‌ای در `transport_secrets` که هیچ رازی از آن دستگاه را نام نبرد هم همین‌طور است، مثل `"<redacted>"` ساده یا نشانهٔ راز دستگاهی دیگر. `username` یا `password` برابر نشانه در فایل پیکربندیِ خوانده‌شده از دیسک هم خطای اعتبارسنجی است.
 
 ## کاربران، آمار، نشست‌ها، خروجی‌ها
 
@@ -239,10 +240,11 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/users/alice/usage/rese
 | `flows` | فلوهای جدول فلو در همین لحظه. |
 | `ws_stalled`، `ws_refused` | اتصال‌های WebSocket که ارتقا را تمام نکردند و رها شدند، و آن‌هایی که هنگام accept رد شدند. |
 | `state_write_failures` | نوشتن‌های ناموفق فایل state مصرف از شروع. |
+| `control` | آنچه کانال کنترل ورودی‌های `veilway` از شروع انجام داده: اتصال‌های `accepted` و `authenticated`، اتصال‌های بسته‌شده به خاطر `auth_failed`، `malformed`، `timed_out` (گشایش بیش از 10 ثانیه طول کشید) و `replaced` (اتصال تازه‌تری از همان دستگاه جایش را گرفت)، درخواست‌هایی که پاسخ `rate_limited` گرفتند، `exits_selected`، `exits_refused` و `exits_dropped` (با بارگذاری مجدد)، `probe_runs`، `probes_confirmed`، `probes_sent`، `probes_refused`، `mtus_set`، `byes`، و `open` یعنی اتصال‌های احرازشدهٔ همین حالا. روی گره‌ای بدون ورودی `veilway` همه صفرند. |
 
 ### `GET /v1/sessions`
 
-`{"sessions": [...]}`، برای هر دستگاهِ دارای نشست زنده روی یک ورودی یک مورد: `user`، `device`، `public_key`، `inbound`، `transport` (`udp` یا `ws`، وقتی ترنسپورتی که دستگاه با آن آمده دیگر نیست `null`)، `handshake_age_secs` و `flows` (فلوهای دستگاه روی همهٔ ورودی‌هایش).
+`{"sessions": [...]}`، برای هر دستگاهِ دارای نشست زنده روی یک ورودی یک مورد: `user`، `device`، `public_key`، `inbound`، `transport` (`udp` یا `ws`، وقتی ترنسپورتی که دستگاه با آن آمده دیگر نیست `null`)، `handshake_age_secs`، `flows` (فلوهای دستگاه روی همهٔ ورودی‌هایش)، `selected_exit` (خروجی‌ای که دستگاه روی کانال کنترل انتخاب کرده؛ وقتی انتخابی نکرده و از خروجی کاربرش می‌رود `null`)، `control_connections` (اتصال‌های کنترل احرازشده‌اش) و `mtu` (MTU ای که دستگاه تعیین کرده؛ وقتی تعیین نکرده و تونلش MTU ورودی را دارد `null`).
 
 آدرسی که دستگاه از آن وصل می‌شود جزو نشست نیست. `log.destinations` هر چه بگوید، این آدرس هرگز در پاسخ نمی‌آید.
 

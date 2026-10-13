@@ -45,7 +45,7 @@ The host name in the URL is never looked up over a unix socket, so any name work
 | `message` | One plain sentence, for people. |
 | `details` | List of `{"path", "message"}`. For a refused config, every error with the path of its field. Empty when there is nothing to add. |
 
-No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `transport_secrets`, `username`, `password`), only paths. A `details` entry never holds a value from the document.
+No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `username`, `password`), only paths. A `details` entry never holds a value from the document.
 
 ### Error codes
 
@@ -126,7 +126,7 @@ Body: a config document. Nothing changes. The answer holds `valid`, `report` as 
 |---|---|
 | `inbounds`, `outbounds`, `exits`, `rules`, `users` | `{"added", "changed", "removed"}`, each a list of tags (names for users). |
 | `dns`, `log`, `routing_default`, `rules_reordered`, `notices`, `replay` | `true` when that part changed. For `replay`, the rate per source is in force at once and the cache size from the next start of the node. |
-| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type` or `padding` alone changed is listed with `restart` false and both lists empty. Adding a `udp-obfs` transport to an inbound with no `mtu` written is a `restart`: its `mtu` goes from 1420 to 1390. |
+| `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type`, `padding`, `transport_keys`, `upgrade_cookie` or `upgrade_headers` alone changed is listed with `restart` false and both lists empty. Adding a `udp-obfs` transport to an inbound with no `mtu` written is a `restart`: its `mtu` goes from 1420 to 1390. |
 | `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed`, `devices_secrets_changed` (devices by public key) and `lost_access`. `devices_secrets_changed` lists the kept devices whose `transport_secrets` are not the ones they were; a control connection that proved a secret that is gone is closed, and a `udp-obfs` session that was opened with it ends. |
 
 An outbound whose `username` or `password` is written out in the document, instead of left as the marker, is listed as changed whatever the values are. Otherwise "not changed" would tell whoever guessed a password that the guess was right.
@@ -169,16 +169,17 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 
 ## Editing a config without seeing secrets
 
-`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username` and `password` hold the string `"<redacted>"`, and every entry of `transport_secrets` holds a marker that names it, `"<redacted:1a2b3c4d>"` with eight hex digits. The digits tell the secrets of one device apart and say nothing about either. They are made anew by every node process, so a document read before a restart has to be read again. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
+`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username` and `password` hold the string `"<redacted>"`, and every entry of `transport_secrets` and of an inbound's `transport_keys` holds a marker that names it, `"<redacted:1a2b3c4d>"` with eight hex digits. The digits tell the secrets of one device, or the keys of one inbound, apart and say nothing about either. They are made anew by every node process, so a document read before a restart has to be read again. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
 
 | Field | Taken from |
 |---|---|
 | inbound `private_key` | the running inbound with the same `tag` |
 | device `preshared_key` | the running device with the same `public_key` |
 | an entry of a device's `transport_secrets` | the secret that this marker names, of the running device with the same `public_key`, wherever either stands in its list. An entry that is left out is removed: to end a rotation, drop the marker of the old secret and keep the other. To begin one, write the new secret out next to the marker of the one that stays. |
+| an entry of an inbound's `transport_keys` | the key that this marker names, of the running inbound with the same `tag`, wherever either stands in its list. Rotation works as for a device's secrets: write the new key out before the marker of the old one, and drop that marker later. |
 | outbound `username` and `password` | the running `socks5` outbound with the same `tag` and the same `server` |
 
-A marker that finds no such object is a validation error at the path of that field. That includes an outbound whose `server` changed: the document must then spell out its username and password. It also includes a marker in `transport_secrets` that names no secret of that device, such as the plain `"<redacted>"` or the marker of another device's secret. A `username` or `password` that is the marker in a config file read from disk is a validation error as well.
+A marker that finds no such object is a validation error at the path of that field. That includes an outbound whose `server` changed: the document must then spell out its username and password. It also includes a marker in `transport_secrets` that names no secret of that device, such as the plain `"<redacted>"` or the marker of another device's secret, and a marker in `transport_keys` that names no key of that inbound. A `username` or `password` that is the marker in a config file read from disk is a validation error as well.
 
 ## Users, stats, sessions, exits
 
@@ -273,6 +274,7 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `send_failed` | Datagrams the node made for a device and no socket took, over every transport of every inbound. A `veilway` inbound never fragments, so a packet larger than the host's interface carries is counted here and not sent, and logged at info once a minute: lower the inbound's `mtu` when this grows. |
 | `control` | What the control channel of the `veilway` inbounds did since start: `accepted` and `authenticated` connections, connections closed for `auth_failed`, `malformed`, `timed_out` (the opening took over 10 seconds) and `replaced` (a newer connection of the device took the place), requests answered `rate_limited`, `exits_selected`, `exits_refused` and `exits_dropped` (by a reload), `probe_runs`, `probes_confirmed`, `probes_sent`, `probes_refused`, `mtus_set`, `byes`, and `open`, the authenticated connections right now. All zero on a node without a `veilway` inbound. |
 | `udp_obfs` | What the `udp-obfs` transports did since start, and what they hold now. See below. All zero on a node without one. |
+| `stream` | What the stream listeners of the `tls` transports did since start, and what they hold now. See below. All zero on a node without one. |
 | `replay` | The replay memory of the obfuscated transports. `null` on a node that has run none. See below. |
 
 `udp_obfs`. No counter names an address, a tag or a key, and a datagram that is dropped got no answer whatever its reason:
@@ -292,6 +294,23 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `ended_deadline`, `ended_idle`, `ended_packets`, `ended_replaced`, `ended_displaced`, `ended_revoked` | Sessions that ended: no WireGuard packet within 10 seconds of the opening packet, no activity for 180 seconds, 2^31 packets sent, a newer session of the same source and device, the device's ninth session, and a device that was cut off for any reason or a transport secret the config no longer has. |
 | `table_rebuilds`, `table_rebuilds_late`, `table_build_failures`, `tag_collisions` | How often a tag table was built for a new epoch (every 120 seconds for each inbound), how often that was more than 10 seconds late, how often a build did not end and the table before stayed, and tags that were left out because another secret had the same, which never happens with random secrets. |
 
+`stream`. No counter names an address, a path, a token or a key. Whoever is not a user got the decoy origin's answer whatever the reason, so the reasons are for the operator alone:
+
+| Field | Meaning |
+|---|---|
+| `undecided`, `relayed`, `pending`, `sessions` | Right now: connections inside their TLS handshake or their request line, connections that are relayed to a decoy origin, sessions whose proof was accepted and on which WireGuard has not authenticated yet, and established sessions. |
+| `accepted`, `accept_failed`, `broken` | Connections the listeners took from the system, failures to take one, which a host that is out of file descriptors shows, and connections that broke before they were decided with an error that is no close, such as a reset inside the request line. |
+| `handshake_failed`, `handshake_slow`, `handshake_displaced` | TLS handshakes that failed, that did not finish within 10 seconds, and that were closed to make room in the undecided pool. |
+| `stranger_syntax`, `stranger_slow`, `stranger_closed`, `stranger_displaced`, `stranger_origin`, `stranger_proof` | Connections decided "not a user", by the class of the reason: a byte that cannot be part of a user's request line or a line above 4,096 bytes, a line that was not complete within 10 seconds, a peer that closed its side first, a connection decided at once to make room in the undecided pool, a connection whose decoy origin said something or closed while the request line was not complete, and a complete request line that is no proof of a device. The last is where a wrong path, a wrong token and a removed device are counted alike. |
+| `refused_window`, `refused_floor`, `refused_seen`, `refused_cache_full` | Proofs of a device that the replay rule refused: a timestamp more than 60 seconds off the node's clock, one at or below the floor, a token that was accepted before, and any while the cache is full. `refused_window` that grows for a node points at a wrong clock on a device or on the node. |
+| `refused_limit`, `refused_no_replay` | Proofs with a timestamp above the written limit whose write did not end within 2 seconds, or for which 64 others waited already, and proofs that came while the node took none at all. |
+| `refused_pool`, `refused_pending`, `refused_device_rate`, `refused_source_rate` | Proofs refused by a limit: the listener's `limits.sessions` is reached, the device has 2 pending sessions, the device's allowance (16, then 1 a second) or the source's (`replay.per_source`) is spent. |
+| `relays`, `relays_evicted`, `decoy_down` | Connections that were connected to a decoy origin and relayed, relayed connections that were closed to make room for another, and strangers that were closed with no answer because the origin could not be reached. While `decoy_down` grows the node can be told from its decoy: look at the origin. |
+| `proofs_accepted`, `proofs_waited`, `head_refused`, `established`, `establish_full` | Proofs that were accepted, proofs that waited for a higher limit to be written, users whose request head was over a limit or no WebSocket upgrade, sessions that became established, and sessions that could not because the session pool had filled up since their proof. |
+| `handshakes`, `tunnel`, `queue_full`, `chunks_sent` | Inside sessions: WireGuard handshake initiations above a session's allowance (3, then 1 a second), datagrams WireGuard did not take as a packet of the session's device, datagrams for a device that were dropped because the send queue of its connection held 256, and chunks the node sent. `queue_full` that grows is a connection slower than the traffic meant for it. |
+| `ended_deadline`, `ended_idle`, `ended_packets`, `ended_displaced`, `ended_revoked`, `ended_closed`, `ended_invalid`, `ended_unserved` | Sessions that ended: no WireGuard packet within 10 seconds of the proof, no chunk for 300 seconds, every chunk number used, the device's ninth session, a device that was cut off for any reason or a transport secret or node transport key the config no longer has, a connection that closed or a peer that closed the session, a chunk that did not open or a frame the protocol does not allow, and a transport the config no longer has. |
+| `upgrade_learned`, `upgrade_learn_failed` | How often the header fields of the upgrade answer were learnt from a decoy origin, and how often that failed. While the last try failed the upgrade answer carries only `Date` of `upgrade_headers`. |
+
 `replay`. Times are Unix seconds on the node's clock:
 
 | Field | Meaning |
@@ -307,7 +326,7 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 
 ### `GET /v1/sessions`
 
-`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp`, `ws` or `udp-obfs`, `null` when the transport the device came over is gone, or its `udp-obfs` session has ended), `handshake_age_secs`, `flows` (the flows of the device across all its inbounds), `selected_exit` (the exit the device chose on the control channel, `null` when it chose none and leaves through its user's exit), `control_connections` (its authenticated control connections) and `mtu` (the MTU the device set, `null` when it set none and its tunnel has the inbound's).
+`{"sessions": [...]}`, one entry per device with a live session on an inbound: `user`, `device`, `public_key`, `inbound`, `transport` (`udp`, `ws`, `udp-obfs` or `tls`, `null` when the transport the device came over is gone, or its `udp-obfs` or `tls` session has ended), `handshake_age_secs`, `flows` (the flows of the device across all its inbounds), `selected_exit` (the exit the device chose on the control channel, `null` when it chose none and leaves through its user's exit), `control_connections` (its authenticated control connections) and `mtu` (the MTU the device set, `null` when it set none and its tunnel has the inbound's).
 
 The address a device connects from is not part of a session. It is never put in an answer, whatever `log.destinations` says.
 

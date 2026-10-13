@@ -4,7 +4,7 @@ description: How tunnel datagrams are framed and carried over each transport, an
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by the project owner or by anyone outside the project. Nothing in it is implemented except `udp` and legacy `ws`. The obfuscation it describes is experimental and not externally reviewed.
+This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by anyone outside the project. Nothing in it is implemented except `udp` and legacy `ws`. The obfuscation it describes is experimental and not externally reviewed.
 :::
 
 A transport carries WireGuard datagrams between a client and a node. The tunnel inside is WireGuard, unchanged. Read [Protocol overview](../overview/) first for the terms, the keys and the fail-closed rules. Statements about how browsers, web servers and libraries behave are not made on this page. They are listed under "To measure before implementing" on the overview.
@@ -807,7 +807,7 @@ What this does not achieve: the fingerprint is correct for one browser release a
 
 ## `faketls`: goals and open questions only
 
-`faketls` is in the plan as "version 1 after a spike". This page does not specify a wire format for it, because the design questions below are open and because it puts load on a third party in a way that needs the owner's decision first.
+`faketls` is in the plan as "version 1 after a spike". This page does not specify a wire format for it, because the design questions below are open and because it puts load on a third party in a way that needs a project decision first.
 
 **The idea.** The listener holds no certificate and needs no name. A connection that does not carry a valid proof is relayed to a real third-party site, so a prober completes a real TLS handshake with that site through the node. A client proves itself inside its first TLS message.
 
@@ -888,11 +888,11 @@ Each is listed with the default this draft takes. The first six are the ones an 
 | Does anything on the "not a user" paths differ in timing by cause (table hit or miss, which check failed, how much of the path matched)? | Intended not to. No measurement exists. |
 | Do the upgrade answer and the padded token remove the fixed-size first exchange, or only move it? | Unmeasured. The first two records of each direction are to be added to the length and timing test. A cookie with a name per inbound is a judgement call, and whoever ends TLS still sees a recognisable request. |
 | Random nonces on `udp-obfs` data packets, with the packet limit | As written. A counter nonce would need to be hidden on the wire, which is one more construction. |
-| Should a client take a clock offset from the `Date` header of a connection that validated but has no pin, so that a profile with only CDN transports works with a wrong clock? | No. A party that can present a valid certificate for the front could then steer the timestamps of that client's proofs. The cost is that such a client cannot connect until its clock is right. This is the owner's call. |
+| Should a client take a clock offset from the `Date` header of a connection that validated but has no pin, so that a profile with only CDN transports works with a wrong clock? | No. A party that can present a valid certificate for the front could then steer the timestamps of that client's proofs. The cost is that such a client cannot connect until its clock is right. This default may change. |
 | Built-in certificate issuance for `tls` | Not specified, files only. If it is added, a challenge that needs no listener (a DNS record) avoids a new probe surface. The plan says issuance is built in. |
 | Should the token on `tls` also be bound to the TLS connection (RFC 9266)? | No. It cannot be done behind a CDN, and one format for `tls` and `ws` was preferred. |
 | Always prohibiting outer fragmentation on datagram transports | Yes. Without a working control channel a path with a small MTU then loses full-size packets until the client lowers its MTU by itself. |
-| Junk packets on `udp-obfs`, which the plan lists | None before the first packet. The owner may want them back. |
+| Junk packets on `udp-obfs`, which the plan lists | None before the first packet. They may come back. |
 | Padding ranges, the session base, the 16 chunk count, and the keepalive and rekey ranges (threat model Q5) | As in the table of numbers, with no measurement. The length and timing test decides. |
 | Parallel connections (threat model Q13) | Default 1, at most 4. Whether more than 1 is worth its pattern is unmeasured. |
 | Limits per source behind carrier-grade address translation, where many users share one address | Config values with the defaults above. They may be too low for large mobile networks. |

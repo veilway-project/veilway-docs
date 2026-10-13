@@ -8,7 +8,7 @@ The obfuscation layer is not implemented yet. When it ships it will be experimen
 :::
 
 :::caution[Draft]
-This page is a draft. It describes a specification that has had two rounds of internal review, has not been reviewed by the project owner or by anyone outside the project, and none of which is implemented.
+This page is a draft. It describes a specification that has had two rounds of internal review, has not been reviewed by anyone outside the project, and none of which is implemented.
 :::
 
 This page is for readers who want to know what to expect, in plain words. The exact formats are on [Transports](../../protocol/transports/) and [Control channel](../../protocol/control-channel/), and the terms are on [Protocol overview](../../protocol/overview/).
@@ -159,7 +159,6 @@ Nothing has been tested. There are no probe measurements, no length or timing ca
 | Review | Status |
 |---|---|
 | Adversarial review inside the project | Two rounds on the written text. The first found three critical and seven high findings, the second one high and several medium ones, and the text was revised against all of them. The last revision has not been reviewed again. |
-| Review of the specification by the project owner | Not done |
 | Review by anyone outside the project | Not done |
 
 Before any transport is described as more than Detectable, the results of the tests the threat model defines are published for that release.
@@ -188,7 +187,7 @@ For operators:
 
 | Question | Default this draft takes |
 |---|---|
-| Should "Protected" be renamed, or the rating split into "encrypted" and "hard to recognise"? | Left to the owner. Version 1 gives no native profile a rating above Detectable, so the question does not block it. |
+| Should "Protected" be renamed, or the rating split into "encrypted" and "hard to recognise"? | Undecided. Version 1 gives no native profile a rating above Detectable, so the question does not block it. |
 | Should `faketls` be built? | Not decided. It is not specified. |
 | How does the app learn that a weaker service shares a server's address? | It computes what it can from its own subscription. Beyond that, through a cap in the signed profile that can only lower the rating, which depends on a provider that tells the truth. |
 | How much later does a stranger's answer arrive through the node? | Not measured. |

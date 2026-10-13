@@ -4,7 +4,7 @@ description: The layers of the Veilway protocol, what each one is responsible fo
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by the project owner or by anyone outside the project, and nothing in it is implemented except where a row says "built". Do not rely on any property described here.
+This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by anyone outside the project, and nothing in it is implemented except where a row says "built". Do not rely on any property described here.
 :::
 
 Veilway is a VPN: the client has a virtual network interface, whole IP packets go into a tunnel, and the node at the other end sends them on. The native protocol has three layers. Only the outer two are new.
@@ -224,12 +224,12 @@ Each is listed with the default this draft takes. The pages are written to the d
 | Question | Default |
 |---|---|
 | Is the transport secret per user or per device? | Per device. The proof then names exactly one WireGuard key, which is what binds a session to a tunnel, and one device can be revoked alone. The cost is one more secret per device in the config and in the subscription. |
-| What is the top rating called, and does version 1 have one? | Version 1 rates every native profile Detectable. The name of a higher rating, and whether "Protected" invites a wrong reading, is left to the owner. |
+| What is the top rating called, and does version 1 have one? | Version 1 rates every native profile Detectable. The name of a higher rating, and whether "Protected" invites a wrong reading, is undecided. |
 | The config keys, commands and profile fields in the section above | As proposed. The config reference, its schema and the subscription format page must be changed before implementation. This draft does not change them. |
 | Does the first subscription fetch use the fronting options? (threat model Q15) | Not specified here. It belongs to the subscription format page. |
 | Should the client drop inner packets that belong to no flow it opened? (threat model Q7) | Not specified here. Nothing on these pages depends on it. |
 | Refusing clients by source country before authentication (threat model Q18) | Not specified. If it is added, a refused client must get exactly the unauthenticated path of its listener. |
-| Has anyone reviewed this text? | Two rounds of internal adversarial review, whose findings this revision answers. The revision itself has not been reviewed again. No review by the owner and none from outside the project. |
+| Has anyone reviewed this text? | Two rounds of internal adversarial review, whose findings this revision answers. The revision itself has not been reviewed again. No review from outside the project. |
 
 ## Implementation status of this draft
 
@@ -248,5 +248,5 @@ Each is listed with the default this draft takes. The pages are written to the d
 | `udp-obfs` | Pending | It was judged sound in review. It belongs to the same implementation step as the other transports and depends on the replay rule. |
 | `tls`, `ws`, `fronted` as whole transports | Pending | They depend on the three rows above. Certificate issuance for `tls` is a marked gap. |
 | Fronting options, transport fallback, client fingerprint | Pending | Refusal handling changed in this revision. The fingerprint depends on a measurement that has not been made. |
-| `faketls`, `quic` | Goals only | No wire format. `faketls` waits for the owner's decision on relaying to third parties. |
+| `faketls`, `quic` | Goals only | No wire format. `faketls` waits for a project decision on relaying to third parties. |
 | Subscription and profile format | Not written | These pages assume fields that only that format can define. |

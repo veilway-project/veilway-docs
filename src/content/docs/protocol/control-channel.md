@@ -4,7 +4,7 @@ description: The authenticated API a client reaches inside the tunnel, at the ga
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by the project owner or by anyone outside the project, and nothing in it is implemented.
+This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. It has not been reviewed by anyone outside the project, and nothing in it is implemented.
 :::
 
 The control channel is what plain WireGuard lacks: a way for a connected client to check its addresses and resolver for IPv4 and IPv6, find a working MTU, see the exits it may use and pick one, see its usage and quota, and receive operator notices. It is a small binary protocol on one port of the gateway address, inside the tunnel. Read [Protocol overview](../overview/) first for the terms and the keys.

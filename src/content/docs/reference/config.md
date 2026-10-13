@@ -271,7 +271,7 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 | `devices` | list of 1 to 16 | required | See below. |
 | `exits` | `"all"` or a list of exit tags | required | Exits the user may leave through. An empty list means none: the user can connect but every flow is rejected, and validation warns. |
 | `exit` | exit tag | none | The user's own exit. Must be in `exits`. |
-| `quota_bytes` | integer 1 to 9007199254740991 | none | Bytes of inner IP traffic, both directions, per period. |
+| `quota_bytes` | integer 1 to 9007199254740991 | none | Bytes of inner IP traffic, both directions, per period, including traffic that was rejected or answered locally. See Usage and quota. |
 | `quota_period` | `daily`, `weekly`, `monthly` | none | When the count resets, at 00:00 UTC (weekly on Monday, monthly on the 1st). Needs `quota_bytes`. Without it the quota never resets. |
 | `expires_at` | RFC 3339 timestamp with an explicit offset | none | From this moment the user is treated as disabled. |
 
@@ -286,7 +286,20 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 
 Each address must lie in the pool of exactly one inbound and may not be that pool's gateway, network or IPv4 broadcast address. A device has at most one IPv4 and one IPv6 address per inbound. No address is used by two devices.
 
-Engine: when a user is disabled, expires, runs out of quota or is removed, or when a device's key or addresses change or it is removed, then within one second the core drops the session keys, resets every flow and clears the DNS memory that belong to it, and logs it at info. Expiry and quota are driven by a timer and by the byte count, not only checked at handshake. A backward step of the node's clock does not re-enable a user. Usage is kept outside this document in a state file keyed by user name, and survives reloads and restarts. Traffic that is rejected or answered locally counts.
+Engine: when a user is disabled, expires, runs out of quota or is removed, or when a device's key or addresses change or it is removed, then within one second the core drops the session keys, resets every flow and clears the DNS memory that belong to it, and logs it at info. Expiry and quota are driven by a timer and by the byte count, not only checked at handshake. A backward step of the node's clock does not re-enable a user. Usage is kept outside this document, see below.
+
+### Usage and quota
+
+Engine. Usage never lives in the config document. It is kept in one state file (see `--state` under Commands) and survives reloads and restarts. Without a state file path the node keeps usage in memory only and it is lost on restart.
+
+- **Counting.** `quota_bytes` counts inner IP bytes in both directions. Traffic that is rejected or answered locally counts too.
+- **Over quota.** A user at or over quota is cut off by the same path as a disabled user, within one second, and the info log line names quota as the reason. The user cannot shake hands again until the period rolls over or a reload raises or removes the quota.
+- **Period.** Without `quota_period` the count never resets. With it the count resets at 00:00 UTC (weekly on Monday, monthly on the 1st). A backward step of the clock never resets a count and never re-enables a user: the start of a period only moves forward.
+- **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. They are totals; rates are computed by whoever polls. Counters follow names and tags across reloads. Exit traffic is counted where a packet or payload is handed to or taken from the exit, and a flow moved by `via` is not counted twice.
+- **State file.** Versioned JSON keyed by user name. Per user it holds the bytes used in the current quota period, the start of that period, and lifetime totals (up and down, bytes and packets).
+- **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename. It is written at most once every 10 seconds and only when something changed, once more on shutdown, and right after a user is cut off for quota. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
+- **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended, logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not a valid entry is skipped and only that user starts from zero. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
+- **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it. Renaming a user is removing one and adding another, so it starts from zero.
 
 ## Reloading
 
@@ -307,8 +320,9 @@ After a commit:
 
 ```
 veilway run --config config.json
+veilway run --config config.json --state veilway-state.json
 veilway check --config config.json
 veilway schema
 ```
 
-`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.
+`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format.

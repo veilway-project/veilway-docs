@@ -465,6 +465,7 @@ An entry of `exits`:
 | `name` | display text, 1 to 64 characters | |
 | `country` | two uppercase ASCII letters | Optional. |
 | `full_ip` | boolean | Whether the exit carries every IP protocol. Default `false`. |
+| `linked` | boolean | Whether traffic through this exit leaves from a second node that is joined to this one by a node link, and that may be run by someone else (see [Node links](../node-links/)). Default `false`. The app shows it on the exit. A value that is not a boolean drops the exit, as any wrong member of an exit does. An older client that does not know the member ignores it and shows the exit without the mark. A panel sets it from the node's config, never by hand. |
 
 The catalogue in a subscription is what the user sees before connecting. Once connected, the catalogue from the control channel replaces it for that session.
 

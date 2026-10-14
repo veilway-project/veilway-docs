@@ -26,6 +26,7 @@ export default defineConfig({
 						{ label: "Transports", translations: { fa: "ترنسپورت‌ها" }, slug: "protocol/transports" },
 						{ label: "Control channel", translations: { fa: "کانال کنترل" }, slug: "protocol/control-channel" },
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
+						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },
 					],
 				},
 				{ label: "Config reference", translations: { fa: "مرجع پیکربندی" }, slug: "reference/config" },

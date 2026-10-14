@@ -47,7 +47,7 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Smallest opening packet a client sends | 122 bytes | `udp-obfs` client |
 | Reset answered "still being written" | after 10 s | node |
 | Cookie replies on plain `udp` | begin above 100 handshake messages a second per inbound | `udp` |
-| Opening packet with no answer | sent again after 1, 2 and 4 s, then the attempt is lost | `udp-obfs` client |
+| Opening packet with no answer | sent at 0, 1, 3 and 7 s. The attempt is lost at 10 s, so the last one is waited for 3 s. | `udp-obfs` client |
 | Replay limit write | 2 s deadline | node |
 | Wait for the peer's close frame | 5 s | `tls`, `ws` |
 | Body of a `fronted` request | 10 s to arrive | `fronted` node |
@@ -93,7 +93,11 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Upgrade header learning | once at start and on reload, again every 60 s while it has failed | `tls`, `ws` node |
 | Clock offset from `Date` | kept for at most 24 h, and taken again after any refusal on a pinned candidate | client |
 | Fallback | 10 s per transport, a wait drawn uniformly from 2 to 10 s between transports, 3 per round, then 30 s doubling to 900 s, each multiplied by a number drawn uniformly from 0.5 to 1.5 | transport fallback |
-| Reconnect after a lost session | 1 s doubling to 60 s, each multiplied by a number drawn uniformly from 0.5 to 1.5 | client |
+| Reconnect after a lost session | 1 s doubling to 60 s, each multiplied by a number drawn uniformly from 0.5 to 1.5. The wait returns to its start only after a session has stayed open for 60 s. After 3 sessions in a row that were lost sooner, the client moves to the next candidate. | client |
+| An accepted proof followed by silence | 10 s, then one more try at once | client, stream transports |
+| A parallel connection that is unreachable | not tried again for 1 hour | client |
+| Identical `fronted` request resent on a new connection | up to 3 times inside 10 s | `fronted` client |
+| Head of an answer, as the client reads it | at most 16,384 bytes | client, stream transports |
 | Certificate pins | at most 4 per candidate | `tls`, `ws` |
 | Fingerprint pack expiry | 90 days after its capture date | client TLS |
 | Node transport key age | rotate at least every 30 days | operators |
@@ -198,7 +202,7 @@ The length field and the padding are inside the encryption. On the wire a chunk 
 2. **Wide padding** goes on the first 16 chunks of each direction of a session, on every chunk that holds a WireGuard handshake message, and on every chunk that holds a control channel packet. The sender knows which datagrams those are, because it built them. On `udp-obfs` the opening packet is always padded wide and is not one of the 16: the 16 are counted over data packets. The 16 is the `N` of threat model invariant 7.
 3. Wide padding starts at the session's base, a small number each side draws once per session, so that the smallest padded size is not the same in every session.
 4. The upper bounds and the keepalive range may be set per profile for the client and per inbound for the node, inside the bounds in the table of numbers, so that not every installation shows the same ranges.
-5. A chunk that would hold exactly one WireGuard keepalive is held back for the lone keepalive delay and joins whatever else is sent in that time.
+5. A chunk that would hold exactly one WireGuard keepalive is held back for the lone keepalive delay. On a stream transport it joins whatever else is sent in that time. On `udp-obfs`, where a chunk holds one datagram, it is sent alone after the delay. The delay does not apply to the first chunk of a session or to an opening packet.
 
 What padding achieves: WireGuard's sizes do not appear as exact lengths. What it does not achieve: a uniform spread above a base size is itself a shape that no ordinary protocol has, and over many sessions its lower edge still points at the base sizes. The order of the first exchange is unchanged, and a full-size inner packet still gives a chunk of nearly fixed size. Whether any of these ranges is good enough is decided by the length and timing measurement of the threat model, which has not been run.
 
@@ -225,7 +229,7 @@ This section is the one definition of when a session is alive. Every other secti
 | The node ends a session with no activity for | 180 s | 300 s | 60 s |
 | Client idle keepalive, after a send silence of | 20 to 40 s, or the profile's range within 10 to 60 s | Same | None |
 | Node's echo | A padding-only chunk after 0 to 3000 ms | Same | None. The response to a request. |
-| The client treats the session as lost when | An idle keepalive got no chunk back within 10 s, or WireGuard reports the node silent | An idle keepalive got no chunk back within 10 s, or the connection closes | A request got no valid response within 10 s |
+| The client treats the session as lost when | An idle keepalive got no chunk back within 10 s, or WireGuard reports the node silent | An idle keepalive got no chunk back within 10 s, or the connection closes, or 10 s pass without a chunk after a handshake that WireGuard started because the node stopped answering | A request got no valid response within 10 s |
 | Lone keepalive delay | 0 to 3000 ms | Same | Same |
 | Client rekey point | 60 to 110 s after the last handshake | Same | Same |
 
@@ -277,9 +281,9 @@ Inside a stream transport, the tunnel's own TCP connections run on top of the tr
 3. **Drop, do not queue.** Each connection has a send queue of 256 datagrams. When it is full, new datagrams are dropped and counted. The applications inside then see loss and slow down, which is what they would do on a real network. An unbounded queue would turn loss into seconds of delay.
 4. **Parallel connections.** A client uses 1 connection per tunnel by default. A profile may allow up to 4. When more than one is open:
    - Each connection is its own session with its own proof and keys, for the same device.
-   - A sender picks the connection for a datagram by a hash of the inner packet's addresses, protocol and ports, so one inner flow stays on one connection and in order. A stall on one connection then holds back only the flows on it. WireGuard handshake messages go on the connection that has been open longest.
+   - The client picks the connection for a datagram by its flow: for each open connection it hashes the flow (the inner packet's addresses, protocol and ports) together with that connection's number, and takes the connection with the highest result. One inner flow stays on one connection and in order, and a connection that comes or goes moves only the flows that were, or now are, its own. A stall on one connection holds back only the flows on it. A WireGuard handshake that is an ordinary rekey goes on the connection that has been open longest. A handshake that WireGuard started because the node stopped answering goes on the connection a chunk was last heard on.
    - The node does not use the flow rule when it sends. In version 1 it answers a device on the session it last heard that device on. A hash would send a flow into a connection that has died without a sign, and the node cannot tell. The cost: when a device alternates between its connections, the packets of one flow coming back from the node may arrive out of order, which the applications see as reordering.
-   - The client opens the second and later connections one at a time, each after a delay drawn uniformly from 1 to 5 s.
+   - The client opens the second and later connections one at a time, each after a delay drawn uniformly from 1 to 5 s. A parallel connection that is unreachable is not tried again for 1 hour, and one that is refused waits the refusal wait. Once any connection of the tunnel was established, the end of the last one is a lost session.
 
 Several long-lived connections from one client to one host are themselves a pattern. That is why the default is 1. When one connection stalls for long while others run, its packets can arrive outside WireGuard's replay window and are then dropped, which the applications see as loss.
 
@@ -440,17 +444,22 @@ A client whose proof is refused gets the decoy's answer on a stream transport an
 
 On a stream transport the client can tell a refusal from a block: an HTTP answer that arrived over validated TLS means the node or its front was reached and said no. The client then:
 
-0. Counts as a refusal any attempt that got through a validated TLS handshake and then received an HTTP answer other than the expected one, or a close with no answer. A node whose decoy is down closes without an answer, and that must not look like an unreachable candidate.
+0. Counts as a refusal an attempt that got through a validated TLS handshake and then received an HTTP answer other than the expected one, a `101` with a wrong accept value, bytes that are no HTTP, or an authenticated close with no answer. A close is authenticated when it is a TLS `close_notify` or a WebSocket Close frame. A connection that is reset, or ends without one of those, at any point after the handshake and before a whole answer, is unreachable and not a refusal: anyone on the path can cause that. A node whose decoy is down closes with `close_notify`, and that must not look like an unreachable candidate. The client bounds the head of any answer it reads.
 1. Does not mark the candidate or the transport as failed, and does not spend the candidate budget.
 2. Shows "the server or its front answered and did not accept the connection: check the device clock and your quota, or try again later". The answer may come from a CDN that could not reach the node, so the message does not blame the node alone.
-3. Tries the same candidate again after the refusal wait. A candidate is tried at most 3 times in a row, the first attempt included, and then the client continues in the profile's order without setting it aside.
+3. Tries the same candidate again after the refusal wait. A candidate is tried at most 3 times in a row, the first attempt included, and then the client continues in the profile's order without setting it aside. With two candidates in flight, each has its own count of three.
 4. Doubles the refusal wait after every refusal, up to the limit in the table of numbers, for as long as refusals continue on this profile. A device that is over quota or disabled therefore ends up trying about once an hour, not once a minute. The wait returns to its start when a session opens or the user asks to connect again.
 
 On `udp-obfs` a refusal is silence and cannot be told from a block by the answer. The client uses what it remembers. On a datagram transport that worked on this network within the last 7 days, it keeps trying for 90 s in all, with the reconnect waits, before it treats the transport as unreachable and moves on. That covers a node that refuses for some tens of seconds after a crash. The doubling refusal wait is not used for silence, so a network that starts to drop the transport costs the user about a minute and a half, not many minutes.
 
+**An accepted proof followed by silence.** A third outcome is neither a refusal nor unreachable. The client's proof was accepted (a `101` with the right accept value, or a `fronted` opening request that was written whole), the client opened the session with a keepalive of a tunnel it believes is up, and then nothing comes for 10 s, or the node closes at its own deadline. The client tries the same candidate once more, at once, this time with a handshake initiation. A second such end in a row is unreachable. Silence after an initiation is unreachable. The 10 s for the first chunk run from the moment the client's request is written. The reason: after a node restart every client's tunnel still looks up on the client's side, its keepalive means nothing to the node, and without this rule every client would set its working candidate aside for an hour.
+
+**A failure of the device itself** (no route, no address, no socket, or the engine's socket hook refusing) marks nothing and waits the reconnect wait.
+
 The clock:
 
-- On `tls` or `ws`, and only after the certificate matched a pin from the profile, the client may read the `Date` header of the decoy's answer and use the difference as an offset for proof timestamps and for the epoch number of `udp-obfs`, which is computed from the same clock. It then uses that offset for every transport of the profile, for at most 24 h, and takes it again after any later refusal on a pinned candidate, so that a stale offset does not outlive the fault that caused it. It never changes the system clock, never takes a time from a connection without a matching pin, and shows the user that the device clock is wrong.
+- On `tls` or `ws`, and only on a candidate whose certificate matched a pin from the profile, the client takes a clock offset from any answer that is not a `101`: the `Date` of that answer less the device clock at the moment the answer's head is read. It uses the offset for proof timestamps and for the epoch number of `udp-obfs`, for every transport of that profile and no other, for at most 24 h, and takes it again after any later refusal on a pinned candidate. It never changes the system clock and never takes a time from a connection without a matching pin, and it shows the user that the device clock is wrong. Nothing bounds the offset: a holder of a pinned key can name any time, which spoils only that profile's proofs for the 24 h the offset is kept. After a refusal on a candidate without a pin while an offset is held, the next attempt is made on the device clock, and the offset is dropped if that attempt opens.
+- **Certificate validity is always checked against the device clock, never the offset.** A certificate outside its validity at the device's time ends the attempt, marks nothing, and the user is told to check the clock. The limit: a device whose clock is outside a certificate's validity cannot connect over TLS at all, and the `Date` offset cannot help it.
 - A profile whose only cover transports run through a CDN has no pin. A client with a wrong clock cannot connect to it and is told so. See "Open questions".
 - Once connected, the control channel reports the node's time, so the client can warn about a clock that is drifting towards the limit.
 
@@ -556,9 +565,10 @@ The client sends an opening packet in these cases and no others:
 
 Rules for an opening packet:
 
-1. **No answer.** If no chunk of the new session opens, the client sends a new opening packet, with a fresh salt and a fresh WireGuard datagram of the same kind, after 1 s, then after 2 s more, then after 4 s more. If the last one is not answered either, the attempt is lost and is handled as silence under "Refusals and clocks". A client makes every opening packet at least 122 bytes long, the size of a first answer that carries a handshake response without padding, so that the first answer always fits the send limit.
-2. **The old session stays in use.** While it waits for the first answer of a new session, the client keeps sending and receiving on the session it had. It switches to the new keys when the first answer of the new session opens, and keeps the old session readable for 10 s after that.
+1. **No answer.** If no chunk of the new session opens, the client sends a new opening packet, with a fresh salt and a fresh WireGuard datagram of the same kind. Opening packets go at 0, 1, 3 and 7 s, and the attempt is lost at 10 s. A lost attempt is handled as silence under "Refusals and clocks". A client makes every opening packet at least 122 bytes long, the size of a first answer that carries a handshake response without padding, so that the first answer always fits the send limit.
+2. **The old session stays in use.** While it waits for the first answer of a new session, the client keeps sending and receiving on the session it had. It switches to the new keys when the first answer of the new session opens, and keeps the old session readable for 10 s after that. Opening packets that carry keepalives can establish at the node in another order than they were sent. The client keeps the older keys readable for 10 s, does not switch back to them, and recovers by its liveness rule if the node settled on another session.
 3. **The clock.** The timestamp and the epoch number both use the client's clock with the offset from "Refusals and clocks", when one is held.
+4. **What the client cannot tell.** It cannot tell the node's echo from a recorded packet, since a recorded chunk opens again. A replayed packet can therefore hide a dead idle session from the transport until WireGuard itself reports the node silent.
 
 Every other WireGuard datagram travels in a data packet, rekey handshakes included. An upload with nothing coming back does not cause an opening packet, because the node's WireGuard still sends its own keepalive, and neither does an idle tunnel whose keepalives are answered.
 
@@ -747,7 +757,7 @@ The node ends TLS itself, with a certificate for a name the operator owns.
 
 **State machine.** The accept state machine, with TLS ended by the node. The client:
 
-1. Connects to a candidate (see "Fronting options") and completes TLS. It ends the attempt unless TLS 1.3 was negotiated, the chain validates for the name, and the leaf's public key matches a pin in the profile (SHA-256 of the SubjectPublicKeyInfo).
+1. Connects to a candidate (see "Fronting options") and completes TLS. It ends the attempt unless TLS 1.3 was negotiated, the chain validates for the name, and the leaf's public key matches a pin in the profile (SHA-256 of the SubjectPublicKeyInfo). The pin is a second condition, never a replacement: a self-signed certificate with a matching pin is refused. A private authority is used by giving the client its root, and a certificate placed in the client's root store is a trust anchor whatever it says of itself. On every pinned candidate TLS 1.3 is required. An empty root store, an Encrypted Client Hello configuration (which the first implementation does not support), and a `host` or `path` that holds a blank, a line end or a `?` end the attempt before anything is dialled.
 2. Sends the upgrade request with a fresh token.
 3. On a `101`, sends its first chunk, which holds a WireGuard packet of this device: a handshake initiation, or a keepalive of a tunnel that is already up. On any other HTTP answer it handles a refusal as "Refusals and clocks" says.
 4. Treats the session as open when a chunk from the node has opened.
@@ -951,8 +961,8 @@ The node decides every request in this order, and a request that fails any step 
 The client:
 
 1. Keeps one request in flight per session at a time.
-2. Sends at once when it has data and no request is in flight. When idle it polls with the waits in the table of numbers.
-3. Drops the session and opens a new one after the reconnect wait when a request gets no response within 10 s, or anything but a 200 with a body it can open. If that happens to the opening request, it is a refusal, handled as "Refusals and clocks" says.
+2. Sends at once when it has data and no request is in flight. When idle it polls with the waits in the table of numbers. The poll wait returns to its start after a response, or a request, that carried a datagram.
+3. Drops the session and opens a new one after the reconnect wait when a request gets no response within 10 s, or anything but a 200 with a body it can open. If that happens to the opening request, it is a refusal, handled as "Refusals and clocks" says. Before that, a request whose connection failed is sent again as the identical bytes on a new connection, up to 3 times inside 10 s. The client gives a connection up when its answer says `Connection: close`, or when the front wrote on it between two requests. An answer with `Transfer-Encoding` is refused, so a front must not re-chunk the node's responses.
 4. Opens a new session before `n` would pass its limit.
 
 A session with no accepted request for its idle time is forgotten. There is no idle keepalive and no echo on `fronted`: an accepted request is the activity and its response is the sign of life (see "Session activity and timers").
@@ -991,9 +1001,9 @@ Every TLS-based transport of a profile has a list of candidates. A candidate say
 | Field | Meaning |
 |---|---|
 | `address` | The IP address and port to dial. Examples use `192.0.2.10:443` and `[2001:db8::10]:443`. |
-| `sni` | The TLS server name, for example `cdn.example.com`. Empty means no server name is sent. |
-| `host` | The HTTP `Host`, for example `node.example.com` |
-| `verify_name` | The name the certificate must be valid for when `sni` is empty |
+| `sni` | The TLS server name, for example `cdn.example.com`. Empty means no server name is sent. A host name. An IP address is refused. |
+| `host` | The HTTP `Host`, for example `node.example.com` The client adds the port of `address` when it is not 443. |
+| `verify_name` | The name the certificate must be valid for when `sni` is empty A host name. An IP address is refused. |
 | `ech` | A configuration for Encrypted Client Hello, when the front supports it. Encrypted Client Hello is the TLS extension that encrypts the server name. |
 
 The plain case is `sni` equal to `host`, both a name the operator owns. That is the recommended first choice.
@@ -1016,10 +1026,13 @@ There is no probe request. Trying a candidate is opening a real session on it. T
 2. If there is none, or it is unreachable, the client walks the list in an order that is random per installation and fixed between attempts.
 3. At most 2 candidates are in flight, the second starting 250 ms after the first. The client sends the same WireGuard datagram on both: the same handshake initiation, or the same keepalive. WireGuard on the node accepts it once, so only one of the two sessions is established and only that one gets a chunk from the node. That candidate wins and the other is closed.
 4. At most 6 distinct candidates are tried per hour per network. When that is spent the client waits, and says so.
-5. A candidate counts as unreachable when the connection or the TLS handshake fails or times out. It is then not tried again on that network for 1 hour. The mark expires, and the mark and its expiry are logged at info, so that no failure is remembered forever.
+5. A candidate counts as unreachable when the connection or the TLS handshake fails or times out. It is then not tried again on that network for 1 hour. The mark expires, and the mark and its expiry are logged at info, so that no failure is remembered forever. A connection that is reset or cut after the handshake counts the same way.
 6. A candidate that answered with a refusal is reachable. It is not marked, does not count against the 6, and is handled as "Refusals and clocks" says.
 7. While the current candidate works, no other is tried.
 8. The kill switch stays in force throughout.
+9. On the last transport the client may use, when no candidate is free of a mark, the marks are passed over, oldest first, still under the hourly budget, so that the client is never left with nothing to try.
+10. Marks, the budget and the remembered candidate are dropped when their time lies in the future or when the profile's list of transports has changed. What a client has stored for these decisions is untrusted input to itself.
+11. When the user asks to connect again, marks, counts and waits start over. The hourly budget and the consents stay.
 
 Even so, a client that tries several addresses of one CDN within a short time, with no DNS lookups, can be noticed, and what it tries shows the path part of the candidate list.
 
@@ -1029,7 +1042,7 @@ The rating of a profile is too coarse to guard a change of transport, because in
 
 **Order.** A profile lists its transports in the provider's order. Two things can change which is tried first:
 
-- `stream_first`, a profile option that the user may also set for a profile. With it the client tries every cover transport before any other. It is the right choice on a network that is known to act on random-looking UDP.
+- `stream_first`, a profile option that the user may also set for a profile. With it the client tries every cover transport before any other. It is the right choice on a network that is known to act on random-looking UDP. Where `stream_first` and the remembered transport disagree, `stream_first` wins.
 - The transport that last worked on this network, if one is remembered.
 
 **Consent to move down a class.** The client uses a transport of a lower class than the best class in the profile only when the user has agreed to that class for this profile. This covers the first attempt as well as fallback: a profile that lists `udp-obfs` before `tls` asks once before its first connection. The question says in plain words what the lower class means. The answer is stored per profile and class and can be withdrawn. Plain transports are never reached without that consent.
@@ -1064,6 +1077,10 @@ The first message of a TLS connection, the ClientHello, differs between programs
 | The plain variant, for `ws-plain` | `ws-plain` sends no TLS, so only the HTTP part of the pack applies, and the whole path reads it. The pack holds a fixed set of header fields for a plain upgrade, with fixed values and never `Accept-Language`. What a plausible set is for a plain WebSocket upgrade is unmeasured, so until it is measured the client sends the set the pack names and the page records that it is unmeasured. |
 
 What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognisable.
+
+**What the first implementation does.** It does not have the fingerprint pack. Its TLS ClientHello is the TLS library's own and recognisable as such, with `http/1.1` as its only protocol offer, and its request header fields are a short fixed list. Every profile is therefore recognisable by its ClientHello today, which is one more reason every native profile is rated Detectable.
+
+**A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognisable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
 
 ## `faketls`: goals and open questions only
 
@@ -1133,6 +1150,7 @@ A leak is ended by rotation (see the overview). Rotation does not undo what was 
 - **Finding the device does not depend on the number of devices.** One table lookup, no scan, no early exit. A tag that is found and one that is not differ by a fraction of a microsecond, as "Timing" records.
 - **Timing residuals are real.** The hop to the decoy origin, a slowly sent request line, the node's own TLS stack on `tls`, and the difference between an authenticated and an unauthenticated answer for a subscriber who holds a valid profile.
 - **Every shared default is a signature.** Padding ranges, timers and close behaviour are the same on every installation unless a profile sets them. They are fixed here so that they can be measured, not because they are known to be safe.
+- **A cut is not a refusal.** Only an authenticated close counts as the node saying no. An earlier wording treated any close after the TLS handshake as a refusal, which let one forged reset buy the refusal waits and hold a client on a blocked candidate for hours.
 - **Third parties.** A decoy origin is the operator's own. A CDN carries load and risk for this protocol, and the client's waits and budgets exist for its sake as well as for the user's.
 
 ## Open questions

@@ -164,8 +164,8 @@ Pairing is done by two people, each at their own panel, with two short texts tha
 
 1. **The listener's operator creates the link** and gets an **offer code**. In a forward link that is the exit's operator, in a reverse link the entry's.
 2. **The dialler's operator pastes the offer.** The panel checks it, shows every address the link would dial, generates a new WireGuard key pair and a new pairing key pair for this paste, and shows an **answer code**.
-3. **The listener's operator pastes the answer.** Both panels now hold the same fingerprint.
-4. **Each operator types the other's whole fingerprint.** Both panels show all 8 groups. Each operator reads all 8 to the other over a channel they trust, and types the 8 groups they were told into their own panel. A panel accepts the link only when all 8 typed groups equal its own value. There is no button that confirms without it.
+3. **The listener's operator pastes the answer.** Both panels now hold the same pairing hash, and each shows its own value made from it.
+4. **Each operator types the other side's value.** Each panel shows its own value, all 8 groups. Each operator reads it to the other over a channel they trust, and types the 8 groups they were told into their own panel. A panel accepts the link only when what was typed equals the other side's value, which it computes itself. Its own value is refused. There is no button that confirms without it.
 5. Only then is the link put into that node's config, and only then does the listener's tag table hold the link.
 
 A single code that carries everything, a private key for the dialler included, was considered. It needs one paste, and it puts a private key into chat histories and clipboards, and whoever copies it can be the dialler. With two codes each side makes its own private keys.
@@ -174,7 +174,7 @@ A single code that carries everything, a private key for the dialler included, w
 
 **Between the paste and the confirmation.** A pairing that is not confirmed is held in the panel's memory only: the open offer and its pairing private key on the listener, and the new WireGuard private key, the pairing private key and the derived secret on the dialler. Nothing of it is written to disk, so that no private key and no secret of a link that was never agreed outlives the attempt. A restart of the panel cancels every pending pairing, and the operators start again with a new offer. A pasted answer must be confirmed before the offer's `expires_at`. After that the pairing is discarded with everything made for it.
 
-**When only one operator finishes.** Each panel puts the link into its own node's config when the fingerprint typed into it matched. If the other operator never finishes, the other node never has the link. The node that has it reports "connecting" and then "ended or misconfigured", carries nothing, and its operator removes the link. Nothing is half trusted: a link works only when both nodes hold it, and each holds it only after its own check.
+**When only one operator finishes.** Each panel puts the link into its own node's config when the other side's value typed into it matched. If the other operator never finishes, the other node never has the link. The node that has it reports "connecting" and then "ended or misconfigured", carries nothing, and its operator removes the link. Nothing is half trusted: a link works only when both nodes hold it, and each holds it only after its own check.
 
 ### The link's transport secret
 
@@ -217,9 +217,18 @@ One line of text: `vwlinka1.`, then 80 bytes in base64url without padding, then 
 
 ### The fingerprint
 
-The pairing hash is the SHA-256 of these bytes in this order: the label `"veilway v1 link pairing"`, the length of the offer's object as 4 bytes, the exact bytes of the offer's object as they stand between the two dots of the code after decoding, and the 80 bytes of the answer. The fingerprint is its first 16 bytes, shown as 8 groups of 4 hexadecimal digits.
+The pairing hash is the SHA-256 of these bytes in this order: the label `"veilway v1 link pairing"`, the length of the offer's object as 4 bytes, the exact bytes of the offer's object as they stand between the two dots of the code after decoding, and the 80 bytes of the answer.
 
-- Each side checks all 16 bytes. Checking only half on each side would not do: someone in the middle sees one side's code first and can change its own codes until the half the other side checks matches, which takes about 2^64 tries per side, not 2^128.
+From the pairing hash, two values are made, one for each side:
+
+| Value | Derivation | Shown by |
+|---|---|---|
+| The listener's value | the first 16 bytes of SHA-256(`"veilway v1 link listener"` \|\| pairing hash) | The listener's panel |
+| The dialler's value | the first 16 bytes of SHA-256(`"veilway v1 link dialler"` \|\| pairing hash) | The dialler's panel |
+
+Each is shown as 8 groups of 4 hexadecimal digits. A label is its ASCII bytes followed by one zero byte, as on the transports page.
+
+- Each panel shows its own value and accepts only the other side's, all 16 bytes, compared in constant time. Typing the value on one's own screen is refused. With one shared value an operator could confirm by copying their own screen, which skips the comparison; two values make the comparison the only way through. Checking only half of a value would not do either: someone in the middle sees one side's code first and can change its own codes until the half the other side checks matches, which takes about 2^64 tries, not 2^128.
 - It covers everything either side acts on: where to dial, the transport key, the pins, the direction, the addresses, the MTU and all four public keys. Any change to an offer or an answer on its way shows as two different fingerprints.
 - **The listener's panel computes it from the offer it issued and kept, never from anything that was sent back to it.** The dialler's panel computes it from the bytes it received. Nothing is parsed and written out again on either side.
 - Both panels hold it before the link exists in either config.
@@ -312,7 +321,7 @@ Which half a node is follows from `direction` and from whether the link is liste
 ## Security considerations
 
 - **No new wire format, and one new construction.** A link is a device session. Everything the transports page says about proofs, replay, binding and what a transport leaves visible holds for a link, including that a link's long-lived, high-volume connection between two servers is visible to whoever watches either of them. The pairing's key agreement is new and unreviewed.
-- **Pairing rests on the comparison of one fingerprint.** It covers every byte of both codes, and a panel cannot be made to accept a link without the whole fingerprint the other side shows. A comparison that is fooled costs everything the link carries: whoever sits in the middle of the pairing ends the tunnel on both sides, and reads and can change all traffic of every user of the link.
+- **Pairing rests on two values that the operators exchange.** Both come from a hash over every byte of both codes, each panel shows one and accepts only the other, and a panel cannot be made to accept a link by typing its own screen or by any button. A comparison that is fooled all the same costs everything the link carries: whoever sits in the middle of the pairing ends the tunnel on both sides, and reads and can change all traffic of every user of the link.
 - **A hostile or compromised entry** can send the exit anything from the one address the exit accepts, up to the link's caps. It reaches what the exit's rules let that link reach, which never includes the exit's users or other links, and private networks only if the exit's operator switched that on. It can use up the link's allowance. It cannot change anything on the exit.
 - **A hostile or compromised exit** sees and can alter everything that passes through it that is not encrypted end to end, can answer DNS falsely, and can drop or delay. It can fill any live flow with bytes, which the entry counts against that user before the user's device throws them away, so an exit can use up users' quotas. It can tell the entry's users' devices apart and often count them, as "What the exit learns" says. It cannot learn a user's address or key from the link, cannot send the entry a packet that reaches a user unless it answers a flow that user opened, and cannot reach the entry's own addresses or other users.
 - **Each node learns the other's address, and the dialler learns more.** The dialler holds the listener's names, paths and keys: in a forward link the entry holds the exit's, and in a reverse link the exit holds the inbound key, transport key and paths of the entry's link inbound. That inbound carries no users, so these are not what the entry's subscribers hold. Either is enough to block the listener. An operator pairs with someone they are willing to give that to.

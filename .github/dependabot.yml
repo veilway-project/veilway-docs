@@ -1,0 +1,11 @@
+# Weekly version updates, grouped into one pull request per ecosystem. Security updates come on their own as soon as an advisory is published.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule: {interval: weekly}
+    groups: {npm: {patterns: ["*"]}}
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: weekly}
+    groups: {actions: {patterns: ["*"]}}

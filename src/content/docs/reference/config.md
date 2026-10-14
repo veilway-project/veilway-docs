@@ -205,7 +205,7 @@ Engine. Only the node's side is built. No client speaks it yet. The [transports 
 - **`limits.sessions`.** How many established sessions the listener holds at once. When it is full, new opening packets are refused, and nothing a stranger does takes a place.
 - **`padding`.** The node pads what it sends, inside the encryption. `wide` bounds the padding of the first 16 packets of a session, of every WireGuard handshake message and of every control channel packet. `normal` bounds the rest. A full-size packet carries none: no packet is larger than `mtu` + 62 bytes. Change them so that not every node shows the same ranges.
 - **`mtu`.** `udp-obfs` adds 62 bytes around a tunnel packet, 30 more than `udp`. The default `mtu` of a `veilway` inbound with a `udp-obfs` transport is therefore 1390. Adding the transport to an inbound that has no `mtu` written changes its `mtu` from 1420 to 1390, which restarts the tunnel once.
-- **The clock.** A device and the node must agree on the time within 60 seconds. A node whose clock is wrong refuses its devices, and a clock that ran ahead can leave the node refusing everybody after it is put right, see `replay`. Run the node with a synchronised clock.
+- **The clock.** A device and the node must agree on the time within 60 seconds. A node whose clock is wrong refuses its devices, and a clock that ran ahead can leave the node refusing everybody after it is put right, see `replay`. Run the node with a synchronized clock.
 - **What is logged.** At info: a listener that starts, sessions that a reload ended, a session that reached the packet limit of its keys. At warn or error: a tag table that was built late, and everything about the replay file. No line names a client address, a tag or a secret.
 
 ### `tls`
@@ -269,7 +269,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 - **Being cut off.** Whenever the node cuts a device off, every `tls` session of that device ends within a second, and so does a session whose transport secret was removed, and one that was opened under a node transport key the config no longer has. A session ends the same way for every cause: a WebSocket Close frame, then TLS and TCP in the normal order.
 - **`padding`** bounds the padding of what the node sends, as for `udp-obfs`. A stream has no packet size to keep to, so the inbound's `mtu` default stays 1420 with `tls` alone.
 - **The address.** A `tls` transport on an address that also has a `udp`, `udp-obfs` or `ws` listener marks that address for whoever watches it. Put it on an address of its own if you can.
-- **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached, a key file that group or others can read, header fields that could not be learnt. Nothing is logged for a single connection, and no line names a client address, a path, a token or a key. Counters are in `stream` of `/v1/stats`.
+- **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached, a key file that group or others can read, header fields that could not be learned. Nothing is logged for a single connection, and no line names a client address, a path, a token or a key. Counters are in `stream` of `/v1/stats`.
 
 ### `ws` and `fronted` behind your web server
 
@@ -487,7 +487,7 @@ Three things hold whatever the rules say. A device can only send from its own ad
 
 Engine: `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start. The `udp` policy is decided once per flow at its first packet and the flow never moves between the proxy and the other path. A destination sent by `direct` or `via` must pass the gate of both exits. A `via` target that cannot carry the packet rejects it. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
 
-More engine behaviour of `unsupported`:
+More engine behavior of `unsupported`:
 
 - A flow sent by `via` needs the user to be entitled to both exits. A UDP flow the proxy has carried is never moved to `direct` or `via` later; it is refused if the proxy loses UDP.
 - `reject` answers are rate limited per device (burst 20, then 10 a second).
@@ -592,7 +592,7 @@ Engine. Usage never lives in the config document. It is kept in one state file (
 - **Over quota.** A user at or over quota is cut off by the same path as a disabled user, within one second, and the info log line names quota as the reason. The user cannot shake hands again until the period rolls over, a reload raises or removes the quota, or the operator resets the user's usage.
 - **Period.** Without `quota_period` the count never resets by itself. With it the count resets at 00:00 UTC (weekly on Monday, monthly on the 1st).
 - **Clock steps back.** A backward step of the clock by less than one period never resets a count and never re-enables a user, at that moment or when the clock moves forward again. The period start stays where it was.
-- **A period start far in the future.** A period start that lies more than one whole period after the node's clock (more than 1 day for `daily`, 7 days for `weekly`, 31 days for `monthly`) is not trusted. It can come from a state file that was edited or written while the clock was wrong, or from a clock that was ahead by more than a period and was then set right. Left alone, such a count would not reset until the clock reached that time, which can be years. So the node sets the period start to the start of the period its clock is in, keeps `used_bytes`, and logs one warning that names the user. This is checked when the state file is loaded and four times a second while the node runs. The price: a clock that jumps back by more than a period and then forward again gives that period's quota a second time. Keep the node's clock synchronised.
+- **A period start far in the future.** A period start that lies more than one whole period after the node's clock (more than 1 day for `daily`, 7 days for `weekly`, 31 days for `monthly`) is not trusted. It can come from a state file that was edited or written while the clock was wrong, or from a clock that was ahead by more than a period and was then set right. Left alone, such a count would not reset until the clock reached that time, which can be years. So the node sets the period start to the start of the period its clock is in, keeps `used_bytes`, and logs one warning that names the user. This is checked when the state file is loaded and four times a second while the node runs. The price: a clock that jumps back by more than a period and then forward again gives that period's quota a second time. Keep the node's clock synchronized.
 - **Without `quota_period`.** Any period start after the node's clock is set to `0` with `used_bytes` kept and one warning. Nothing resets by itself for such a user, so this costs nothing.
 - **Reset by the operator.** `veilway usage reset --user <name>`, or `POST /v1/users/{name}/usage/reset` on the control API, sets `used_bytes` to 0 and the period start to the start of the current period. A user who was over quota can connect again at once, without a reload. Lifetime totals are kept unless `--totals` (`"totals": true`) is given. See Commands and the control API reference.
 - **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. They are totals; rates are computed by whoever polls. Counters follow names and tags across reloads. Exit counters count inner IP packets and bytes where a packet is handed to or taken from the exit, and a flow that leaves by way of another exit (`via`) is counted on the exit that carries it and not on the exit the rule chose.
@@ -645,7 +645,7 @@ Three things undo replay protection:
 
 - **Never restore the replay file from a backup or a machine snapshot.** An older file reopens replay for everything accepted since it was taken. If in doubt, delete it: that costs 60 seconds of refusals.
 - A reset (below) after the node's clock ran ahead.
-- A lost file on a node whose clock is behind where it has been. Do not start the node before its clock is synchronised.
+- A lost file on a node whose clock is behind where it has been. Do not start the node before its clock is synchronized.
 
 ### When the floor is ahead of the clock
 

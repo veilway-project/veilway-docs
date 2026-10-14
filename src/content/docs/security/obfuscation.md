@@ -17,7 +17,7 @@ This page is for readers who want to know what to expect, in plain words. The ex
 
 **Encryption** keeps what you send unreadable. In Veilway that is WireGuard, a published and widely examined design, used unchanged. It does not depend on anything on this page.
 
-**Obfuscation** tries to keep the connection from being recognised as a VPN and blocked. That is the layer this page is about. It is new, it is built by this project from standard parts, and nobody outside the project has checked it.
+**Obfuscation** tries to keep the connection from being recognized as a VPN and blocked. That is the layer this page is about. It is new, it is built by this project from standard parts, and nobody outside the project has checked it.
 
 If the obfuscation fails, your traffic is still encrypted. What you lose is the cover: someone watching the network may be able to tell that you use Veilway, or that a server is a Veilway node.
 
@@ -25,7 +25,7 @@ If the obfuscation fails, your traffic is still encrypted. What you lose is the 
 
 It tries to do three things:
 
-1. Remove the fixed bytes and exact packet sizes by which WireGuard is recognised.
+1. Remove the fixed bytes and exact packet sizes by which WireGuard is recognized.
 2. Make a server answer everyone who is not a user either with nothing, or with the pages of the operator's own web site.
 3. Give the app several ways to reach a server, so that blocking one address or one name is not the end.
 
@@ -35,7 +35,7 @@ It tries to do three things:
 - **It does not hide how much you send, when, or in which direction.** A long connection that carries a lot of data to one address is visible on every transport.
 - **It does not hide your address** from the network, from the server, or from a content delivery network (CDN) in between.
 - **It does not hide you from the server's operator.** The operator sees your address, your account, every site you reach and every name you look up. Veilway is a VPN, not an anonymity network.
-- **It does not help on a network that only allows what it recognises**, that blocks a whole CDN, or that blocks the server's address when there is no other way in.
+- **It does not help on a network that only allows what it recognizes**, that blocks a whole CDN, or that blocks the server's address when there is no other way in.
 - **It does not protect a device or a server that someone else controls.**
 
 ## Who it is designed against
@@ -54,7 +54,7 @@ It is not designed against someone who watches both your connection and the serv
 
 Two transports are built, `udp` and legacy `ws`. Neither is obfuscation, and both are rated Detectable.
 
-- `udp` is plain WireGuard. It is recognised by its first bytes and its packet sizes.
+- `udp` is plain WireGuard. It is recognized by its first bytes and its packet sizes.
 - Legacy `ws` puts WireGuard inside a WebSocket inside TLS. That looks like obfuscation and is not: the server answers any stranger in a way that identifies it, WireGuard's packet sizes show through, and the app's TLS does not look like a browser's (threat model G1, G14).
 
 Everything else on this page is specified and not built.
@@ -85,8 +85,8 @@ Limits that every obfuscated transport shares:
 - **The first moments of a connection have a fixed order.** Padding changes the sizes, not the order.
 - **Regular small exchanges remain.** WireGuard renews its keys every minute or two, and an idle tunnel sends a small packet and gets one back. Their sizes and times are varied, and they still happen.
 - **Large transfers show a steady packet size.**
-- **What the apps inside the tunnel do shows through as a pattern of sizes.** Published research has recognised tunnels by the TLS handshakes of the apps inside them. Nothing here defends against that.
-- **The app's own TLS has to look like a browser's, and browsers change.** A copy that was right for one browser release becomes rare, and so recognisable, when that release ages.
+- **What the apps inside the tunnel do shows through as a pattern of sizes.** Published research has recognized tunnels by the TLS handshakes of the apps inside them. Nothing here defends against that.
+- **The app's own TLS has to look like a browser's, and browsers change.** A copy that was right for one browser release becomes rare, and so recognizable, when that release ages.
 - **Switching between transports is visible.** An app that tries one way in, then another, then a third, shows a pattern. An app that sends random-looking UDP to an address and then opens a TLS connection to the same address has pointed at that address.
 - **A stranger's answer comes through the node.** It arrives a little later than it would from the web site itself, and that can be measured.
 
@@ -126,7 +126,7 @@ Some of these techniques lean on people who did not ask to be involved. The spec
 The core computes a rating for each profile from the settings that are actually in force, and a provider cannot raise it. The rating is a word for operators: the panel and these pages use it. The app does not show it, because a label scares some users and makes others too sure of themselves. The app shows only the connection's name, and for an Unsafe profile a plain warning and one explicit tap before it connects.
 
 - **Unsafe**: certificate checking is switched off, or there is no encryption.
-- **Detectable**: encrypted, and recognisable. A censor can see that this is a tunnel and can block it, without reading what is inside.
+- **Detectable**: encrypted, and recognizable. A censor can see that this is a tunnel and can block it, without reading what is inside.
 - A `tls` profile whose certificate is self-signed and pinned in the signed subscription is not Unsafe: the pin is a check, and a stricter one than a public authority's. It is Detectable, and a self-signed certificate is one more thing a censor can notice.
 - **A higher rating** exists in the plan under the name "Protected": a censor that watches the connection would see what looks like an ordinary site. In version 1 no native profile gets it.
 
@@ -173,7 +173,7 @@ For users:
 - Keep your subscription private. Do not post it or share a screenshot of it.
 - Keep your device's clock right. The app refuses to guess when it is wrong.
 - Prefer a profile on a name the provider owns. The app does not label profiles; if it warns that a profile is unsafe, take that seriously.
-- When the app asks whether it may use a lower class of transport, the honest answer to "is this easier to recognise?" is yes.
+- When the app asks whether it may use a lower class of transport, the honest answer to "is this easier to recognize?" is yes.
 
 For operators:
 
@@ -189,7 +189,7 @@ For operators:
 
 | Question | Default this draft takes |
 |---|---|
-| Should "Protected" be renamed, or the rating split into "encrypted" and "hard to recognise"? | Undecided. Version 1 gives no native profile a rating above Detectable, so the question does not block it. |
+| Should "Protected" be renamed, or the rating split into "encrypted" and "hard to recognize"? | Undecided. Version 1 gives no native profile a rating above Detectable, so the question does not block it. |
 | Should `faketls` be built? | Not decided. It is not specified. |
 | How does the app learn that a weaker service shares a server's address? | It computes what it can from its own subscription. Beyond that, through a cap in the signed profile that can only lower the rating, which depends on a provider that tells the truth. |
 | How much later does a stranger's answer arrive through the node? | Not measured. |

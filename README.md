@@ -17,7 +17,7 @@ The source of the Veilway documentation site, in English and Persian.
 </p>
 
 <p align="center">
-<a href="LICENSE"><img alt="licence" src="https://img.shields.io/badge/licence-Apache--2.0-blue"></a>
+<a href="LICENSE"><img alt="license" src="https://img.shields.io/badge/license-Apache--2.0-blue"></a>
 </p>
 
 ## What it is
@@ -66,6 +66,6 @@ npm run build
 
 Add or change a page in both languages in the same change. Examples must use placeholder names and addresses only (`example.com`, `192.0.2.0/24`), never real servers or keys.
 
-## Licence
+## License
 
 Apache-2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).

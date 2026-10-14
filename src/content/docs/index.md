@@ -1,6 +1,6 @@
 ---
 title: Introduction
-description: What Veilway is and how this documentation is organised.
+description: What Veilway is and how this documentation is organized.
 ---
 
 :::caution[Not written yet]
@@ -14,4 +14,4 @@ This page will explain:
 - what Veilway is and who it is for
 - the main parts (core, panel, clients) and how they fit together
 - which features exist today and which are only planned
-- how the rest of the documentation is organised
+- how the rest of the documentation is organized

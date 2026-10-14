@@ -21,7 +21,7 @@ Two rules shape everything on this page:
 | Address | The gateway address of the inbound, IPv4 or IPv6 |
 | Port | TCP 47873 for the channel. UDP 47873 for MTU probes only. Fixed, not configurable. |
 | Inbound types | `veilway` only. On a `wireguard` inbound the port is not served and the gateway answers DNS and nothing else, as today. |
-| Carried in | Plain TCP inside the tunnel. No TLS: the tunnel already encrypts and authenticates, and a TLS handshake inside the tunnel would add a recognisable pattern. |
+| Carried in | Plain TCP inside the tunnel. No TLS: the tunnel already encrypts and authenticates, and a TLS handshake inside the tunnel would add a recognizable pattern. |
 | Routing | Handled by the node before the routing rules and before any exit, the way gateway DNS is. No rule can block, redirect or open it. `dns.hijack` has no effect on it. |
 | Counting | Its bytes are inner IP bytes like any others and count towards usage. |
 
@@ -42,7 +42,7 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Node message | `length` at most 65,535 |
 | Messages from one device, of every type | 10 at once, then 1 a second. Over it: `error` code 1. |
 | `set_exit` from one device | 3 at once, then 1 every 5 s. Over it: `exit_result` status 2. |
-| Exits in a catalogue | at most 256, at most 64 per message |
+| Exits in a catalog | at most 256, at most 64 per message |
 | Notices | at most 4, each shown cut to 280 bytes |
 | Hints | at most 16 |
 | Usage push | not sooner than a time drawn uniformly from 30 to 90 s after the last one |
@@ -89,7 +89,7 @@ Every text that a provider or a node wrote goes through one filter before it is 
 
 **What it removes.** Control characters, bidirectional formatting characters, zero-width and other invisible characters, and also U+2800, U+FFF0 to U+FFF8, U+FFFC, U+13430 to U+1343F, U+1BCA0 to U+1BCA3, private use characters and noncharacters.
 
-**The two joiners.** U+200C (zero width non-joiner) and U+200D (zero width joiner) are invisible, and they are also part of correct spelling: standard Persian uses U+200C inside words, and several scripts of South Asia need one or the other. So they are kept in exactly the places where the contextual rules of RFC 5892 (appendix A, the rules for these two characters) keep them, narrowed to one script, and removed everywhere else. The rule is applied to the text after everything else above has been removed. It uses three Unicode properties of the neighbouring characters: Joining_Type, Canonical_Combining_Class and Script.
+**The two joiners.** U+200C (zero width non-joiner) and U+200D (zero width joiner) are invisible, and they are also part of correct spelling: standard Persian uses U+200C inside words, and several scripts of South Asia need one or the other. So they are kept in exactly the places where the contextual rules of RFC 5892 (appendix A, the rules for these two characters) keep them, narrowed to one script, and removed everywhere else. The rule is applied to the text after everything else above has been removed. It uses three Unicode properties of the neighboring characters: Joining_Type, Canonical_Combining_Class and Script.
 
 1. A joiner that stands directly next to another joiner is removed, and so is the other.
 2. **After a virama.** U+200C or U+200D is kept when the character directly before it has Canonical_Combining_Class 9 (a virama), and the first character after it is a letter (General_Category L) whose Script is the Script of the letter that the virama follows, and the virama's own Script is that same Script. The letter that the virama follows is the character directly before the virama. With a nukta or any other mark between them, the joiner is removed. So a Latin letter, a Devanagari virama, a joiner and a Latin letter lose the joiner.
@@ -184,7 +184,7 @@ Node to client:
 | `0x81` | `hello_reply` | `version` (1), `node_nonce` (32) |
 | `0x82` | `auth_ok` | `node_mac` (32) |
 | `0x90` | `session` | `node_time` (8, Unix seconds), `mtu` (2), family count (1, 1 or 2), then per family: the device's address and the gateway address. Families appear in the order IPv4 then IPv6, each at most once, and both addresses of an entry are of the same family. Anything else is malformed. |
-| `0x91` | `exits` | `flags` (1: bit 0 set on the last message of a catalogue, every other bit zero), entry count (1, at most 64), entries |
+| `0x91` | `exits` | `flags` (1: bit 0 set on the last message of a catalog, every other bit zero), entry count (1, at most 64), entries |
 | `0x92` | `exit_result` | `status` (1), the tag now selected (empty when none) |
 | `0x93` | `usage` | `used_bytes` (8), `quota_bytes` (8, 0 for none), `period` (1: 0 none, 1 daily, 2 weekly, 3 monthly), `period_start` (8, Unix seconds), `expires_at` (8, Unix seconds, 0 for none), lifetime `up_bytes` (8), lifetime `down_bytes` (8) |
 | `0x94` | `notices` | Count (1, at most 4), then per notice: `severity` (1: 0 information, 1 warning), text (shown cut to 280 bytes) |
@@ -207,16 +207,16 @@ An `exits` entry:
 
 "The user's configured exit" is the exit a device without a selection leaves through: the user's `exit`, or `routing.default` when the user has none. "Working" is always set for a `netstack` exit, set for an `l3` exit while its interface is up, and never set for a `block` exit.
 
-A catalogue is one or more `exits` messages, the last with bit 0 of `flags` set. `refresh` asks for the snapshot again.
+A catalog is one or more `exits` messages, the last with bit 0 of `flags` set. `refresh` asks for the snapshot again.
 
-A catalogue has exactly one encoding, and the client checks it as a whole:
+A catalog has exactly one encoding, and the client checks it as a whole:
 
 - Every message that is not the last carries exactly 64 entries. The last carries 1 to 64, or 0 only when it is the only message and the user has no exits.
 - No tag appears twice.
 - At most one entry has the "this device's selection" bit, and at most one has the "user's configured exit" bit.
 - At most 256 entries in all.
 
-A catalogue that breaks any of these is dropped whole, nothing of it is shown, and the client closes the connection.
+A catalog that breaks any of these is dropped whole, nothing of it is shown, and the client closes the connection.
 
 ### Errors
 
@@ -261,7 +261,7 @@ A device's tunnel addresses are fixed in the node's config, and WireGuard needs 
 
 What the client does with `session`:
 
-| Case | Client behaviour |
+| Case | Client behavior |
 |---|---|
 | Same values as the profile | Nothing |
 | Anything else: a different address or gateway, a family the profile lacks, a family the node lacks | Keeps the profile's values, shows that the profile is out of date, and refreshes the subscription within the limit in the table of numbers, through the tunnel |
@@ -307,7 +307,7 @@ The value from `set_mtu` is the MTU of the tunnel towards that one device. It la
 
 | Packet headed to the device, larger than its MTU | What the node does |
 |---|---|
-| TCP that the node itself ends (a `netstack` exit) | Does not arise for connections opened after the MTU was lowered: the node honours the segment size the device announces when it opens a connection. A connection that was open before is fragmented by the node as the sending host. |
+| TCP that the node itself ends (a `netstack` exit) | Does not arise for connections opened after the MTU was lowered: the node honors the segment size the device announces when it opens a connection. A connection that was open before is fragmented by the node as the sending host. |
 | UDP that the node itself builds (a `netstack` exit) | Fragments it as the sending host: IPv4 fragments, or IPv6 fragments made at the source. The fragment identification is counted per device and starts at a random value. |
 | IPv4 that the node forwards (an `l3` exit), fragmentation allowed | Fragments it. |
 | IPv4 that the node forwards with fragmentation prohibited, and any forwarded IPv6 | Drops it and sends the sender the ICMP error "fragmentation needed" or "packet too big" with the device's MTU, within the node's ICMP rate limits. |
@@ -325,7 +325,7 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 4. **What it changes.** Only flows that the rules send to `"user"`, or that match no rule. A rule that names an exit is not affected, and entitlement still applies to every flow.
 5. **Live flows.** On a successful `set_exit` the node ends the flows of that device whose decision came from `"user"`, the way it ends flows on a cut-off (a reset for TCP, an ICMP error for UDP). Their next packets are decided again and leave through the new exit. A TCP connection cannot move to another exit address, so it is broken on purpose and not left to hang. The tunnel itself does not reconnect.
 6. **Cost.** The node rechecks only that device's flows, at most 512, and does it without holding the flow table's lock for the whole check. It must not run the full recheck that a reload runs (threat model G31).
-7. **Catalogue.** It holds only the exits in the user's `exits`. It says nothing of backends, outbounds or upstream addresses. "Working" and "load" are coarse on purpose.
+7. **Catalog.** It holds only the exits in the user's `exits`. It says nothing of backends, outbounds or upstream addresses. "Working" and "load" are coarse on purpose.
 
 ## Usage, notices and hints
 
@@ -337,9 +337,9 @@ A device may choose which exit the action `"user"` means for it. The meaning of 
 
 ### Languages
 
-The channel carries one string for an exit's name and one for a notice's text, and that does not change. Translations come from the signed subscription, which already holds them (see "Text in several languages" on the subscription format page). The client joins the two by one rule: **a translation from the subscription is used only when the subscription's `default` is, byte for byte, the text the node sent.** The comparison is on the raw UTF-8 bytes as they arrived on the channel and the raw `default` as decoded from the document, before any filter or cut, with no normalisation.
+The channel carries one string for an exit's name and one for a notice's text, and that does not change. Translations come from the signed subscription, which already holds them (see "Text in several languages" on the subscription format page). The client joins the two by one rule: **a translation from the subscription is used only when the subscription's `default` is, byte for byte, the text the node sent.** The comparison is on the raw UTF-8 bytes as they arrived on the channel and the raw `default` as decoded from the document, before any filter or cut, with no normalization.
 
-- **An exit's name.** The node sends the exit's tag and its name. When the subscription's catalogue for this profile has an exit with the same tag whose name has that same `default`, the app shows the subscription's name, picked for the app's language. In every other case it shows the name the node sent. A signed label that has gone stale must not sit on an exit whose meaning the operator has changed. The node's config judges an exit's name with the display filter of this page: a name that the filter would change is refused when the config is validated. A correctly spelled Persian name with U+200C is therefore accepted, and a joiner between Latin letters is not. The config reference still states the older rule for an exit's `name` and is to be brought in line.
+- **An exit's name.** The node sends the exit's tag and its name. When the subscription's catalog for this profile has an exit with the same tag whose name has that same `default`, the app shows the subscription's name, picked for the app's language. In every other case it shows the name the node sent. A signed label that has gone stale must not sit on an exit whose meaning the operator has changed. The node's config judges an exit's name with the display filter of this page: a name that the filter would change is refused when the config is validated. A correctly spelled Persian name with U+200C is therefore accepted, and a joiner between Latin letters is not. The config reference still states the older rule for an exit's `name` and is to be brought in line.
 - **A notice.** The node sends its text. The client looks for a notice with that same `default`, first in the `notices` of the profile it is connected through and then in the subscription's own `notices`, and shows that notice's text in the app's language. With no match it shows the text the node sent, which is in the node's default language.
 - **Severity** is always the one the node sent.
 - **A matched notice is shown once.** When a node's notice matches one of the subscription's own notices, the two are one notice on the screen, not two.
@@ -360,8 +360,8 @@ A compromised node is a malicious provider. This table is the whole list of valu
 | `mtu` in `session` and `mtu_result` | 1280 to the `mtu` of the signed profile | Lowers the tunnel MTU to it. A value outside the bound is ignored. |
 | Addresses and gateways | None needed | Compares them with the profile and reports a difference. Applies nothing. |
 | `node_time` | None needed | Shows a warning. Sets no clock. |
-| Exit catalogue | At most 256 entries, and the checks under "Messages". A name is first filtered (control, bidirectional formatting, zero-width and other invisible characters are removed) and then cut to 64 characters. A name that is too long for the screen is cut, never a reason to close the connection. Tags need no filter. | Shows it. A later catalogue replaces the earlier one. A catalogue that fails a check is dropped whole and closes the connection. |
-| Selected exit | Must be a tag in the catalogue | Shows it. |
+| Exit catalog | At most 256 entries, and the checks under "Messages". A name is first filtered (control, bidirectional formatting, zero-width and other invisible characters are removed) and then cut to 64 characters. A name that is too long for the screen is cut, never a reason to close the connection. Tags need no filter. | Shows it. A later catalog replaces the earlier one. A catalog that fails a check is dropped whole and closes the connection. |
+| Selected exit | Must be a tag in the catalog | Shows it. |
 | Usage | Integers, clamped to 9007199254740991 | Shows it. |
 | Notices | At most 4. Each is filtered as names are and then cut to 280 bytes, at a character boundary. A longer notice is cut, never a reason to close the connection. | Shows them as plain text in the area for provider content, apart from the app's own interface. Nothing in a notice is a link and nothing in it can be opened. |
 | Hints | At most 16, each index inside the profile's lists | May try a hinted candidate before others of the same transport. An index outside the lists is ignored. |
@@ -381,7 +381,7 @@ A device that holds a valid key is authenticated and still hostile.
 |---|---|
 | Act as another user or device | Identity is the tunnel peer. No field names anyone. The credential is bound to the device's own key. |
 | Select an exit it is not entitled to | Refused, with the same answer as for a tag that does not exist. |
-| Learn what exits or users exist | The catalogue holds only that user's exits. |
+| Learn what exits or users exist | The catalog holds only that user's exits. |
 | Flood the channel | Rate limits per device, two small pools of connections per device, a fixed time to authenticate. Over the limit the node answers a 5 byte error or closes. |
 | Guess the credential | The key is 32 random bytes. No lockout is needed, and none exists that other software on the device could turn against the user. |
 | Make the node work hard with `set_exit` | Its own rate limit, and the recheck touches only that device's flows. |
@@ -432,7 +432,7 @@ Each is listed with the default this draft takes.
 | Is re-confirming the MTU on a timer worth two large packets every few minutes on a datagram transport? | Yes. Without it a shrinking path breaks the tunnel until the next reconnect. |
 | Is probing right after connecting worth its pattern? | Yes when no result is remembered for the network, because a wrong MTU breaks the tunnel in ways users cannot diagnose. |
 | The credential is per connection, not a MAC on every message | Per connection, for the reason given under "The credential". |
-| Should the catalogue carry load and whether an exit works, as the plan lists? | Yes, coarsely: one bit and four levels. What "working" means for each backend is not defined yet. |
+| Should the catalog carry load and whether an exit works, as the plan lists? | Yes, coarsely: one bit and four levels. What "working" means for each backend is not defined yet. |
 | May a hint name an address that is not in the signed profile? (threat model Q6) | No. |
 | Is `bye` worth what it tells a device about its account? | Yes. The device learns only what its own user could ask the provider. |
 | Where notices come from | A proposed top-level `notices` key in the config. Not in the config reference yet. A notice's `text`, and an exit's `name`, may be a string or a map of language tags to strings with a `default`. The node sends the default, and the panel puts the whole map in the subscription. |

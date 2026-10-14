@@ -136,7 +136,7 @@ Each construction follows a published design. Where it departs from that design,
 |---|---|---|
 | Stream proof | HPKE base mode used as in Oblivious HTTP (RFC 9458): the client seals a small message to the server's static key, and both sides take further keys from the HPKE exporter | The message is a device tag, a timestamp and a binder, not a request |
 | Proof binder | The pre-shared key binder of TLS 1.3 (RFC 8446, section 4.2.11.2): an HMAC under a key derived from the shared secret, over a value that is unique to this exchange | The value is an HPKE exporter output followed by the message fields themselves, where TLS uses a hash of the handshake transcript. As in TLS, the binder covers the message it vouches for. |
-| Epoch tag | Time-based one-time passwords (RFC 6238): a truncated HMAC of a time step under a shared key, with the neighbouring steps accepted | 16 bytes, not decimal digits |
+| Epoch tag | Time-based one-time passwords (RFC 6238): a truncated HMAC of a time step under a shared key, with the neighboring steps accepted | 16 bytes, not decimal digits |
 | Tag mask | QUIC header protection (RFC 9001, section 5.4): header bytes are XORed with the output of a keyed function over bytes sampled from the same packet. The mask key comes from the inbound's public key, as WireGuard keys its first handshake check. | HMAC-SHA-256 as the keyed function |
 | `udp-obfs` envelope | Shadowsocks AEAD: a session key from HKDF of a pre-shared key and a random salt. Shadowsocks 2022: a timestamp and a salt check against replay | The device is found by the epoch tag. Data packets use random nonces under a packet limit. |
 | Chunk | TLS 1.3 record padding (RFC 8446, section 5.4): padding inside the encryption. WireGuard's counter nonce layout. | Several datagrams per chunk |
@@ -277,7 +277,7 @@ Rules:
 
 Inside a stream transport, the tunnel's own TCP connections run on top of the transport's TCP connection. When the outer connection loses one segment, everything behind it waits, and the inner connections also see the delay and slow down. This cannot be designed away. These rules reduce it:
 
-1. **Datagram transports perform better, and are easier to recognise.** Which comes first is a choice the profile and the user make, under "Transport fallback". This page does not prefer one.
+1. **Datagram transports perform better, and are easier to recognize.** Which comes first is a choice the profile and the user make, under "Transport fallback". This page does not prefer one.
 2. **No second retransmission layer.** A transport never retransmits a chunk or a datagram, and never acknowledges one. Loss recovery belongs to the outer TCP connection alone, and to the applications inside the tunnel.
 3. **Drop, do not queue.** Each connection has a send queue of 256 datagrams. When it is full, new datagrams are dropped and counted. The applications inside then see loss and slow down, which is what they would do on a real network. An unbounded queue would turn loss into seconds of delay.
 4. **Parallel connections.** A client uses 1 connection per tunnel by default. A profile may allow up to 4. When more than one is open:
@@ -421,7 +421,7 @@ What each event does to the cache, the floor and the limit. In every row, "nothi
 
 - A replay file restored from a backup or a machine snapshot. It is older than the truth and reopens replay for everything accepted since it was taken. Delete it. Do not restore it.
 - A reset after a clock fault, for proofs accepted during the fault with timestamps above the new floor.
-- A lost or unusable file while the node's clock is behind where it has been. The no-file row sets the floor from the clock. If the clock is stale, for example on a machine that boots before its time is synchronised, on the same boot that lost the file, the floor is below proofs the node accepted before, and those can be used again inside their window. Nothing in the file can protect against this, since the file is what was lost. A node should not start its obfuscated transports before its clock is synchronised.
+- A lost or unusable file while the node's clock is behind where it has been. The no-file row sets the floor from the clock. If the clock is stale, for example on a machine that boots before its time is synchronized, on the same boot that lost the file, the floor is below proofs the node accepted before, and those can be used again inside their window. Nothing in the file can protect against this, since the file is what was lost. A node should not start its obfuscated transports before its clock is synchronized.
 
 ### When the floor is ahead of the clock
 
@@ -495,7 +495,7 @@ Bytes 1 to 3 of every message are zero.
 
 **Limits.** WireGuard's handshake load limit, one counter per inbound. Cookie replies begin above 100 handshake messages a second on an inbound.
 
-**Errors and decoy behaviour.** There is no decoy. The node sends nothing to a datagram that fails WireGuard's first check, or to a handshake from a key that is not a device. Two known exceptions: above the inbound's handshake load limit the node sends a cookie reply to anyone who can compute the first check, which needs only the inbound's public key, and after a restart a replayed handshake initiation is answered (threat model G18).
+**Errors and decoy behavior.** There is no decoy. The node sends nothing to a datagram that fails WireGuard's first check, or to a handshake from a key that is not a device. Two known exceptions: above the inbound's handshake load limit the node sends a cookie reply to anyone who can compute the first check, which needs only the inbound's public key, and after a restart a replayed handshake initiation is answered (threat model G18).
 
 **What it does not hide.** Anything. The type byte, the zero bytes and the sizes identify WireGuard to any observer. Its class is plain and it is rated Detectable.
 
@@ -503,7 +503,7 @@ Bytes 1 to 3 of every message are zero.
 
 `udp-obfs` wraps every WireGuard datagram in a ChaCha20-Poly1305 envelope keyed by the device transport secret, so that an observer without a subscription sees no fixed or repeated byte and no length that is one of WireGuard's.
 
-The plan describes this transport as "randomised headers, junk packets and padding". This draft has padding and padding-only packets and no junk before the first packet. See "Open questions".
+The plan describes this transport as "randomized headers, junk packets and padding". This draft has padding and padding-only packets and no junk before the first packet. See "Open questions".
 
 ### Keys
 
@@ -581,7 +581,7 @@ A change of the client's address that the client cannot see (a rebinding in a ne
 - **Work per packet.** A datagram from a stranger costs the node one HMAC and one table lookup, and a miss is dropped right after the lookup. Nothing is derived or decrypted with a dummy key for a miss: the node answers nothing on either path, so there is no timing for a stranger to compare. A datagram whose unmasked tag is in the table costs one key derivation and one decryption more. The two data keys of the session, `k_c2s` and `k_s2c`, are derived only after the replay rule has accepted the opening packet. None of this involves a public key operation.
 - **Table size.** The tag table holds three epoch tags per device secret. A node at the upper limits of the config holds millions of entries and must budget memory for that.
 
-### Errors and decoy behaviour
+### Errors and decoy behavior
 
 There is no decoy and there are no error messages. Every drop is silent and counted by reason. Two reasons that look alike are counted apart: a tag that is not in the table, and a tag that is in the table on a packet that does not open. A prober that does not hold a device secret gets no reply, whatever it sends and however often.
 
@@ -591,11 +591,11 @@ One case gives a reply to someone without a secret: an interferer on the path th
 
 ### What `udp-obfs` does not hide
 
-- It imitates nothing. Every byte is uniformly random, and traffic that is random from its first byte is a class of its own. A network that passes only protocols it recognises, or that drops or slows unknown UDP, stops it.
+- It imitates nothing. Every byte is uniformly random, and traffic that is random from its first byte is a class of its own. A network that passes only protocols it recognizes, or that drops or slows unknown UDP, stops it.
 - A port that answers no probe and carries sustained random-looking UDP.
 - Full-size inner packets give datagrams of exactly `mtu` + 62 bytes, so a bulk transfer shows a plateau.
 - From anyone who holds a subscription of the same inbound: `k_mask`. Such a holder can remove the mask and sees that two opening packets in the same epoch come from the same device, on any network. It cannot tell which device, and cannot open the packets.
-- Whoever holds a device's transport secret (the node, a leaked subscription, a seized client) computes that device's tags for any epoch, past or future, recognises that device's recorded opening packets, and removes the envelope from that device's recorded packets. What is under the envelope is still WireGuard and stays encrypted.
+- Whoever holds a device's transport secret (the node, a leaked subscription, a seized client) computes that device's tags for any epoch, past or future, recognizes that device's recorded opening packets, and removes the envelope from that device's recorded packets. What is under the envelope is still WireGuard and stays encrypted.
 - There is no cover protocol to compare against, so the length and timing test of the threat model (invariant 7) cannot be passed. `udp-obfs` is rated Detectable and stays so.
 
 ## Stream listeners: what `tls`, `ws` and `fronted` share
@@ -688,11 +688,11 @@ Rules:
 
 The decision point for a direct peer is the end of the request line, or the first byte that cannot belong to one. For a proxy peer it is the end of the request head.
 
-### Errors and decoy behaviour
+### Errors and decoy behavior
 
 | Condition | What the node does | What the peer sees |
 |---|---|---|
-| Any proof that fails any check, a wrong path, a malformed request, a request that is not HTTP | Relays to the decoy origin | The origin's answer, bytes and close behaviour |
+| Any proof that fails any check, a wrong path, a malformed request, a request that is not HTTP | Relays to the decoy origin | The origin's answer, bytes and close behavior |
 | A pool is full | As the table of pools says | Nothing, or for a stranger whose relayed connection was the idlest or the oldest, a close |
 | The decoy origin cannot be reached, and the peer is not a user | Closes the peer's connection at the decision point, counts it as `decoy_down`, logs at warn at most once a minute | A closed connection with no answer. A node whose decoy is down can be identified for as long as that lasts. Users are not affected. |
 | The TLS handshake of a `tls` listener is not finished in time, or its connection is displaced before it finishes | Closes the connection | A close during the handshake |
@@ -702,7 +702,7 @@ The node never sends an error page, a status line or a header of its own to some
 
 **The node as a relay.** Everything a stranger sends to a stream listener reaches the operator's own decoy origin and nowhere else. The node is not an open relay: the destination is fixed and cannot be chosen by the peer. It does not amplify: it sends a stranger only what the origin answered.
 
-**Timing.** The node does not do identical work for every input, and nothing on this page should be read as saying so. What is equalised: every request from a direct peer that passes the syntactic test goes through steps 1 to 4 of "Verifying", with dummy inputs where needed, and every other input is forwarded as it arrives. What is left is in the table below. The figures are one measurement, in October 2026, on one machine, of the first implementation. They record what was seen. They are not a requirement on an implementation.
+**Timing.** The node does not do identical work for every input, and nothing on this page should be read as saying so. What is equalized: every request from a direct peer that passes the syntactic test goes through steps 1 to 4 of "Verifying", with dummy inputs where needed, and every other input is forwarded as it arrives. What is left is in the table below. The figures are one measurement, in October 2026, on one machine, of the first implementation. They record what was seen. They are not a requirement on an implementation.
 
 | Input | Time against a token that is accepted (about 46 microseconds) | What it could tell |
 |---|---|---|
@@ -712,7 +712,7 @@ The node never sends an error page, a status line or a header of its own to some
 | Not base64url, or not of a token's size | about 0.6 microseconds less | Nothing: it depends only on bytes the peer chose. |
 | What follows the verdict: steps 5 to 7 and a session for a token that passed, the decoy for one that did not | not measured, and larger than the others | Whether a token passed steps 1 to 4, to someone able to make such a token. |
 
-The whole spread of the first four rows is under 1 microsecond. The judgement for version 1: that is not measurable across a wide-area path, where it sits behind the hop from the node to the decoy origin, and is at the edge of what can be measured on a local network. It is stated, not removed, and a timing check in the test suite is to catch a change that adds or drops a whole operation. Against the origin itself, an answer through the node is later by the hop from node to origin, and a request line that arrives slowly is held until its end. Those two are far larger, a prober can measure them, and they are to be published per transport with the probe test of the threat model.
+The whole spread of the first four rows is under 1 microsecond. The judgment for version 1: that is not measurable across a wide-area path, where it sits behind the hop from the node to the decoy origin, and is at the edge of what can be measured on a local network. It is stated, not removed, and a timing check in the test suite is to catch a change that adds or drops a whole operation. Against the origin itself, an answer through the node is later by the hop from node to origin, and a request line that arrives slowly is held until its end. Those two are far larger, a prober can measure them, and they are to be published per transport with the probe test of the threat model.
 
 **The differential test.** "A stranger gets what the origin gives" is decided by a test, and no stream transport is rated above Detectable without it. The test sends the same inputs to the node and to its origin from one place and compares three things: the bytes that come back, whether the connection is left open or closed and how, and the time of a close or of the first byte. It must include a connection that sends nothing, a request that is never finished, and an answer larger than a socket buffer read by a peer that reads slowly. Comparing bytes alone does not find a node that answers correctly and late, or one that cuts a long answer. What the implemented test covers today: 28 kinds of request against one web server product; a second, hand-written origin for large answers that are read late and paced; an early `408`; a real WebSocket endpoint of the origin reached through the relay; a reset in the middle of an answer; an early answer to an upload; and a client that offers only `h2`. What it does not cover: any second web server product, any distribution of timings as opposed to single cases, and anything at the TLS layer. "The test passes" means exactly that list and no more. For the proxy path, what exists: 49 kinds of request against one web server product through a front written for the test; a hand-written origin for large answers that are read late; and a run between real servers, with nginx in front and first nginx, then HAProxy, as the origin, in which 18 kinds of request gave the same bytes and the same end, and a device connected over `ws` and one over `fronted` through the real front. What does not exist: any CDN, any other web server product, any distribution of timings, and an unrequested `408` from a real server, which was tested from a stub only.
 
@@ -762,7 +762,7 @@ The node ends TLS itself, with a certificate for a name the operator owns.
    - **A certificate from an authority** (the default): the chain validates for the name, and the leaf's public key matches a pin in the profile (SHA-256 of the SubjectPublicKeyInfo). The pin is a second condition here, never a replacement. A private authority is used by giving the client its root, and a certificate placed in the client's root store is a trust anchor whatever it says of itself.
    - **A self-signed certificate**, only on a candidate whose `self_signed` member is `true`: the chain, the name and the validity dates are not checked. The leaf's public key must match a pin of that candidate. **The TLS 1.3 handshake's signature is always verified against that pinned key**, with the signature schemes TLS 1.3 allows, by the TLS library's own verification of the handshake: only the checks of the chain, the name and the dates are skipped. A pin is the hash of a public key, and a certificate is public, so the pin means something only because the server proves it holds the private key. A server that presents the pinned certificate without holding its key fails. The dates are not checked because the trust comes from the signed profile, not from the certificate, and checking them would only make a device with a wrong clock fail. What bounds the use of a stolen key instead is the document's lifetime and a refreshed document with a new pin. A candidate without `self_signed` never takes this path, whatever the server sends.
 
-   A certificate that fails the check of its candidate, including a pin that does not match, makes that candidate unreachable for this attempt, at once and with no refusal wait, and the client moves on. It never counts as the node refusing the device, since the answer was not authenticated: it is what an interceptor presents, and on many networks the commonest one. The client records it and tells the user "the server's certificate does not match this profile; the network may be interfering". An empty root store on a candidate from an authority, an Encrypted Client Hello configuration (which the first implementation does not support), and a `host` or `path` that holds a blank, a line end or a `?` end the attempt before anything is dialled.
+   A certificate that fails the check of its candidate, including a pin that does not match, makes that candidate unreachable for this attempt, at once and with no refusal wait, and the client moves on. It never counts as the node refusing the device, since the answer was not authenticated: it is what an interceptor presents, and on many networks the commonest one. The client records it and tells the user "the server's certificate does not match this profile; the network may be interfering". An empty root store on a candidate from an authority, an Encrypted Client Hello configuration (which the first implementation does not support), and a `host` or `path` that holds a blank, a line end or a `?` end the attempt before anything is dialed.
 2. Sends the upgrade request with a fresh token.
 3. On a `101`, sends its first chunk, which holds a WireGuard packet of this device: a handshake initiation, or a keepalive of a tunnel that is already up. On any other HTTP answer it handles a refusal as "Refusals and clocks" says.
 4. Treats the session as open when a chunk from the node has opened.
@@ -798,7 +798,7 @@ The same WebSocket session, behind something else that ends TLS: the operator's 
 
 **Limits.** Those of the stream listener. Behind a proxy every connection has one TCP source, so limits per source work only when `client_address_header` is set. Without it every visitor shares one limit. `trusted_proxies` is always required.
 
-**What a CDN or a front web server sees.** The client's address, the path, the token (opaque, of varying length, different every time), the WebSocket upgrade, and the length and timing of every message. It does not see WireGuard's type bytes or sizes, and it cannot tell which device it is, because the hello is sealed to a key it does not have. A request for a fixed path with a long random query, answered by an upgrade, is still a recognisable shape to whoever ends TLS. Operators should keep the query part of the request out of the front server's access log. A token the node has accepted cannot be used again on that node. A token that was logged on the way and never reached the node can be presented once by whoever holds it, inside its window of about a minute, and opens a pending session that this party cannot establish. Either way a logged token is a record that someone holding the node's transport key could later tie to a device.
+**What a CDN or a front web server sees.** The client's address, the path, the token (opaque, of varying length, different every time), the WebSocket upgrade, and the length and timing of every message. It does not see WireGuard's type bytes or sizes, and it cannot tell which device it is, because the hello is sealed to a key it does not have. A request for a fixed path with a long random query, answered by an upgrade, is still a recognizable shape to whoever ends TLS. Operators should keep the query part of the request out of the front server's access log. A token the node has accepted cannot be used again on that node. A token that was logged on the way and never reached the node can be presented once by whoever holds it, inside its window of about a minute, and opens a pending session that this party cannot establish. Either way a logged token is a record that someone holding the node's transport key could later tie to a device.
 
 ### `ws-plain`: WebSocket without TLS
 
@@ -858,7 +858,7 @@ When a proof is refused, the request with its cookie is forwarded to the decoy o
 - Held back, or copied, and sent first: the node answers `101` and holds a pending session for the sender. That sender cannot seal a chunk, because the session keys come from an exchange it was not part of, so the session is never established, gets no chunk from the node, and ends at the first tunnel packet deadline (10 s, one of the device's two pending places, one accepted proof from its rate). The `101` confirms that the token was valid: a live Veilway node at this address and a user. A guess from the request's shape becomes a confirmation with no false positives. The client's own request then arrives as a replay and gets the decoy's answer.
 - Kept, with a node transport key that later leaks: whoever recorded tokens on the path can open them and link a device's connections. On a plain path that is anyone who keeps traffic records, not only whoever ended TLS. The short key age limits how far back.
 
-**What interference does.** A changed, injected or missing frame makes a chunk fail to open, and the session ends. A forged answer to the upgrade gets the sender nowhere, because no chunk follows that opens. Middleboxes are the common failure, not attackers: a proxy that strips `Upgrade` or `Connection`, a transparent cache, or an "optimising" proxy that rewrites the request breaks the upgrade, and the candidate then does not work on that network.
+**What interference does.** A changed, injected or missing frame makes a chunk fail to open, and the session ends. A forged answer to the upgrade gets the sender nowhere, because no chunk follows that opens. Middleboxes are the common failure, not attackers: a proxy that strips `Upgrade` or `Connection`, a transparent cache, or an "optimizing" proxy that rewrites the request breaks the upgrade, and the candidate then does not work on that network.
 
 **An answer that is not a session.** On a plain connection anyone on the path can inject an answer, so an answer that does not become a session counts as unreachable at once, as a dropped connection would. The client does not treat it as a refusal and does not touch the profile's refusal waits. It sets the candidate aside for about 90 s, which covers a node restart, and moves on. The message says the network or the server answered and that it cannot tell which. The set-aside doubles on each failure in a row of the same candidate, up to the hour an unreachable candidate gets, and returns to 90 s when a session opens. Without that, a device that is over quota, disabled or has a wrong clock would put the server's name and the cookie on the path every 90 s without end, on the most visible transport there is.
 
@@ -969,7 +969,7 @@ The node decides every request in this order, and a request that fails any step 
 5. **The body.** The node reads the whole body, which must arrive within 10 s, before it acts on any of it.
 6. **The chunks.** Every chunk of the body must open under `k_c2s` at the expected chunk numbers. Chunk numbers advance only when the request is accepted. If any chunk does not open, nothing of the body is processed. For a later request the session stays as it was, so a stranger who learns a `sid` cannot disturb it. For an opening request the pending session is dropped at once.
 7. **A chunk that is invalid, in a body whose every chunk opened** (a bad item length), came from the session's client. The session is ended and the request takes the unauthenticated path. A body in which any chunk fails to open is handled by step 6, whatever its other chunks hold.
-8. **A repeat** of the last accepted request with the same body gets the stored response again, because a CDN may retry. The node knows a repeat by the length and the SHA-256 of the last request body, which it keeps with the last response, so a repeat is recognised before anything is opened. A repeat is not activity.
+8. **A repeat** of the last accepted request with the same body gets the stored response again, because a CDN may retry. The node knows a repeat by the length and the SHA-256 of the last request body, which it keeps with the last response, so a repeat is recognized before anything is opened. A repeat is not activity.
 9. **The answer.** The node answers an accepted request as soon as it has downstream data for the session, and otherwise after the hold time, with status 200. Its first answer on a new session comes when the session is established, as on every transport. A session that ends while a request is in flight still answers that request with 200 and what was queued for it.
 
 The client:
@@ -988,13 +988,13 @@ A session with no accepted request for its idle time is forgotten. There is no i
 - The node stores one response per session, for the repeat in step 8. With the cap on `fronted` sessions this bounds the memory: at the default, 1,024 sessions of 65,536 bytes, 64 MiB.
 - At most 2 `fronted` sessions per device. A third displaces the device's oldest `fronted` session at the moment it is established.
 
-### Errors and decoy behaviour
+### Errors and decoy behavior
 
 Those of the stream listener. The node handles every connection request by request, and every request that is not a valid opening or a valid later request of a live session is answered by the decoy origin.
 
 ### What `fronted` does not hide
 
-- The polling: many small requests to one CDN host for as long as the tunnel is up, with near-equal request and response sizes when idle. Published research has recognised polling transports by exactly this rhythm.
+- The polling: many small requests to one CDN host for as long as the tunnel is up, with near-equal request and response sizes when idle. Published research has recognized polling transports by exactly this rhythm.
 - From the CDN: the client's address, the path, the session id on every request, and all sizes and timing. Anyone the CDN answers to has the same.
 - Everything in the list for `tls` and `ws` that concerns the tunnel's own timing. That includes the differences of the proxy path listed there.
 
@@ -1078,7 +1078,7 @@ The sequence can be observed. The random waits blur it and do not remove it.
 
 ## Client TLS and HTTP fingerprint
 
-The first message of a TLS connection, the ClientHello, differs between programs in ways an observer can catalogue. A ClientHello from a general-purpose TLS library does not look like a browser's. The plan is to build the client side of every TLS-based transport on a browser's own TLS library, configured from a fingerprint pack, and to measure the result.
+The first message of a TLS connection, the ClientHello, differs between programs in ways an observer can catalog. A ClientHello from a general-purpose TLS library does not look like a browser's. The plan is to build the client side of every TLS-based transport on a browser's own TLS library, configured from a fingerprint pack, and to measure the result.
 
 | Rule | Value |
 |---|---|
@@ -1090,11 +1090,11 @@ The first message of a TLS connection, the ClientHello, differs between programs
 | Session resumption | Tickets are kept in memory only and never written to disk. |
 | The plain variant, for `ws-plain` | `ws-plain` sends no TLS, so only the HTTP part of the pack applies, and the whole path reads it. The pack holds a fixed set of header fields for a plain upgrade, with fixed values and never `Accept-Language`. What a plausible set is for a plain WebSocket upgrade is unmeasured, so until it is measured the client sends the set the pack names and the page records that it is unmeasured. |
 
-What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognisable.
+What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognizable.
 
-**What the first implementation does.** It does not have the fingerprint pack. Its TLS ClientHello is the TLS library's own and recognisable as such, with `http/1.1` as its only protocol offer, and its request header fields are a short fixed list. Every profile is therefore recognisable by its ClientHello today, which is one more reason every native profile is rated Detectable.
+**What the first implementation does.** It does not have the fingerprint pack. Its TLS ClientHello is the TLS library's own and recognizable as such, with `http/1.1` as its only protocol offer, and its request header fields are a short fixed list. Every profile is therefore recognizable by its ClientHello today, which is one more reason every native profile is rated Detectable.
 
-**A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognisable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
+**A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognizable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
 
 ## `faketls`: goals and open questions only
 
@@ -1105,7 +1105,7 @@ What this does not achieve: the fingerprint is correct for one browser release a
 **Goals, if it is built.**
 
 - A prober that does not hold a device secret gets the borrowed site's bytes on every path, including after a replay.
-- The proof names one device, is bound to that device's WireGuard key, has the replay rule of this page, and cannot be recognised by a holder of another device's subscription.
+- The proof names one device, is bound to that device's WireGuard key, has the replay rule of this page, and cannot be recognized by a holder of another device's subscription.
 - Pressure from strangers lands on strangers first, and what is relayed to the site is capped per source and in total.
 - The client knows it reached the node and not an interceptor, without trusting a certificate.
 
@@ -1113,7 +1113,7 @@ What this does not achieve: the fingerprint is correct for one browser release a
 
 - The node's address is not one of the borrowed site's addresses. One lookup shows that.
 - A stranger's TCP handshake ends at the node and its TLS handshake at the borrowed site, so the two round-trip times differ by the relay hop.
-- It depends on the borrowed site keeping its TLS behaviour, which the site can change at any time.
+- It depends on the borrowed site keeping its TLS behavior, which the site can change at any time.
 
 **What it does to the third party.** Every stranger's connection, and every probe, is relayed to a site whose owner has not agreed to it. The site sees that traffic coming from the node's address. Its name is used to make the node's traffic look like visits to it, and if that is noticed the site may be blocked or its owner questioned. This may break the site's terms of use or the law. If `faketls` is built: the borrowed site is always chosen by the operator, none is suggested or shipped, the config key requires an explicit acknowledgement, and relayed connections are capped so that the node cannot be used to load the site.
 
@@ -1134,7 +1134,7 @@ What this does not achieve: the fingerprint is correct for one browser release a
 
 **Open questions.**
 
-- Whether the proof and the decoy behaviour of the stream listener carry over to HTTP/3, where the request arrives on a stream after the QUIC handshake.
+- Whether the proof and the decoy behavior of the stream listener carry over to HTTP/3, where the request arrives on a stream after the QUIC handshake.
 - Whether a QUIC library's handshake can match a browser's, which is the same fingerprint question as for TLS.
 - The MTU: QUIC adds its own overhead to every datagram.
 - Networks that block or slow UDP stop it, as they stop `udp-obfs`.
@@ -1143,12 +1143,12 @@ What this does not achieve: the fingerprint is correct for one browser release a
 
 | What leaks | What its holder can do | What it cannot do |
 |---|---|---|
-| One subscription (one device's profile) | Connect as that device and so confirm that every node in it is a Veilway node. Read every address, name, path and public key in it, and block them. Recognise and unwrap that device's recorded `udp-obfs` traffic down to WireGuard. Remove the tag mask from any `udp-obfs` opening packet of the inbound and link two of one device within an epoch. | Tell which device another opening packet belongs to. Read or unwrap another device's traffic on any obfuscated transport. Read that device's past tunnel content, which WireGuard's forward secrecy protects. |
+| One subscription (one device's profile) | Connect as that device and so confirm that every node in it is a Veilway node. Read every address, name, path and public key in it, and block them. Recognize and unwrap that device's recorded `udp-obfs` traffic down to WireGuard. Remove the tag mask from any `udp-obfs` opening packet of the inbound and link two of one device within an epoch. | Tell which device another opening packet belongs to. Read or unwrap another device's traffic on any obfuscated transport. Read that device's past tunnel content, which WireGuard's forward secrecy protects. |
 | A node transport private key, current or retired, without the config | Open any token it can get hold of: from a CDN, a front server's log, or an interceptor. Like anyone who holds a token that never reached the node, present it once inside its window, which gives a pending session it cannot establish. Each opened token gives the device's tag, which never changes for a secret, so all tokens of one device can be linked, across time and networks. | Make a proof that a node accepts, or give a logged token a new timestamp: the binder covers the timestamp and the tag and needs the device secret. Use again a token the node accepted: its timestamp is outside the window by the time it has left the replay cache. Read tunnel content. Name the device without the config. |
 | An inbound's WireGuard private key | Impersonate the node to clients. Open the first message of every recorded WireGuard handshake to that inbound and read the static key in it, which names the device. On plain `udp` and legacy `ws` those handshakes are readable on the path. On obfuscated transports they are inside the envelope. | Read past sessions. |
 | The whole node (a compromised node) | Everything above for every device of the node, with names. All traffic through it while compromised: destinations, DNS names, client addresses, timing, and the plaintext of anything not encrypted end to end. Lie on the control channel within the bounds on that page. | Read sessions recorded before the compromise. Use a device's identity on another node, as long as device private keys are not stored on that host, which depends on how the provider generates and keeps keys (threat model Q9). |
 
-A leak is ended by rotation (see the overview). Rotation does not undo what was recognisable in traffic recorded before it. Because a retired transport key still opens old tokens, rotating it on a schedule and destroying the old one is the only thing that limits how far back logged tokens can be tied to devices.
+A leak is ended by rotation (see the overview). Rotation does not undo what was recognizable in traffic recorded before it. Because a retired transport key still opens old tokens, rotating it on a schedule and destroying the old one is the only thing that limits how far back logged tokens can be tied to devices.
 
 ## Security considerations
 
@@ -1159,11 +1159,11 @@ A leak is ended by rotation (see the overview). Rotation does not undo what was 
 - **Replay.** A proof is accepted once, including across restarts and clock steps, by the window, the cache, the floor and the limit. Three things undo that, and each is documented with its cost: restoring an old replay file, `veilway replay reset` after a clock fault, and a lost or unusable file on a node whose clock is behind where it has been. A node that cannot write its limit accepts nothing and says so loudly. The rules of the limit were changed after the first implementation was reviewed, each time because the earlier wording could shut honest clients out with no attack or left a failed write undefined: the limit follows the clock, so that an honest proof on a quiet node never waits for a write. Nothing is derived from the floor after a start, so that a node that crashes in a loop does not raise its own floor. The node judges by the lowest limit that may be on disk, so that a write whose fate is unknown cannot let a proof through. And the node brings its own limit down after a clock fault, so that a later crash does not turn a past fault into an outage. On `udp-obfs` an opening packet travels in the clear, so a packet the node dropped stayed valid for whoever saw it, a few milliseconds later, from any address. That is why the node now keeps a packet that is waiting for a limit and records one that a limit refused, and why the three cases where it cannot are listed under `udp-obfs`.
 - **No failure is latched silently.** Every state in which the node refuses honest clients (floor ahead of the clock, replay file not writable, cache full, decoy down) has a log line, a counter and an end. The floor running ahead after a clock fault is a real outage that lasts as long as the fault was large, unless the operator resets.
 - **Possession of the secret is proven per proof,** by the binder on streams, which covers the timestamp and the tag, and by the sealed opening packet on `udp-obfs`. A proof alone still does not displace a device's sessions: only a session on which that device's WireGuard has authenticated does.
-- **No offline test of a secret.** On `tls`, `ws` and `fronted` the proof is sealed to the node's key, so recorded traffic gives nothing to test a leaked device secret against. On `udp-obfs` this does not hold: a holder of the real secret recognises that device's packets. Secrets are 32 random bytes, so guessing is not possible. Leaking is.
+- **No offline test of a secret.** On `tls`, `ws` and `fronted` the proof is sealed to the node's key, so recorded traffic gives nothing to test a leaked device secret against. On `udp-obfs` this does not hold: a holder of the real secret recognizes that device's packets. Secrets are 32 random bytes, so guessing is not possible. Leaking is.
 - **Binding.** A proof names one device, the session keys and the binder key depend on that device's WireGuard public key, and the node accepts on a session only that device's WireGuard packets.
 - **Finding the device does not depend on the number of devices.** One table lookup, no scan, no early exit. A tag that is found and one that is not differ by a fraction of a microsecond, as "Timing" records.
 - **Timing residuals are real.** The hop to the decoy origin, a slowly sent request line, the node's own TLS stack on `tls`, and the difference between an authenticated and an unauthenticated answer for a subscriber who holds a valid profile.
-- **Every shared default is a signature.** Padding ranges, timers and close behaviour are the same on every installation unless a profile sets them. They are fixed here so that they can be measured, not because they are known to be safe.
+- **Every shared default is a signature.** Padding ranges, timers and close behavior are the same on every installation unless a profile sets them. They are fixed here so that they can be measured, not because they are known to be safe.
 - **A cut is not a refusal.** Only an authenticated close counts as the node saying no. An earlier wording treated any close after the TLS handshake as a refusal, which let one forged reset buy the refusal waits and hold a client on a blocked candidate for hours.
 - **What self-signed certificates cost.** A self-signed certificate on a public address is something a censor can look for: a prober that completes the handshake sees it, and ordinary sites rarely have one. A profile that pins one is still rated Detectable at most, as every `tls` profile is. A new key on the node means a new pin, and a node that runs never makes one: if the key file is gone or changed it keeps the certificate it has and warns. The key files are named by the inbound's tag, so renaming a tag makes a new key too, so rotating it means a refreshed document for every user, and a client that has not refreshed meets a certificate that does not match. Making the next key ahead of time and pinning both avoids that. The trust rests entirely on the signed profile: whoever can sign the provider's subscriptions can point a self-signed candidate at any server.
 - **Third parties.** A decoy origin is the operator's own. A CDN carries load and risk for this protocol, and the client's waits and budgets exist for its sake as well as for the user's.
@@ -1175,12 +1175,12 @@ Each is listed with the default this draft takes. The first six are the ones an 
 | Question | Default |
 |---|---|
 | Is the stream proof sound: HPKE base mode, a static device tag, and a binder that is an HMAC under a key from `S` over an exporter value and the hello's fields? | As written. Unreviewed. The static tag still lets a holder of a transport private key link one device's tokens. |
-| Is the masked epoch tag acceptable? Outsiders see no repetition. A subscriber of the same inbound can link one device's opening packets within an epoch, and a holder of a device's secret recognises that device's recorded traffic. | Yes for version 1, with both limits stated. A key exchange hidden with Elligator2, as obfs4 does, would remove both and needs an implementation of proven quality. |
+| Is the masked epoch tag acceptable? Outsiders see no repetition. A subscriber of the same inbound can link one device's opening packets within an epoch, and a holder of a device's secret recognizes that device's recorded traffic. | Yes for version 1, with both limits stated. A key exchange hidden with Elligator2, as obfs4 does, would remove both and needs an implementation of proven quality. |
 | Is the replay rule sound across restarts, clock steps in both directions, a lost or restored replay file, and a valid device that sends far-future timestamps? | As written. |
 | The limit follows the clock, so a forward clock fault followed by a crash makes the faulty time the floor even when no proof was accepted. Should the node lower its limit by itself once the clock is corrected? | Yes, in a bounded way: rule 9. It never goes below the floor or below anything in the cache. A crash before the timer has acted still gives the outage, and only a reset ends that. |
 | After a clock fault the floor can be far ahead, and the reset forgets proofs above the new floor. Should the node keep forgotten timestamps above a trusted floor as a bounded set of burned intervals, so that a fault burns only the seconds that were actually used? | Not in this draft. It would end the outage without the reset's replay cost, at the price of one more structure in the replay file. |
 | Does anything on the "not a user" paths differ in timing by cause (table hit or miss, which check failed, how much of the path matched)? | Yes, by under a microsecond in all, as the table under "Timing" records for one machine. Whether that can be used from where a prober sits has not been measured across a network. |
-| Do the upgrade answer and the padded token remove the fixed-size first exchange, or only move it? | Unmeasured. The first two records of each direction are to be added to the length and timing test. A cookie with a name per inbound is a judgement call, and whoever ends TLS still sees a recognisable request. |
+| Do the upgrade answer and the padded token remove the fixed-size first exchange, or only move it? | Unmeasured. The first two records of each direction are to be added to the length and timing test. A cookie with a name per inbound is a judgment call, and whoever ends TLS still sees a recognizable request. |
 | Random nonces on `udp-obfs` data packets, with the packet limit | As written. A counter nonce would need to be hidden on the wire, which is one more construction. |
 | Should a client take a clock offset from the `Date` header of a connection that validated but has no pin, so that a profile with only CDN transports works with a wrong clock? | No. A party that can present a valid certificate for the front could then steer the timestamps of that client's proofs. The cost is that such a client cannot connect until its clock is right. This default may change. |
 | Built-in certificate issuance for `tls` | Not specified, files only. If it is added, a challenge that needs no listener (a DNS record) avoids a new probe surface. The plan says issuance is built in. |

@@ -15,13 +15,13 @@ Veilway is a VPN: the client has a virtual network interface, whole IP packets g
 | Transport | How WireGuard datagrams cross the network: `udp`, `udp-obfs`, `tls`, `ws`, `fronted`, later `faketls` and `quic` | [Transports](../transports/) | None invented. Standard constructions combined in a way nobody outside the project has reviewed. |
 | Control channel | A small request and push protocol on one port of the gateway address, inside the tunnel | [Control channel](../control-channel/) | One mutual challenge and response with HMAC-SHA-256 |
 
-Confidentiality, integrity and authentication of user traffic come from the tunnel layer alone. No key or construction of the transport or the control channel is relied on for them, so a flaw in the outer cryptography cannot decrypt what a user sends. It can make a user or a node recognisable, which on a hostile network is the harm that matters. That is why the outer layers carry the label "experimental, not externally reviewed" (see [Obfuscation layer status](../../security/obfuscation/)).
+Confidentiality, integrity and authentication of user traffic come from the tunnel layer alone. No key or construction of the transport or the control channel is relied on for them, so a flaw in the outer cryptography cannot decrypt what a user sends. It can make a user or a node recognizable, which on a hostile network is the harm that matters. That is why the outer layers carry the label "experimental, not externally reviewed" (see [Obfuscation layer status](../../security/obfuscation/)).
 
 One part of the outer layers does matter for whether traffic stays protected: the client logic that keeps packets inside the tunnel while transports change or fail (the kill switch and transport fallback). A bug there can send traffic outside the tunnel. The fail-closed rules below are written for that logic.
 
 ## Goals
 
-1. Carry WireGuard datagrams so that the byte patterns and exact sizes by which WireGuard is recognised do not appear on the wire.
+1. Carry WireGuard datagrams so that the byte patterns and exact sizes by which WireGuard is recognized do not appear on the wire.
 2. Make a listener answer anyone who is not a user with nothing (datagram transports) or with the bytes of the operator's own web site (stream transports).
 3. Give a client several ways to reach one node, chosen from a signed list, so that the loss of one address or one name is not the loss of the node.
 4. Give a connected client what plain WireGuard lacks: the exits it may use and a way to pick one, a check of its addresses and resolver for IPv4 and IPv6, a working MTU, its usage and quota, and operator notices.
@@ -33,9 +33,9 @@ One part of the outer layers does matter for whether traffic stays protected: th
 These are not provided, and no page or screen may suggest they are.
 
 - **Undetectability.** No transport is claimed to be undetectable or unblockable. The strongest claim this project can make is that named tests, on a stated date, did not tell a transport apart from its cover.
-- **Defence against traffic analysis.** Volume, timing and direction of a flow stay visible on every transport. Padding blurs sizes and proves nothing.
+- **Defense against traffic analysis.** Volume, timing and direction of a flow stay visible on every transport. Padding blurs sizes and proves nothing.
 - **Anonymity from the node.** The node ends the tunnel. Its operator sees the client's address, the device's key, every destination and every DNS name.
-- **Unlinkability of a device over time.** A device's WireGuard key is its identity and the node recognises it at every handshake.
+- **Unlinkability of a device over time.** A device's WireGuard key is its identity and the node recognizes it at every handshake.
 - **Good performance of IP inside TCP.** It can be reduced, not removed. See "Stream transports and TCP inside TCP" on the transports page.
 - **Protection of a compromised device or node.**
 
@@ -45,7 +45,7 @@ The binding list is section 9 of `THREAT_MODEL.md` in the main repository.
 
 The specification is written against the adversary of the threat model, section 5.1, described abstractly:
 
-- **An observer on the path** sees every packet between client and node: addresses, ports, sizes, timing, direction. It keeps records and can analyse them later.
+- **An observer on the path** sees every packet between client and node: addresses, ports, sizes, timing, direction. It keeps records and can analyze them later.
 - **A prober** connects to any address and port the observer has seen, sends anything, and replays bytes captured from real clients.
 - **An interferer** drops, delays, injects and resets packets, and blocks by address, port, server name or traffic pattern.
 - **A subscriber.** The adversary can get the client software and a valid subscription the way any user does, so it knows the protocol, and every address, name, path and public key in that subscription.
@@ -105,7 +105,7 @@ Integers on the wire are big-endian unless a row says otherwise. Sizes are in by
 | Survives blocking of unknown UDP | No | No | Yes | Yes | Yes |
 | Survives blocking of the node's address | No | No | No | Only behind a CDN | Yes, until the CDN or the front is blocked |
 | TCP inside TCP | No | No | Yes | Yes | Yes, and slow |
-| Recognisable in recorded traffic by a holder of this device's secret | n/a | Yes | No. It takes the node's transport key and the TLS plaintext to link a device's connections. | Same | Same |
+| Recognizable in recorded traffic by a holder of this device's secret | n/a | Yes | No. It takes the node's transport key and the TLS plaintext to link a device's connections. | Same | Same |
 | Highest rating in version 1 | Detectable | Detectable, for good | Detectable, whatever its tests show | Detectable until the tests are recorded | Detectable until the tests are recorded |
 
 In version 1 every native profile is rated Detectable. `ws` and `fronted` are the only transports that could be rated higher later, and only when the tests the threat model names are recorded for a release, and only on an address that carries no datagram listener and no legacy listener. The rating is explained on [Obfuscation layer status](../../security/obfuscation/).
@@ -220,9 +220,9 @@ These pages deliberately do not state how browsers, web servers, CDNs and librar
 
 ## Security considerations
 
-- **Where the security comes from.** Tunnel content is protected by WireGuard and by nothing else on these pages. The outer layers are about recognisability and reachability, and the client's kill switch is what keeps traffic inside the tunnel.
+- **Where the security comes from.** Tunnel content is protected by WireGuard and by nothing else on these pages. The outer layers are about recognizability and reachability, and the client's kill switch is what keeps traffic inside the tunnel.
 - **The outer layers are unreviewed.** They use only standard building blocks (X25519, HKDF-SHA-256, HMAC-SHA-256, ChaCha20-Poly1305, HPKE as in RFC 9180, TLS 1.3 from a mainstream library), each with a label that separates its use from every other. The way they are combined has had no outside review and has no proof. Each page lists what is unproven under "Open questions".
-- **A subscription is a secret and a map.** Whoever holds one can connect as that device, confirm that each node in it is a Veilway node, and block every address and name in it. No design can stop a user from recognising the service it uses. What the design does prevent is that one subscription lets its holder read, unwrap or name other users' traffic.
+- **A subscription is a secret and a map.** Whoever holds one can connect as that device, confirm that each node in it is a Veilway node, and block every address and name in it. No design can stop a user from recognizing the service it uses. What the design does prevent is that one subscription lets its holder read, unwrap or name other users' traffic.
 - **The weakest listener decides.** If any service on a node's address identifies it (a plain `wireguard` inbound, a legacy `ws` transport, a `udp-obfs` or `udp` transport, a panel, a subscription endpoint), the address is identified, whatever the strongest transport on it does. The client applies this cap itself for what it can see in its own subscription, which is a `udp` or `udp-obfs` endpoint on the address of a cover transport. Everything else on the list it cannot see, and for that it depends on the provider saying so.
 - **Third parties.** A decoy origin is the operator's own site, with no exception in version 1. `fronted` and `ws` behind a CDN put load and risk on the CDN. The transports page sets limits and the obfuscation page states the considerations in plain words.
 

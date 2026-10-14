@@ -11,7 +11,7 @@ A node link joins two nodes. Users connect to one of them, the **entry**, and th
 
 Three rules shape the page:
 
-- **A link reuses what exists.** The listening side treats the link as a peer on a `veilway` inbound. The dialling side runs the client side of the transports. No new wire format or proof is added. Pairing adds one key agreement, from parts the protocol already uses.
+- **A link reuses what exists.** The listening side treats the link as a peer on a `veilway` inbound. The dialing side runs the client side of the transports. No new wire format or proof is added. Pairing adds one key agreement, from parts the protocol already uses.
 - **Neither node takes the other's word.** The exit applies its own gate, rules and limits to everything that arrives. The entry delivers only what answers a flow it sent.
 - **A link that is down carries nothing, and nothing goes round it.** Traffic routed to it is answered as unreachable.
 
@@ -58,7 +58,7 @@ A link has two pairs of roles, and they are independent.
 In both directions:
 
 - The dialler is the WireGuard initiator, starts every handshake and every rekey, and follows the client rules of the transports page (keepalives, opening packets, reconnecting). The listener follows the node rules. Nothing on the transports page changes for a link.
-- One WireGuard tunnel carries packets both ways. Which way users' packets flow depends on the roles above the transport, not on who dialled.
+- One WireGuard tunnel carries packets both ways. Which way users' packets flow depends on the roles above the transport, not on who dialed.
 
 Above the transport the two halves behave the same in a forward and in a reverse link. Only who dials differs.
 
@@ -140,7 +140,7 @@ A user who must not be told apart by the exit's operator has no protection from 
 **The entry** treats the link as one exit, of the backend `chain`.
 
 - Its own users, quotas, expiry, routing rules and entitlement decide who may use it, as for any exit. Usage is counted per user before translation.
-- It shows in the exit catalogue with a name and a country, marked as leaving through a second node (see "Ratings and what users are told"). The country, and whether the exit carries every IP protocol, depend on the other node. In the catalogue they are the entry operator's statement.
+- It shows in the exit catalog with a name and a country, marked as leaving through a second node (see "Ratings and what users are told"). The country, and whether the exit carries every IP protocol, depend on the other node. In the catalog they are the entry operator's statement.
 - The destination gate of the config reference applies before a packet is sent into the link.
 
 **The exit** treats the link as one peer and trusts nothing it says.
@@ -209,7 +209,7 @@ One line of text: `vwlink1.`, then a strict JSON object in base64url without pad
 
 **Which transports a link may list.** `udp`, `udp-obfs`, `tls` and `ws`. Not `ws-plain`. Not `fronted` in version 1: a link carries the traffic of many users, and polling that through a CDN multiplies the requests a third party serves. A `ws` candidate that goes through a CDN puts the same volume on that CDN, in fewer requests. It is allowed, and it is shown to both operators at pairing with the warning the transports page gives for `fronted`: the CDN's terms may forbid it, the operator pays for the traffic, and the CDN sees it.
 
-**Where a link may dial.** The refusals of the subscription format hold: no loopback, link-local, unspecified or multicast address, and none of the forms that carry an IPv4 address inside an IPv6 one. They are refused in the offer and again before every dial. Its two rules that depend on a user do not fit a server and are replaced. There is nobody to ask before a private address is dialled, and two nodes in one data centre are a likely pair. So a private address, or one inside a network the dialling node is itself on, is shown plainly on the dialler's panel at step 2 and is accepted there by the operator or the offer is declined.
+**Where a link may dial.** The refusals of the subscription format hold: no loopback, link-local, unspecified or multicast address, and none of the forms that carry an IPv4 address inside an IPv6 one. They are refused in the offer and again before every dial. Its two rules that depend on a user do not fit a server and are replaced. There is nobody to ask before a private address is dialed, and two nodes in one data center are a likely pair. So a private address, or one inside a network the dialing node is itself on, is shown plainly on the dialler's panel at step 2 and is accepted there by the operator or the offer is declined.
 
 ### The answer code
 
@@ -270,7 +270,7 @@ Every change of state is logged at info with the link's tag, and counted.
 
 ## Limits and failure
 
-**A link that is down.** A `chain` exit is down when none of its links is up. While it is down, every flow routed to it is refused with the ICMP error or reset that an unreachable exit gives, new and live flows alike, and the refusal is counted. Nothing routed to it leaves through another exit, the node's own address or another link. It comes back when a link does, with no action by anyone. This is the behaviour of a failed `l3` exit.
+**A link that is down.** A `chain` exit is down when none of its links is up. While it is down, every flow routed to it is refused with the ICMP error or reset that an unreachable exit gives, new and live flows alike, and the refusal is counted. Nothing routed to it leaves through another exit, the node's own address or another link. It comes back when a link does, with no action by anyone. This is the behavior of a failed `l3` exit.
 
 **MTU.** A user's packet is carried in the user's tunnel to the entry and then, translated, in the link's tunnel to the exit. Each tunnel has its own limit, from the arithmetic of the transports page:
 
@@ -311,12 +311,12 @@ Which half a node is follows from `direction` and from whether the link is liste
 
 **The control API** reports for each link: its tag and id, the half and the role of this node, the state and since when, the time of the last handshake, the transport and candidate in use on the dialler, flows, and bytes and packets in each direction. It reports no key and no secret.
 
-**`veilway doctor`** checks, without dialling anything: that a link's addresses lie in the inbound's pool on a listener and in none of this node's pools on a dialler, that a link's inbound carries no users, that no link key is a device's key, that the clock is set, that the link's `mtu` is not below the `mtu` of an inbound whose users are routed to it nor below the MTU of an `l3` exit it may use, that a link is not entitled to a `chain` exit, and, from a running node, each link's state.
+**`veilway doctor`** checks, without dialing anything: that a link's addresses lie in the inbound's pool on a listener and in none of this node's pools on a dialler, that a link's inbound carries no users, that no link key is a device's key, that the clock is set, that the link's `mtu` is not below the `mtu` of an inbound whose users are routed to it nor below the MTU of an `l3` exit it may use, that a link is not entitled to a `chain` exit, and, from a running node, each link's state.
 
 ## Ratings and what users are told
 
 - **The rating of a profile is about the hop from the user to the entry.** A link changes nothing in it. The link's own transport is the two operators' concern, and no rating is shown for it.
-- **A user of a linked exit trusts two operators.** The exit node sees the destinations and the unencrypted content of that user's traffic, as any exit does, and it may be run by someone else. The catalogue must say so. In the subscription, an exit that leaves through a link carries `"linked": true` (see "A profile" in the subscription format), and the app shows on that exit: "leaves through a second server, which may be run by someone else". The panel sets the member from the config, never by hand. The control channel's catalogue has no bit for this in its version 1, so while connected the app takes the mark from the subscription's entry with the same tag. A provider whose panel leaves the mark out is not found out by the app. Like the rating cap, it is the provider's word.
+- **A user of a linked exit trusts two operators.** The exit node sees the destinations and the unencrypted content of that user's traffic, as any exit does, and it may be run by someone else. The catalog must say so. In the subscription, an exit that leaves through a link carries `"linked": true` (see "A profile" in the subscription format), and the app shows on that exit: "leaves through a second server, which may be run by someone else". The panel sets the member from the config, never by hand. The control channel's catalog has no bit for this in its version 1, so while connected the app takes the mark from the subscription's entry with the same tag. A provider whose panel leaves the mark out is not found out by the app. Like the rating cap, it is the provider's word.
 
 ## Security considerations
 
@@ -341,7 +341,7 @@ Each is listed with the default this draft takes.
 | One address for the whole link. Is the limit on protocols without ports acceptable? | Yes for version 1. An entry whose users need such protocols at the same remote address at the same time has no answer here. |
 | Should the entry also rewrite TCP timestamps and sequence numbers, so that the exit can tell devices apart less easily? | No. That is a TCP proxy in all but name, and timing would remain. The page says what the exit can still do. |
 | `fronted` for links | Refused in version 1, for the load on a CDN. A link between nodes that can reach each other only through a CDN has `ws`. |
-| Should the control channel's catalogue carry the "linked" mark itself? | Not in its version 1, which does not grow. It is a point for the next version. |
+| Should the control channel's catalog carry the "linked" mark itself? | Not in its version 1, which does not grow. It is a point for the next version. |
 | Should a link find its path MTU by probing? | No. The operators set `mtu`, both nodes lower TCP segment sizes, and a warning state shows a value that is too high. |
 | Should a node tell its peer that it is ending the link? | No. A message would be one more thing a node believes from the other. |
 | Chains of more than two nodes | Not in version 1. Conforming nodes refuse them in validation and in the engine. |

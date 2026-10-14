@@ -99,7 +99,7 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Identical `fronted` request resent on a new connection | up to 3 times inside 10 s | `fronted` client |
 | Head of an answer, as the client reads it | at most 16,384 bytes | client, stream transports |
 | Certificate pins | at most 4 per candidate | `tls`, `ws` |
-| Validity of a self-signed certificate the node makes | 90 days, made anew with the same key after 60 | `tls` node |
+| Validity of a self-signed certificate the node makes | Drawn per certificate from 80 to 100 days, started up to 7 days in the past, made anew with the same key 20 days before it ends | `tls` node |
 | Fingerprint pack expiry | 90 days after its capture date | client TLS |
 | Node transport key age | rotate at least every 30 days | operators |
 
@@ -773,7 +773,7 @@ The node ends TLS itself, with a certificate for a name the operator owns.
 
 **What the node writes into its own certificate,** so that nothing in it marks the node as Veilway. A self-signed certificate is itself visible to any prober that completes the handshake, and that cannot be hidden. What can be avoided is a certificate that looks like every other Veilway node's:
 
-- the subject and the issuer are a name the operator sets, or one drawn per node, never a fixed placeholder;
+- the subject and the issuer are a name the operator sets (`tls.name`), or one drawn per node from several shapes (a host name with a common private-network suffix), kept across renewals, never a fixed placeholder;
 - the serial number is 16 random bytes;
 - the validity has a normal length, given in the table of numbers, and the node makes a new certificate with the same key before it ends, which needs no new pin since clients ignore the dates;
 - the key is an ECDSA key on P-256, and the extensions are the common set of a server certificate: basic constraints with no authority, key usage for signatures, extended key usage for servers, and a subject alternative name with the subject's name.
@@ -1165,7 +1165,7 @@ A leak is ended by rotation (see the overview). Rotation does not undo what was 
 - **Timing residuals are real.** The hop to the decoy origin, a slowly sent request line, the node's own TLS stack on `tls`, and the difference between an authenticated and an unauthenticated answer for a subscriber who holds a valid profile.
 - **Every shared default is a signature.** Padding ranges, timers and close behaviour are the same on every installation unless a profile sets them. They are fixed here so that they can be measured, not because they are known to be safe.
 - **A cut is not a refusal.** Only an authenticated close counts as the node saying no. An earlier wording treated any close after the TLS handshake as a refusal, which let one forged reset buy the refusal waits and hold a client on a blocked candidate for hours.
-- **What self-signed certificates cost.** A self-signed certificate on a public address is something a censor can look for: a prober that completes the handshake sees it, and ordinary sites rarely have one. A profile that pins one is still rated Detectable at most, as every `tls` profile is. A new key on the node means a new pin, so rotating it means a refreshed document for every user, and a client that has not refreshed meets a certificate that does not match. Making the next key ahead of time and pinning both avoids that. The trust rests entirely on the signed profile: whoever can sign the provider's subscriptions can point a self-signed candidate at any server.
+- **What self-signed certificates cost.** A self-signed certificate on a public address is something a censor can look for: a prober that completes the handshake sees it, and ordinary sites rarely have one. A profile that pins one is still rated Detectable at most, as every `tls` profile is. A new key on the node means a new pin, and a node that runs never makes one: if the key file is gone or changed it keeps the certificate it has and warns. The key files are named by the inbound's tag, so renaming a tag makes a new key too, so rotating it means a refreshed document for every user, and a client that has not refreshed meets a certificate that does not match. Making the next key ahead of time and pinning both avoids that. The trust rests entirely on the signed profile: whoever can sign the provider's subscriptions can point a self-signed candidate at any server.
 - **Third parties.** A decoy origin is the operator's own. A CDN carries load and risk for this protocol, and the client's waits and budgets exist for its sake as well as for the user's.
 
 ## Open questions

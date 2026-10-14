@@ -123,11 +123,12 @@ Some of these techniques lean on people who did not ask to be involved. The spec
 
 ## How a profile is rated
 
-The app shows a rating for each profile. The core computes it from the settings that are actually in force. A provider cannot raise it.
+The core computes a rating for each profile from the settings that are actually in force, and a provider cannot raise it. The rating is a word for operators: the panel and these pages use it. The app does not show it, because a label scares some users and makes others too sure of themselves. The app shows only the connection's name, and for an Unsafe profile a plain warning and one explicit tap before it connects.
 
 - **Unsafe**: certificate checking is switched off, or there is no encryption.
-- **Detectable**: encrypted, and recognisable.
-- **A higher rating** exists in the plan under the name "Protected". In version 1 no native profile gets it.
+- **Detectable**: encrypted, and recognisable. A censor can see that this is a tunnel and can block it, without reading what is inside.
+- A `tls` profile whose certificate is self-signed and pinned in the signed subscription is not Unsafe: the pin is a check, and a stricter one than a public authority's. It is Detectable, and a self-signed certificate is one more thing a censor can notice.
+- **A higher rating** exists in the plan under the name "Protected": a censor that watches the connection would see what looks like an ordinary site. In version 1 no native profile gets it.
 
 What a higher rating would need, all of it:
 
@@ -171,7 +172,7 @@ For users:
 - Assume that someone watching your network can tell you are using a VPN-like tool. Choose what you do accordingly.
 - Keep your subscription private. Do not post it or share a screenshot of it.
 - Keep your device's clock right. The app refuses to guess when it is wrong.
-- Prefer a profile on a name the provider owns. Read the rating and what stands next to it.
+- Prefer a profile on a name the provider owns. The app does not label profiles; if it warns that a profile is unsafe, take that seriously.
 - When the app asks whether it may use a lower class of transport, the honest answer to "is this easier to recognise?" is yes.
 
 For operators:

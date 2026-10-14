@@ -233,7 +233,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 |---|---|---|---|
 | `listen` | `ip:port` | required | Where the node ends TLS. |
 | `path` | 12 to 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, starting with `/`, no `..` component | required | The path a device's request names. It is known to whoever holds a subscription. Choose one your site does not have. |
-| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance: get the certificate with your own tooling, and renew it the same way. |
+| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get the certificate with your own tooling, and renew it the same way. On a native `tls` transport `self_signed: true` may stand instead of `cert` and `key`: the node then makes its own self-signed key and certificate, keeps them next to the config file with mode 600, renews the certificate with the same key, and reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. See the transports page of the protocol specification. |
 | `decoy.origin` | `http://` URL with an address or a name and an optional port, nothing behind it | required | Your own web server. There is no default and no other kind of decoy. |
 | `decoy.proxy_protocol` | bool | `false` | Send the PROXY protocol header, version 2, at the start of every connection to the origin. |
 | `limits.sessions` | integer 1 to 1,048,576 | `16384` | Established sessions the listener holds at once. |

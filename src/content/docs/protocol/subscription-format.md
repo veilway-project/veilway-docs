@@ -397,14 +397,14 @@ If none of them is there, it shows `default`. The client never guesses what lang
 
 **What translations can and cannot do.** A provider can write anything in any one language, and with several it can say different things to different readers: a calm notice in one language and a false one in another. Nobody who reads only one of them will notice. The format does not stop this and cannot. What it does keep true:
 
-- Everything that carries a warning is the app's own text in the app's own language: ratings, classes, the wording of the import and consent screens, key fingerprints, hosts, and the message for every refusal. Where a provider's name or a profile's name appears on such a screen, `default` is always there.
+- Everything that carries a warning is the app's own text in the app's own language: the warning for an Unsafe profile, the wording of the import and consent screens, key fingerprints, hosts, and the message for every refusal. Where a provider's name or a profile's name appears on such a screen, `default` is always there.
 - A link has one `url`, whatever language its label is in, and the screen that asks before it is opened shows the host. A translation cannot change where a link goes.
 - A translation cannot change a tag, an exit, a profile's settings or a number the app computes.
 - The mark on a translated text, and the way from it to `default`, make a difference between the two something a user can find.
 
 **Languages and privacy.** The app's display language and the fallback list are read only by the app. They are never sent, logged or put in a diagnostic report. No request the client makes for a subscription carries an `Accept-Language` field. Where a transport copies a browser's header fields from the fingerprint pack and a browser would send that field, its value is the pack's fixed one, never the user's. A provider can still learn a reader's language in two ways the format does not control: the browser that opens a support link or a card's link sends its own languages, and a device name is typed in the user's script.
 
-**The provider's labels in the app's own lists.** A profile's name and an exit's name appear in the app's lists, outside the provider's area. They are always shown as the provider's labels, next to part of the key's fingerprint so that two subscriptions with one name can be told apart, and never in the place where the app shows a rating or a class.
+**The provider's labels in the app's own lists.** A profile's name and an exit's name appear in the app's lists, outside the provider's area. They are always shown as the provider's labels, next to part of the key's fingerprint so that two subscriptions with one name can be told apart, and never in the place where the app shows its own warnings.
 
 **Keys.** A WireGuard key, a transport key and a transport secret are written as in the config reference: standard base64 with padding, 44 characters, 32 bytes. An Ed25519 public key in a document is written the same way. An all-zero key is an error. An `inbound_public_key`, a `transport_public_key` or a `device.public_key` of small order refuses the profile, as a device key of small order is refused in a request.
 
@@ -504,14 +504,14 @@ Every transport has a `type`. An unknown `type` refuses the profile. A provider 
 | `type` | Members | Rule |
 |---|---|---|
 | `udp`, `udp-obfs` | `endpoints`: list of 1 to 16 | Each an IP address and port, `192.0.2.10:51820` or `[2001:db8::10]:51820`. |
-| `tls` | `path`, `candidates` | Every candidate must have `pins`. |
+| `tls` | `path`, `candidates` | Every candidate must have `pins`. A candidate may set `self_signed`. |
 | `ws` | `path`, `candidates` | A candidate may have `pins`. |
 | `fronted` | `path`, `candidates` | No candidate has `pins`: the certificate is a content delivery network's and changes. |
 | `ws-plain` | `path`, `candidates` | Plain HTTP, no TLS. No candidate has `pins`, `sni`, `verify_name` or `ech`. See "`ws-plain`" on the transports page. A `ws-plain` transport may not use a `host` or a `path` that any `tls`, `ws` or `fronted` transport of the document uses, and carries its own `transport_public_key` on the transport. A `ws-plain` transport may carry an optional `appearance` (a fixed identifier), which dresses the frames as another kind of content (see "Appearance of `ws-plain` frames" on the transports page, a design that is not built). An unknown or malformed `appearance` refuses the transport, not the document. It has a required `cookie`: the name of the cookie that carries the token, 1 to 32 characters from `A-Z a-z 0-9 _ -`. A missing or malformed `cookie` refuses the transport. |
 
 - `path` follows the path rule of the config reference and is at least 12 characters.
 - A candidate is an object with the members of "Fronting options" on the transports page: `address` (IP address and port, required), `sni` (required: a host name, or empty for none), `host` (a host name, required), `verify_name` (a host name, required when `sni` is empty and not allowed otherwise), `ech` (an Encrypted Client Hello configuration in standard base64, optional, at most 1,024 bytes when decoded), and `pins`. There is no member that turns TLS off on a candidate: a transport without TLS is the separate type `ws-plain`, whose candidates carry `address` and `host` and none of `sni`, `verify_name`, `ech` or `pins`. A candidate with a member it must not have (a `pins` on a `fronted` candidate, any of the TLS members on a `ws-plain` candidate) refuses that candidate and nothing else. A transport whose candidates are all refused is left out, and a profile whose transports are all left out is refused.
-- `pins` is a list of 1 to 4 pins and belongs to one candidate, because one transport can list a candidate that reaches the operator's own server and another that goes through a content delivery network. A pin is the SHA-256 of a certificate's SubjectPublicKeyInfo, in standard base64, 44 characters. A candidate with pins is a "pinned candidate" on the transports page.
+- `pins` is a list of 1 to 4 pins and belongs to one candidate, because one transport can list a candidate that reaches the operator's own server and another that goes through a content delivery network. A pin is the SHA-256 of a certificate's SubjectPublicKeyInfo, in standard base64, 44 characters. A candidate with pins is a "pinned candidate" on the transports page. A candidate of a `tls` transport may also have `self_signed`, a boolean, default `false`. With `true` the client trusts the server's certificate only through the candidate's `pins` and does not check its chain, name or dates (see the `tls` client steps on the transports page). `self_signed` on a candidate of any other transport, or a value that is not a boolean, refuses that candidate. A candidate with `self_signed` set still needs 1 to 4 `pins`. Its `sni` may be a host name, which is sent, or empty. It has no `verify_name`, since no name is checked, and a `verify_name` on it refuses the candidate.
 - A host name is lowercase ASCII, at most 253 bytes, by the domain rule of the config reference, without the wildcard.
 - A hint on the control channel names a transport by its position in `transports` and a candidate by its position in that transport's `candidates`, or in its `endpoints` for `udp` and `udp-obfs`.
 
@@ -594,7 +594,7 @@ Nothing is sent, generated or stored by the app before the user continues. A dee
 
 - the provider's name, in `default` and with the picked translation beside it when there is one, marked as the provider's own claim;
 - the fingerprint again, and the hosts in `refresh_urls`;
-- how many profiles it holds, and the lowest class and the lowest rating among them;
+- how many profiles it holds, and whether any of them is Unsafe, with the plain warning for that. Ratings and classes are not shown to users.
 - whether the device's key was made on this device or issued by the provider;
 - whether this adds a new subscription or replaces a stored one (same key and same id), and which;
 - the account's devices, as the document lists them.

@@ -48,6 +48,7 @@ export default defineConfig({
 						{ label: "Client", translations: { fa: "کلاینت" }, slug: "manuals/client" },
 						{ label: "Android app", translations: { fa: "برنامهٔ اندروید" }, slug: "manuals/android" },
 						{ label: "Home network", translations: { fa: "شبکهٔ خانگی" }, slug: "manuals/home-network" },
+						{ label: "Xray add-on", translations: { fa: "افزونهٔ Xray" }, slug: "manuals/xray" },
 					],
 				},
 				{

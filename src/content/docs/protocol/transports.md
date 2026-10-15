@@ -1092,7 +1092,7 @@ The first message of a TLS connection, the ClientHello, differs between programs
 
 What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognizable.
 
-**What the first implementation does.** It does not have the fingerprint pack. Its TLS ClientHello is the TLS library's own and recognizable as such, with `http/1.1` as its only protocol offer, and its request header fields are a short fixed list. Every profile is therefore recognizable by its ClientHello today, which is one more reason every native profile is rated Detectable.
+**What the first implementation does.** Its client TLS ClientHello is built on BoringSSL, the library Chrome uses, and shaped like a Chrome 131 hello for a `wss://` connection, with `http/1.1` as its only protocol offer. That shape has not been checked against a real Chrome capture, so it is a target and not yet a measured match. A `fronted` session is still an HTTP/1.1 client where Chrome would offer `h2`. Every native profile is still rated Detectable.
 
 **A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognizable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
 

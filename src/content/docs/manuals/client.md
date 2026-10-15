@@ -4,7 +4,7 @@ description: Using the Veilway clients.
 ---
 
 :::caution[Not written yet]
-This page is a stub. No client is released, so there is nothing to document yet. A Windows desktop client exists in the current code; the cross-platform clients and the Android client are not built yet.
+This page is a stub. No client is released, so there is nothing to document yet. The Windows and macOS client layers exist in the code, but neither has run on a real machine yet. The Linux layer is tested in Docker. The desktop and Android apps are being built for the first alpha.
 :::
 
 This manual will cover:

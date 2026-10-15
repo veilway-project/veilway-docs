@@ -28,11 +28,11 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 Parts of the site are written and parts are still stubs. Nothing here describes released software yet.
 
-- Written, in English: the draft protocol specification (overview, transports, control channel, subscription format, node links), the obfuscation layer status page, the config reference and the control API reference.
-- Written, in Persian: the config reference and the control API reference.
-- Still stubs: the Persian protocol pages, getting started, the threat model summary, the panel and client manuals and the SDK guides.
+- Written, in English: the draft protocol specification (overview, transports, control channel, subscription format, node links), the obfuscation layer status page, the config reference, the control API reference, the install guide and the panel manual.
+- Written, in Persian: the config reference, the control API reference, the install guide and the panel manual.
+- Still stubs: the Persian protocol pages, the threat model summary, the client manual and the SDK guides.
 
-The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The node side of the native transports and the control channel is built, but no client speaks them yet. The panel, the cross-platform clients and the Android client are not built yet.
+The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The node side of the native transports and the control channel is built, but no client speaks them yet. The panel is built but not released. The Windows and macOS client layers exist but have never run on a real machine, and the desktop and Android apps are being built for the first alpha.
 
 ## Layout
 
@@ -59,6 +59,7 @@ npm run build
 ## Repositories
 
 - [veilway](https://github.com/veilway-project/veilway): the core, the control API and its SDK, and the desktop app.
+- [veilway-panel](https://github.com/veilway-project/veilway-panel): the panel, the admin side of a node.
 - [veilway-ui](https://github.com/veilway-project/veilway-ui): the design system and the translations for the panel and the apps.
 - veilway-docs: this repository, published at [veilway-project.github.io/veilway-docs](https://veilway-project.github.io/veilway-docs/).
 

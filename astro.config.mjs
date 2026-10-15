@@ -17,6 +17,7 @@ export default defineConfig({
 			social: [{ icon: "github", label: "GitHub", href: "https://github.com/veilway-project/veilway" }],
 			sidebar: [
 				{ label: "Introduction", translations: { fa: "معرفی" }, slug: "" },
+				{ label: "The alpha release", translations: { fa: "نسخهٔ آلفا" }, slug: "alpha" },
 				{ label: "Getting started", translations: { fa: "شروع به کار" }, slug: "getting-started" },
 				{
 					label: "Protocol specification",
@@ -45,6 +46,8 @@ export default defineConfig({
 					items: [
 						{ label: "Panel", translations: { fa: "پنل" }, slug: "manuals/panel" },
 						{ label: "Client", translations: { fa: "کلاینت" }, slug: "manuals/client" },
+						{ label: "Android app", translations: { fa: "برنامهٔ اندروید" }, slug: "manuals/android" },
+						{ label: "Home network", translations: { fa: "شبکهٔ خانگی" }, slug: "manuals/home-network" },
 					],
 				},
 				{

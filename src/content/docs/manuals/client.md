@@ -128,7 +128,7 @@ Some connections need your answer before the first connect. Your answer applies 
 
 | Question | What it means |
 |---|---|
-| Connect to a private address? | The connection goes to an address that is not on the internet, or to a device on the network you are on right now. That is normal for a server on your own network. The app asks once for each connection, and without your yes it does not connect to such an address. |
+| Connect to a private address? | The connection goes to an address that is not on the internet, which can be a device on the network you are on right now. That is normal for a server on your own network. The app asks once for each connection, and without your yes it does not connect to such an address. Your yes covers only a private address. An address that looks like the internet is never dialled because the network you are on says it is local. |
 | Connect without checking the server? | The connection does not check who it is talking to. Anyone on the network can read and change what you send. The button is red. |
 | This subscription expired over 30 days ago | The addresses and keys in it may no longer belong to your provider. Refresh it first if you can. The button is red. |
 | Use the connection that looks like ordinary web traffic? | This is the way the provider set up to blend in with normal browsing. |
@@ -203,11 +203,12 @@ The **Subscriptions** screen lists each subscription with its provider, its logo
 
 - **Refresh** (the icon on the row) gets the provider's current settings. It appears only when the provider allows it.
 - **Remove** deletes the subscription, its connections and its keys from this computer. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first.
-- **Send the local network through the VPN** (a checkbox on the row) is off by default. Off, the private and link-local ranges and local multicast stay outside the tunnel, so your printer, your router and the other devices at home stay reachable while you are connected. On, those ranges go through the tunnel like everything else, which is for a provider whose server can reach your home network. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops. On Windows and macOS, a private range that is not directly on your network still goes through the tunnel when the box is off.
+- **Let apps reach devices on this network** (a checkbox on the row) is off by default. Off, everything goes through the tunnel, your local network included, so a printer or your router is not reachable while you are connected. On, apps can reach the devices on the networks you are connected to (a printer, your router) outside the VPN. Only the private subnets you are on go outside, not the whole private ranges, and the list is read again when you change networks. The network can see that traffic, because it does not go through the VPN. Names are still only looked up through the tunnel. On Android nothing goes outside the VPN while you are on mobile data. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops.
 
 ## Known limits
 
 - The app has not run on a real machine yet, and no release is published.
 - On Linux, a real desktop with systemd-resolved and a reboot have not been tested.
-- On Android, with Always-on VPN and Block connections without VPN, the system may block the local network even when the box is off. The app has not been tried with that on a real phone.
+- On Android, with Always-on VPN and Block connections without VPN, the system may block the local network even when the box is on. The app has not been tried with that on a real phone.
+- On Android, when the connection drops, the app keeps the VPN interface up and drops your traffic until you tap Disconnect. The notification says the internet is blocked. If the system kills the app, only Always-on VPN with Block connections without VPN keeps traffic from leaving.
 - The Android app is not covered here.

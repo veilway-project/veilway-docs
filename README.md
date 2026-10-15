@@ -26,13 +26,13 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 ## Status
 
-Parts of the site are written and parts are still stubs. Nothing here describes released software yet.
+The site describes the alpha, `v0.1.0-alpha`, which is not tagged yet. Parts of the site are still stubs.
 
-- Written, in English: the draft protocol specification (overview, transports, control channel, subscription format, node links), the obfuscation layer status page, the config reference, the control API reference, the install guide, the panel manual and the client manual.
-- Written, in Persian: the config reference, the control API reference, the install guide, the panel manual and the client manual.
+- Written, in English: the alpha release page, the install guide, the panel manual, the client manual, the Android app manual, the home network manual, the config reference, the control API reference, the obfuscation layer status page, and the draft protocol specification (overview, transports, control channel, subscription format, node links).
+- Written, in Persian: the same pages, except the protocol pages.
 - Still stubs: the Persian protocol pages, the threat model summary and the SDK guides.
 
-The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The node side of the native transports and the control channel is built, but no client speaks them yet. The panel and the desktop app are built but not released, and neither has been tested end to end. The desktop app has not run on a real machine, and the Android app is being built. The next step is the first release.
+The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The alpha release page lists what each part has been tested on and what has not.
 
 ## Layout
 

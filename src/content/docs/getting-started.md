@@ -1,21 +1,19 @@
 ---
 title: Getting started
-description: Installing a Veilway node and panel with the install script, or with Docker.
+description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-:::caution[No release yet]
-Nothing here is released. The script and the Docker images download release files that do not exist yet, so these steps fail until the first release is published. They describe the install as planned.
-:::
+This page installs the alpha, `v0.1.0-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
 
 ## What you need
 
-- A Linux server with systemd, on x86_64 or aarch64.
+- A Linux server with systemd, on x86_64 or aarch64, that you can reach from the internet on the ports you choose.
 - Root access (`sudo`) and `curl`. The script installs `minisign` from your package manager if it is missing.
 - For the panel: a domain name and a web server with a TLS certificate in front of it.
 
 ## Install with the script
 
-The script is the recommended way to install. It can install the node, the panel or both, and it checks every download before installing it.
+The script is the recommended way to install. It installs the node, the panel or both, and it checks every download before it installs it.
 
 The one-line install:
 
@@ -31,6 +29,14 @@ sudo bash veilway.sh
 ```
 
 Choose `1` (Install), then `node`, `panel` or `both`. The default is `both`. To skip the menu, run `sudo bash veilway.sh install both`.
+
+### What the install puts on the server
+
+- The node, `/usr/local/bin/veilway`, and its service, `veilway.service`.
+- The panel, `/usr/local/bin/veilway-panel`, and its service, `veilway-panel.service`.
+- Two system users with no login shell: `veilway` for the node and `veilway-panel` for the panel.
+- The config folder `/etc/veilway`, and the data folders `/var/lib/veilway` and `/var/lib/veilway-panel`.
+- A copy of the example config from the release, and, if the node has no config yet, a starting config.
 
 ### The menu
 
@@ -76,23 +82,27 @@ Environment:
 
 - `NO_COLOR` turns off colors.
 - `VEILWAY_PANEL_PORT` sets the panel's port. The default is `8480`.
-- `VEILWAY_PANEL_PUBKEY` replaces the public key that panel downloads are checked with. Leave it unset.
 
 ### Checked downloads
 
-Every download comes with a signature file. The script checks it with minisign, against a public key built into the script. The signature's trusted comment must read `veilway <tag> <asset>`. If the signature or the comment does not match, the script stops and installs nothing.
+Every download comes with a minisign signature. The script checks it against a public key built into the script, and it stops if the check fails. The signature's trusted comment must read `veilway <tag> <asset>` for the node and `veilway-panel <tag> <asset>` for the panel, so a signature for one file cannot be used for another. Nothing is installed without that check.
 
 If your package manager has no `minisign`, install it from [minisign.org](https://jedisct1.github.io/minisign/) and run the script again.
 
 ## Set up the node
 
-After `install node` on a new server, the node is enabled but not started, because it has no config yet. The script prints these steps.
+A fresh `install node` writes `/etc/veilway/node/config.json` if the file does not exist. It is owned by `veilway` and its mode is `0600`. The starting config has:
 
-1. Make the keys with `veilway genkey`, and put them in the config as the [config reference](../reference/config/) describes.
-2. Copy `/etc/veilway/config.example.json` to `/etc/veilway/config.json` and edit it.
-3. Run `sudo bash veilway.sh install node` again. It checks the config, and it starts the node only if the check passes. The script then sets the config's owner to `veilway` and its mode to `0600`.
+- one exit named `This server`, which leaves through the node's own connection,
+- no inbound, so no device can connect yet,
+- no users,
+- two routing rules: one refuses traffic between users, and one refuses private addresses.
 
-To check the config first, run `sudo bash veilway.sh check`.
+The script checks the config with `veilway check`, and it starts the node only if the check passes. If the check fails, the node is left stopped and the script says why.
+
+A node with no inbound does nothing useful yet. Add one in the panel: open **Node**, then **Inbounds**. The panel asks for the inbound's private key, which you make on the node with `veilway genkey`. The [panel manual](../manuals/panel/) describes the rest, including users, subscriptions and publishing profiles.
+
+To check the config at any time, run `sudo bash veilway.sh check`.
 
 ## Set up the panel
 
@@ -110,7 +120,7 @@ The panel prints the token only while no admin account exists. Keep it private.
 
 The panel has no TLS of its own, so a web server must serve it over HTTPS. The examples use `panel.example.com`, the admin path `/p-0123456789abcdef` and the subscription path `/sub`. Use your own domain and your own admin path.
 
-For nginx, the script prints this block:
+For nginx, the script prints this block with your admin path filled in:
 
 ```
 location ~ ^(/p-0123456789abcdef|/sub)(/|$) {
@@ -133,61 +143,28 @@ panel.example.com {
 }
 ```
 
-Then open `https://panel.example.com/p-0123456789abcdef/` and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
-
-## Where files live
-
-| Path | What it holds |
-|---|---|
-| `/usr/local/bin/veilway` | The node binary |
-| `/usr/local/bin/veilway-panel` | The panel binary |
-| `/etc/veilway/config.json` | The node's config. Owner `veilway`, mode `0600` |
-| `/etc/veilway/config.example.json` | The example config from the release |
-| `/etc/veilway/panel.json` | The panel's config |
-| `/var/lib/veilway/veilway-state.json` | The node's usage state |
-| `/var/lib/veilway/veilway-replay` | The node's replay memory |
-| `/var/lib/veilway-panel/panel.db` | The panel's database |
-| `/var/lib/veilway-panel/panel.keys` | The panel's keys for sealed secrets |
-| `/var/lib/veilway-panel/signing.keys` | The subscription signing keys |
-| `/run/veilway/control.sock` | The node's control socket, group `veilway` |
-| `/etc/systemd/system/veilway.service` | The node's unit |
-| `/etc/systemd/system/veilway-panel.service` | The panel's unit |
-| `/var/backups/veilway` | Backups, and copies the script makes before it overwrites a file |
-
-The script creates two system users with no login shell: `veilway` for the node and `veilway-panel` for the panel. The installed versions are kept in `/var/lib/veilway/node.version` and `/var/lib/veilway-panel/panel.version`.
+Then open `https://panel.example.com/p-0123456789abcdef/`, enter the setup token, and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
 
 ## Install with Docker
 
-Docker is an alternative to the script. The images are on GitHub Container Registry:
+Docker is an alternative to the script. The alpha's images are on GitHub Container Registry, for linux/amd64 and linux/arm64:
 
 - `ghcr.io/veilway-project/veilway`, the node
 - `ghcr.io/veilway-project/veilway-panel`, the panel
 
-Both are built for linux/amd64 and linux/arm64. Each `v*` release tag publishes them with a version tag and `latest`. **No release is published yet, so these images do not exist yet.**
+Each `v*` release tag publishes both images with a version tag and `latest`.
 
-The core repository's `deploy/compose` folder runs the node and the panel together. Its README has the full steps. In short:
+The core repository's `deploy/compose` folder runs the node and the panel together, with a shared volume for the node's control socket. Its README has the full steps, including the exact commands that copy the config and the panel config into the volumes. In short:
 
-1. Write `config.json` from `config.example.json`. The `ws` transport listens on port 8443 in the container, and Compose publishes host port 443 to it.
-2. Make the keys:
-
-   ```
-   docker compose run --rm --no-deps --entrypoint veilway node genkey
-   ```
-
-3. Copy the config and the panel config into their volumes, and set the owner to uid `65532`, which the images run as. The README has the exact commands.
-4. Write `panel.json`, with a random `prefix` and `listen` set to `127.0.0.1:8480`.
-5. Start the stack and check it:
-
-   ```
-   docker compose up -d
-   docker compose ps
-   ```
-
-   The panel shows as `healthy` once port 8480 accepts connections.
+1. Write the node config from `config.example.json`. The `ws` transport listens on port 8443 in the container, and Compose publishes host port 443 to it.
+2. Make the keys with `docker compose run --rm --no-deps --entrypoint veilway node genkey`.
+3. Copy the node config and the panel config into their volumes, and set the owner to uid `65532`, which the images run as.
+4. Write `panel.json` with a random `prefix` and `listen` set to `127.0.0.1:8480`.
+5. Start the stack and check it with `docker compose up -d` and `docker compose ps`. The panel shows as `healthy` once port 8480 accepts connections.
 
 The panel uses host networking. It listens on loopback only, and a container's loopback cannot be reached from the host, so host networking is how the host reaches it. Put a web server with TLS in front of it, as described above.
 
-### Notes
+### Docker notes
 
 - `docker compose down -v` deletes the volumes, which hold the keys and the usage state. Keep the volumes when you stop the stack.
 - Only an `l3` exit needs more rights. It needs the node to run as root with `NET_ADMIN` and the TUN device. Add these lines under `node` in `docker-compose.yml`:
@@ -200,8 +177,31 @@ The panel uses host networking. It listens on loopback only, and a container's l
 
   Exits that use `netstack` need none of this.
 - Each WireGuard UDP port in the config needs its own line under `ports` on the node.
-- To build the node image from source, run `docker build` in the core repository. The panel's Dockerfile clones the core and the design system at the refs given in `VEILWAY_REF` and `VEILWAY_UI_REF`.
+
+## Where files live
+
+| Path | What it holds |
+|---|---|
+| `/usr/local/bin/veilway` | The node binary |
+| `/usr/local/bin/veilway-panel` | The panel binary |
+| `/etc/veilway/node/config.json` | The node's config. Owner `veilway`, mode `0600` |
+| `/etc/veilway/config.example.json` | The example config from the release |
+| `/etc/veilway/panel.json` | The panel's config |
+| `/var/lib/veilway/veilway-state.json` | The node's usage state |
+| `/var/lib/veilway/veilway-replay` | The node's replay memory |
+| `/var/lib/veilway-panel/panel.db` | The panel's database |
+| `/var/lib/veilway-panel/panel.keys` | The panel's keys for sealed secrets |
+| `/var/lib/veilway-panel/signing.keys` | The subscription signing keys |
+| `/run/veilway/control.sock` | The node's control socket, group `veilway` |
+| `/etc/systemd/system/veilway.service` | The node's unit |
+| `/etc/systemd/system/veilway-panel.service` | The panel's unit |
+| `/var/backups/veilway` | Backups, and copies the script makes before it overwrites a file |
+
+The installed versions are kept in `/var/lib/veilway/node.version` and `/var/lib/veilway-panel/panel.version`.
 
 ## Next
 
-Connecting a client is not covered here yet, because no client is released. The [client manual](../manuals/client/) says where each client stands.
+- [The alpha release](../alpha/): what is in the alpha and what is still limited.
+- [Client manual](../manuals/client/): the desktop app for Linux, macOS and Windows.
+- [Android app](../manuals/android/): installing and using the Android app.
+- [Home network](../manuals/home-network/): reaching devices on your home network through your node.

@@ -3,8 +3,8 @@ title: Panel manual
 description: Running a Veilway node from the web panel.
 ---
 
-:::caution[Not released]
-The panel is built in the code, but it is not released, and no install is published yet. It has not been tested end to end. Steps may change before the first release.
+:::note[Part of the alpha]
+The panel ships in the alpha, `v0.1.0-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). It has been built and reviewed, but it has not yet been run against a real node. [The alpha release](../../alpha/) lists its limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.
@@ -163,7 +163,7 @@ A rule then sends traffic to one of these:
 - **Nowhere, silently**: the traffic is dropped with no answer.
 - **Nowhere, refused**: the device is told it cannot connect, so apps give up at once.
 
-A rule can be turned off. It stays in the list and is skipped.
+A rule can be turned off. It stays in the list and is skipped. For a home network that a phone should reach through the node, see [Home network](../home-network/).
 
 ### Profiles
 

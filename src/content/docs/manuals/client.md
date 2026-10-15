@@ -128,7 +128,7 @@ Some connections need your answer before the first connect. Your answer applies 
 
 | Question | What it means |
 |---|---|
-| Connect to a private address? | The connection goes to an address that is not on the internet. That is normal for a server on your own network. The app asks once for each connection. |
+| Connect to a private address? | The connection goes to an address that is not on the internet, or to a device on the network you are on right now. That is normal for a server on your own network. The app asks once for each connection, and without your yes it does not connect to such an address. |
 | Connect without checking the server? | The connection does not check who it is talking to. Anyone on the network can read and change what you send. The button is red. |
 | This subscription expired over 30 days ago | The addresses and keys in it may no longer belong to your provider. Refresh it first if you can. The button is red. |
 | Use the connection that looks like ordinary web traffic? | This is the way the provider set up to blend in with normal browsing. |
@@ -203,10 +203,11 @@ The **Subscriptions** screen lists each subscription with its provider, its logo
 
 - **Refresh** (the icon on the row) gets the provider's current settings. It appears only when the provider allows it.
 - **Remove** deletes the subscription, its connections and its keys from this computer. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first.
+- **Send the local network through the VPN** (a checkbox on the row) is off by default. Off, the private and link-local ranges and local multicast stay outside the tunnel, so your printer, your router and the other devices at home stay reachable while you are connected. On, those ranges go through the tunnel like everything else, which is for a provider whose server can reach your home network. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops. On Windows and macOS, a private range that is not directly on your network still goes through the tunnel when the box is off.
 
 ## Known limits
 
 - The app has not run on a real machine yet, and no release is published.
 - On Linux, a real desktop with systemd-resolved and a reboot have not been tested.
-- The app connects with local network access off, and there is no setting to change that yet. Local devices may not be reachable while connected.
+- On Android, with Always-on VPN and Block connections without VPN, the system may block the local network even when the box is off. The app has not been tried with that on a real phone.
 - The Android app is not covered here.

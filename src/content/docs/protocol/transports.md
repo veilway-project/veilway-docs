@@ -956,7 +956,7 @@ A body, in both directions, is a sequence of:
 | 0 | 2 | `length` of the sealed chunk that follows, 16 to 16,016 |
 | 2 | `length` | One sealed chunk: ciphertext and tag |
 
-Both bodies are sent with `Content-Type: application/octet-stream` and a `Content-Length`. A request or response with nothing to carry holds one padding-only chunk, so no body is ever empty and every request is authenticated by chunks that only the session's client can seal. The node's response carries the status line, `Content-Type` and `Content-Length`, and no other field.
+Both bodies are sent with `Content-Type: application/octet-stream` and a `Content-Length`. The request's other fields are those of Chrome's `fetch` from a page of the same host, in Chrome's order, as "Client TLS and HTTP fingerprint" describes. A request or response with nothing to carry holds one padding-only chunk, so no body is ever empty and every request is authenticated by chunks that only the session's client can seal. The node's response carries the status line, `Content-Type` and `Content-Length`, and no other field.
 
 ### State machine
 
@@ -1092,7 +1092,7 @@ The first message of a TLS connection, the ClientHello, differs between programs
 
 What this does not achieve: the fingerprint is correct for one browser release and becomes a rare one when that release ages. If the Phase 2 measurement fails, this section is replaced by a statement that the client's TLS is recognizable.
 
-**What the first implementation does.** Its client TLS ClientHello is built on BoringSSL, the library Chrome uses, and shaped like a Chrome 131 hello for a `wss://` connection, with `http/1.1` as its only protocol offer. That shape has not been checked against a real Chrome capture, so it is a target and not yet a measured match. A `fronted` session is still an HTTP/1.1 client where Chrome would offer `h2`. Every native profile is still rated Detectable.
+**What the first implementation does.** Its client TLS ClientHello is built on BoringSSL, the library Chrome uses, and shaped like a Chrome 131 hello for a `wss://` connection, with `http/1.1` as its only protocol offer. That shape has not been checked against a real Chrome capture, so it is a target and not yet a measured match. A `fronted` session is still an HTTP/1.1 client where Chrome would offer `h2`. The header fields of the WebSocket upgrade and of a `fronted` request are Chrome 131's, for the platform the build runs on: User-Agent, the client hints, `Origin`, the `Sec-Fetch-*` fields and `Referer` on `fronted`, and `Accept-Language: en-US,en;q=0.9`, a fixed value and never the user's. They come in Chrome's order. Two fields differ on purpose: `Accept-Encoding` is `identity`, because the client reads no content coding and a front that compressed an answer would break the session, and the upgrade sends no `Sec-WebSocket-Extensions`, since no extension is negotiated. None of these fields is checked against a capture yet. Every native profile is still rated Detectable.
 
 **A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognizable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
 

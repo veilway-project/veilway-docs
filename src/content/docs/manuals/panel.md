@@ -4,7 +4,7 @@ description: Running a Veilway node from the web panel.
 ---
 
 :::caution[Not released]
-The panel is built in the code, but it is not released, and no install is published yet. Steps may change before the first release.
+The panel is built in the code, but it is not released, and no install is published yet. It has not been tested end to end. Steps may change before the first release.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.

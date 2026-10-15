@@ -28,11 +28,11 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 Parts of the site are written and parts are still stubs. Nothing here describes released software yet.
 
-- Written, in English: the draft protocol specification (overview, transports, control channel, subscription format, node links), the obfuscation layer status page, the config reference, the control API reference, the install guide and the panel manual.
-- Written, in Persian: the config reference, the control API reference, the install guide and the panel manual.
-- Still stubs: the Persian protocol pages, the threat model summary, the client manual and the SDK guides.
+- Written, in English: the draft protocol specification (overview, transports, control channel, subscription format, node links), the obfuscation layer status page, the config reference, the control API reference, the install guide, the panel manual and the client manual.
+- Written, in Persian: the config reference, the control API reference, the install guide, the panel manual and the client manual.
+- Still stubs: the Persian protocol pages, the threat model summary and the SDK guides.
 
-The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The node side of the native transports and the control channel is built, but no client speaks them yet. The panel is built but not released. The Windows and macOS client layers exist but have never run on a real machine, and the desktop and Android apps are being built for the first alpha.
+The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The node side of the native transports and the control channel is built, but no client speaks them yet. The panel and the desktop app are built but not released, and neither has been tested end to end. The desktop app has not run on a real machine, and the Android app is being built. The next step is the first release.
 
 ## Layout
 

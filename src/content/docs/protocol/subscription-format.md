@@ -334,7 +334,9 @@ The cost: recovery from a filled account needs the provider.
 - `Accept-Encoding: identity`. An answer with a `Content-Encoding` field is refused, which removes the decompression bomb as a case.
 - No redirect is followed. A request that is redirected is a failed fetch.
 - The timeouts and the size limit in the table of numbers. The body is read up to the limit and no further.
-- The endpoint's host name is looked up once per fetch, by the resolver in force: the tunnel's when the fetch goes through a tunnel, the system's when it does not. The address that was checked is the address that is dialed. An address that is loopback, link-local, private, unspecified or multicast is refused, for the endpoint and for every entry of `refresh_urls`.
+- The endpoint's host name is looked up once per fetch, by the resolver in force: the tunnel's when the fetch goes through a tunnel, the system's when it does not. The address that was checked is the address that is dialed. An address that is loopback, link-local (169.254.0.0/16, which holds the cloud metadata addresses, and fe80::/10), unspecified (all of `0.0.0.0/8`), multicast or broadcast, or an IPv6 address that carries an IPv4 address (the forms the profile rules refuse, "Transports of a profile"), is refused, for the endpoint and for every entry of `refresh_urls`, and no question is asked about it.
+- **A private address is asked about.** "Private" is the list of the profile rules ("Asked about once per profile"). When the endpoint's host, an IP literal or a name, gives no address that may be dialed except private ones, and at least one of those, the fetch stops before anything is sent, and the app says: "This subscription is on a private address (192.168.1.20). Only continue if you run this server yourself, for example at home." It shows every private address the host gave, and a yes goes on with exactly those. A host that gives a public address beside a private one is dialed at the public one and asked nothing; the private one is never dialed without a yes.
+- **The yes is to the addresses, and is kept with the subscription.** It names the IP addresses that were shown and never the host name, so a name that later comes to another private address (DNS rebinding) is asked about again. It is kept with the held subscription, so that the refreshes after it need no question, and it is dropped with the subscription. Only an address that is private and may be dialed can be in it. A subscription stored before this rule has none. What is stored is read as untrusted: an address in it that the rules refuse is ignored, and at most 16 are kept. A refresh host that a later document adds and the user confirms is held to the same rule.
 
 ### A pinned endpoint
 
@@ -369,7 +371,7 @@ A fetch outside a tunnel tells the local network that this device talks to this 
 | A tunnel of one of this subscription's own profiles is up | Refreshes automatically, on the interval, through that tunnel. |
 | No tunnel is up | Does not refresh by itself. The user can ask for a refresh. Before it goes out, the app names every host it may contact (the endpoint and the accepted `refresh_urls`) and says what the network will see: a lookup of each name and a TLS connection to it. |
 | A tunnel of another subscription is up | Does not refresh this subscription by itself. When the user asks, the app offers the two ways below. |
-| First import | The request leaves only after the user's first yes, by the same choice of ways. |
+| First import | The request leaves only after the user's first yes, by the same choice of ways. When the endpoint is on a private address, that is a second question after this yes and before any request, see "How a fetch is made". |
 
 **When another subscription's tunnel is up,** a request for this subscription can go two ways, and each shows something to someone. The app shows both and lets the user choose:
 
@@ -646,7 +648,7 @@ A subscription enters the app in one of these ways. Every one of them goes throu
 
 Nothing is sent, generated or stored by the app before the user continues. A deep link, a QR code or a file can bring the user to this screen and can do nothing else. It cannot cause a request, an enrollment or a used device place.
 
-**Step 2: the fetch.** One request with `op` `"fetch"`. A native link expects a signed document under the link's key, and anything else is a failure. A legacy link gets a `GET`. A whole document needs no fetch.
+**Step 2: the fetch.** One request with `op` `"fetch"`. A native link expects a signed document under the link's key, and anything else is a failure. If the endpoint is on a private address the user has not said yes to, there is no request: the client stays at this step with the question of "How a fetch is made", and nothing is sent, generated or stored until the answer. A no leaves the import where step 1 left it. A legacy link gets a `GET`. A whole document needs no fetch.
 
 **Step 3: the confirmation.** From the verified document the app shows:
 

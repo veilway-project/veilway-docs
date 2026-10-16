@@ -29,6 +29,7 @@ The panel reads `panel.json` when it starts, so restart it after you edit the fi
 | `allowed_hosts` | `[]` | Host names the admin pages answer to. Empty accepts any host, which is safe only behind a web server that checks it. |
 | `trusted_proxies` | `[]` | Addresses whose `X-Forwarded-For` the panel believes. Put your web server's address here. Required unless `direct` is `true`. |
 | `not_found` | a plain 404 page | The status, headers and body of the answer for every path the panel does not serve. Copy your web server's 404 into it. |
+| `trusted_mirrors` | `[]` | Up to 8 relay mirrors, each `{"name": "...", "secret": "..."}`. The secret is 32 to 64 random bytes in unpadded base64url. See [Relay mirrors](#relay-mirrors). |
 | `secure_cookies` | `true` | Keep `true`. Turn it off only for tests, or for plain HTTP on localhost. |
 | `direct` | `false` | Set `true` only when no proxy is in front of the panel. |
 | `two_step` | `"on"` | `"off"` turns the authenticator code off. Any other value keeps it on. See [Two-step sign-in off](#two-step-sign-in-off). |
@@ -120,6 +121,34 @@ A retired key is kept for 365 days, so that it can sign refusals. An app that ne
 ### Mirrors
 
 A mirror is another address for the same subscription. Apps try the mirrors when the endpoint is blocked. You can add up to four. A mirror that has no certificate from an authority needs its own pins, one per line.
+
+### Relay mirrors
+
+A mirror in the list above is only another address for the same panel. A relay mirror is a small program on another server and domain that serves the subscription path and forwards each request to your panel over HTTPS. Apps can then refresh through it while your main endpoint is blocked. Every document is signed, so the mirror cannot change one. It does read every token, so run it only on servers you control.
+
+1. On the other server, run `sudo bash veilway.sh install mirror`. It installs the node's binary, a `veilway-mirror` service that runs as its own user with no capabilities, and a config at `/etc/veilway-mirror/mirror.json` with a new secret. See [the mirror's config](../../reference/config/#veilway-mirror).
+2. In that file, set `upstream` to your panel's endpoint URL and `path` to the path your web server gives the mirror. Check it with `veilway mirror --check --config /etc/veilway-mirror/mirror.json`, then start it with `sudo bash veilway.sh restart mirror`.
+3. In `panel.json`, add the mirror and its secret to `trusted_mirrors`, then restart the panel:
+
+```json
+"trusted_mirrors": [{"name": "mirror-1", "secret": "<the secret from mirror.json>"}]
+```
+
+4. Put your web server in front of the mirror, which listens on `127.0.0.1:8490` and speaks plain HTTP. The mirror takes only a `POST` of at most 1,024 bytes of `application/json` to its path. For anything else it answers with status 599, and the web server must turn that into the answer it gives on any path it does not serve. In nginx:
+
+```
+location = /sub {
+    proxy_pass http://127.0.0.1:8490;
+    proxy_intercept_errors on;
+    error_page 599 = @unknown;
+    proxy_set_header X-Forwarded-For $remote_addr;
+}
+```
+
+   `@unknown` is a location of yours that answers like the rest of the site, for example `return 404;`.
+5. Add the mirror's public URL under **Mirrors** above, with its pins if its certificate is not from a certificate authority. Apps that import or refresh after this learn it from the signed document.
+
+The mirror tells the panel the real address of each visitor in an `X-Veilway-Mirror` header signed with the shared secret, so the panel's limits per source count the visitor and not the mirror. The panel accepts the header only from a mirror in `trusted_mirrors`, only for 60 seconds, and only once. A request with a header that fails any of that is answered like an unknown path. The mirror writes no token to its log and keeps nothing after a request. If the panel cannot be reached, or does not answer like a panel, the mirror hands the request back like any other it will not take.
 
 ### Profiles
 

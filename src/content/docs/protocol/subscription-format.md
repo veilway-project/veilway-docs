@@ -4,7 +4,7 @@ description: The signed document in which a provider delivers profiles to a clie
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review, and its client-side reading (the link, the envelope, the payload, the request, the client's state machine and the legacy reader) has a first implementation that was reviewed once against this page. It has not been reviewed by anyone outside the project. No client and no endpoint exists. Do not rely on any property described here.
+This page is a draft specification. It has had two rounds of internal adversarial review, and its client-side reading (the link, the envelope, the payload, the request, the client's state machine and the legacy reader) has a first implementation that was reviewed once against this page. It has not been reviewed by anyone outside the project. No client and no endpoint exists. The section "Static mirrors" is newer than the rest: it has had one adversarial review inside the project, and has no implementation and no test vectors yet. Do not rely on any property described here.
 :::
 
 A subscription is how a provider gives a user what the app needs to connect: one or more profiles, the list of exits, and a little content of the provider's own. Read [Protocol overview](../overview/) first for the terms. This page defines every profile field that [Transports](../transports/) and [Control channel](../control-channel/) rely on.
@@ -71,6 +71,18 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 | Fetch timeouts | 10 s to connect, 30 s in all |
 | Redirects | none |
 | Legacy list | at most 256 links, each at most 4,096 bytes. Every line that is not empty counts toward the 256, also one that is skipped. |
+| Static mirrors | at most 4 |
+| Static mirror base URL | at most 216 characters, ending in `/`, so that the base with a file name stays within 256 |
+| Mirror lookup id | 16 bytes, written as 32 lowercase hexadecimal characters |
+| Mirror period `P` | 604,800 s, fixed |
+| Overlap of mirror periods `W` | 86,400 s, fixed. No static file lives longer than `P + 2W`. |
+| Size of a static file | 9,413, 36,979, 140,867, 538,201 or 1,089,437 bytes. Every file of one folder has the same size. |
+| Static fetch time limit in all | 30 s up to 36,979 bytes, 60 s for 140,867, 120 s for 538,201, 240 s for 1,089,437 |
+| A folder moves to a smaller size | after 8 rounds in a row in which the smaller size held every envelope |
+| Publishing round | 1 to 12 hours, default 6 |
+| Decoy files in one period of one folder | at least 32 and at least one per 4 real files, at most 64 or one per 2 real files, whichever is larger |
+| Decoy birth and death | in each round, each with probability 1/4, drawn independently |
+| Cache lifetime asked of a static host | at most 600 s |
 
 The limits cannot all be reached at once. A large provider meets the limit on JSON values first: 64 profiles with a handful of transports and a few dozen exits each fit, 64 profiles with 256 exits each do not.
 
@@ -388,12 +400,250 @@ Automatic refresh can be switched off per subscription. A provider cannot ask fo
 
 A user whose profiles have all stopped working can refresh only by asking. With the kill switch on, nothing leaves the device outside a tunnel, the fetch included: the user has to switch the kill switch off, or disconnect, to refresh from the device's own address. The fetch is not an exception to the kill switch.
 
-If the subscription host is blocked as well, the format has two partial answers and no complete one:
+If the subscription host is blocked as well, the format has three partial answers and no complete one:
 
 - `refresh_urls`: the provider can list other endpoints for the same subscription. The client tries them in order after the first fails. Because every document is verified against a key held, a mirror needs no trust beyond seeing the token.
 - A whole document can be carried in a link, a QR code or a file (see "Import"), so a provider can send a new one over any channel the user still has.
+- `static_mirrors`: the provider can publish each device's recent document, sealed, on plain file hosting, ideally on a host name that is costly to block, and the client fetches it there with a plain `GET` when the endpoint and the relay mirrors fail. See "Static mirrors".
 
 Fetching a subscription through the fronting options of the transports is not specified in this draft. See "Open questions".
+
+## Static mirrors
+
+A static mirror is plain file hosting that holds, for each device, a recent signed document of that device, sealed so that only that device can open it. A cloud storage bucket, a content delivery network, a code host's raw file service or anyone's web server will do, and "Choosing a host" says which of them a censor can block cheaply. The host runs no Veilway code, receives no request body and never sees a token. The client fetches its file with a plain `GET` when the endpoint and the relay mirrors have failed, opens it, and checks what is inside exactly as it checks an answer from the endpoint.
+
+On this page a **relay mirror** is an entry of `refresh_urls`. It receives the request, token and device secret included, and answers with what the panel signs. A static mirror is the other kind: it receives nothing secret, and it can only hand back a file the panel wrote earlier.
+
+| | Relay mirror | Static mirror |
+|---|---|---|
+| What the host runs | A server that takes the `POST` and answers it for the panel | Anything that serves files over `https` |
+| Sees the token and the device secret | Yes, in every request | Never |
+| Sees documents | Yes | No. It holds sealed files that all have one size. |
+| Can enroll devices, fill places, fetch any device's document | Yes, it holds the token | No |
+| How fresh its answer is | As fresh as the panel | Up to one publishing round, plus the host's cache, behind the panel, and without usage numbers |
+| Serves a first import | No. A first import goes to the link's endpoint only, since `refresh_urls` comes with a document. | No |
+| Serves `"confirm"`, `"release"`, a new device name | Yes | No |
+| Trust the client gives its answer | None beyond the signature | None beyond the signature |
+
+### Keys of a static mirror
+
+A document is made for one device: it names the device's key, carries that device's transport secrets and marks it with `this`. So a static mirror holds one file per device, not one per account, and the keys of that file come from the token and the device secret together. Keys from the token alone would let anyone who holds the link read every device's document, transport secrets included, which is exactly what the device secret exists to prevent (see "The request"). The device secret is never sent to a static mirror. It only goes into the derivation.
+
+The notation is the transports page's: a label in double quotes is its ASCII bytes followed by one zero byte, `||` joins byte strings, and `HKDF(salt, ikm, info, n)` is HKDF-Extract with `salt` and `ikm`, then HKDF-Expand with `info` to `n` bytes, all with SHA-256. `token_bytes` are the 16 decoded bytes of the token and `secret_bytes` the 16 decoded bytes of the device secret.
+
+| Value | Derivation | Used for |
+|---|---|---|
+| `prk_m` | HKDF-Extract(salt `"veilway v1 sub mirror"`, ikm `token_bytes \|\| secret_bytes`) | Deriving the next two keys, nothing else |
+| `k_name` | HKDF-Expand(`prk_m`, `"veilway v1 sub mirror name" \|\| device_pub`, 32) | Deriving file names, nothing else |
+| `k_mirror` | HKDF-Expand(`prk_m`, `"veilway v1 sub mirror key" \|\| device_pub`, 32) | Deriving the key of each file, nothing else |
+| `mirror_id` | HKDF-Expand(`k_name`, `"veilway v1 sub mirror id" \|\| be64(e) \|\| base_url`, 16) | The name of the device's file for period `e` on one static mirror |
+| `k_file` | HKDF-Expand(`k_mirror`, `"veilway v1 sub mirror seal" \|\| salt`, 32) | Sealing one file, once |
+
+- **`device_pub`** is the `device_public_key` of the device's requests: the 32 bytes of the WireGuard public key the client made and sends. It is never a key taken from a document, which with a provider-issued key names another one. The panel takes it from the request it derives from, and the client from its own key.
+- **`e`** is the period number, `floor(unix_time / P)` with `P` = 604,800 s, and `be64(e)` is it as 8 bytes, big-endian. Period `e` starts at `start(e)` = `e × P`. See "Periods and clocks".
+- **`base_url`** is the base URL exactly as the document's string holds it, after JSON decoding, which the URL rules limit to ASCII. Nothing is normalized: two base URLs that differ in any byte give different names. So every static mirror has names of its own, and files on two hosts cannot be matched by their names.
+- **The file name** is `mirror_id` in lowercase hexadecimal, 32 characters, followed by `.bin`. One case only, because some storage folds the case of names. `.bin` because every host serves it as plain bytes, compresses nothing of that type, and it names no app.
+- **Domain separation.** The six labels of this section (the five above and `"veilway v1 sub mirror file"` below) are used nowhere else. The token and the device secret enter no other HKDF: their other uses are the HMACs under the panel's `lookup_key`, the sealed copy of the token, and the body of a request. Nothing derived here can be taken for a lookup value, a stored copy, a transport key or a control key, and none of those can be taken for these.
+- **The client holds everything it needs:** the link, its device key, its device secret and its clock. It stores nothing new.
+- **What changes them.** A reset of the token, a new device key or a new device secret gives a new `k_name` and a new `k_mirror`. The name changes in every period and differs per static mirror. `k_mirror` is fixed for the life of one token and one device, which is what "What the host keeps" is about.
+
+### Periods and clocks
+
+The client computes `e` from its own clock and asks each static mirror, in one refresh, for exactly one name: the name for `e`. It never asks for the names of `e - 1` and `e + 1` as well, in the same refresh or as a retry, since two names asked together would tie two periods of the device together for the host.
+
+The publisher covers clocks that are off instead. With `W` = 86,400 s, in a round at time `t` in period `e`, it:
+
+1. writes the files of `e`;
+2. from `start(e + 1) - W` on, also writes the files of `e + 1`;
+3. until `start(e) + W`, also writes the files of `e - 1`, and deletes them in the first round after.
+
+So the files of one period exist from `W` before it begins to `W` after it ends. No file lives longer than `P + 2W`, 9 days, and a client whose clock is off by less than a day finds its file.
+
+The format already needs a correct clock, and a day is far looser than what it asks. A device whose clock is more than 300 s behind refuses every fresh document by its `issued_at`, and expiry is judged by the same clock, so a clock off by a day has broken refreshes before it misses a static file. The panel needs a synchronized clock as well: its setup says it requires NTP, and it says so on every page while the system reports its clock as not synchronized, because a panel whose clock is off by more than `W` writes names that no client asks for.
+
+### The file
+
+| Offset | Length | Content |
+|---|---|---|
+| 0 | 32 | `salt`: 32 bytes from a secure random source, drawn for this write and never used for another |
+| 32 | size minus 48 | The sealed plaintext |
+| size minus 16 | 16 | The Poly1305 tag |
+
+The plaintext is sealed with ChaCha20-Poly1305 (RFC 8439) under `k_file`, with a nonce of 12 zero bytes and the associated data `"veilway v1 sub mirror file" || mirror_id`, where `mirror_id` is the 16 bytes, not the hexadecimal. The plaintext, size minus 48 bytes long, is:
+
+| Offset | Length | Content |
+|---|---|---|
+| 0 | 4 | `n`, the length of the envelope in bytes, big-endian |
+| 4 | `n` | The envelope: a signed document, as "Which files exist" says, with nothing added or removed |
+| 4 + `n` | the rest | Zero bytes |
+
+The sizes a file may have, the largest envelope each holds (the size minus 52), and the time a client allows for fetching it:
+
+| Size of the file | Largest envelope | Time limit in all |
+|---|---|---|
+| 9,413 | 9,361 | 30 s |
+| 36,979 | 36,927 | 30 s |
+| 140,867 | 140,815 | 60 s |
+| 538,201 | 538,149 | 120 s |
+| 1,089,437 | 1,048,576, the response body limit. The space would hold 1,089,385. | 240 s |
+
+The time limit is the one of the size the answer's `Content-Length` names, and of the largest size when it names none or names another number. The limit to connect is 10 s, as for any fetch.
+
+**One size per folder.** Every file the publisher writes into a folder, decoys included, has the same size: the smallest size in the table that holds the largest envelope the publisher puts in that folder. When a larger size is needed, every file of the folder moves to it in that round. A folder moves to a smaller size only after 8 rounds in a row in which the smaller one held every envelope, so that a document that grows and shrinks around a border does not make the folder change size round after round. A file's size says nothing about its own document, and the folder's size says only the bracket of its largest one. A provider with many profiles pays for it in bytes: up to four times the size of a document per fetch, and in every round.
+
+Decisions behind the layout:
+
+- **No magic and no version byte.** The client knows what it asked for, since it built the URL. A magic number would let a host or a scanner find Veilway files by their first bytes. Without one, a file is a random salt and ciphertext, which look like random bytes to anyone without the key. The version is in the labels: the associated data and every derivation begin with `"veilway v1"`. A later version has other labels, so other names and other keys, and a client never opens a file of another version. There is nothing on the wire to downgrade.
+- **A key per file instead of a random nonce.** The protocol's AEAD is ChaCha20-Poly1305 through `ring`, which has no XChaCha20-Poly1305. A device's files are rewritten every round for the life of its token, which can be years. A random 12-byte nonce under one key would be safe at those numbers, but it puts a limit on how often one key may be used, which someone would have to keep. A salt that is never used twice gives every write its own key, so the zero nonce is used once per key, and nothing needs counting. A random source that repeated a salt would repeat a key and a nonce: the publisher draws salts from the same source as every key of the panel.
+- **The id in the associated data** binds a file to its name and its period. A host that copies one file over another, or keeps a file under its name into another period, makes it fail.
+- **The length inside the seal** keeps the size of the document out of sight, and the zero bytes after it are checked so that a file has exactly one valid form.
+- **Sizes that are not powers of two.** A body of exactly 32,768 bytes is a more distinctive thing to look for than one of an odd size. The difference is small: any fixed set of sizes can be looked for.
+
+**How the client opens a file**, in order. Any step that fails is a failure of this static mirror, and changes nothing:
+
+1. The body is exactly one of the five sizes. The client reads at most 1,089,437 bytes, and a body with more is a failure without reading further.
+2. It derives `k_file` from the first 32 bytes and `k_mirror`, and opens the rest with the associated data above. A tag that does not verify is a failure.
+3. `n` is at least 1 and at most the smaller of 1,048,576 and the size minus 52, and every byte after the envelope is zero.
+4. The `n` bytes of the envelope go into the same refresh as an answer from the endpoint, with every check of "What is checked, in order", "Identity", "Keys held for a subscription" and "Rollback and expiry". The client keeps one path for both: the static path hands over bytes, and nothing about where they came from is passed on or trusted. What it does with the result is in "Order and rate".
+
+Opening proves only that the file was made by someone who knows `k_mirror`: the panel, the device itself, or anyone who has seen one of the device's requests in the clear, which includes whoever ends TLS for the endpoint or a relay mirror. It proves nothing about the provider. Only the signature does.
+
+### Listing static mirrors
+
+A document lists static mirrors in a top-level member of its own:
+
+| Member | Type | Required | Rule and default |
+|---|---|---|---|
+| `static_mirrors` | list of at most 4 strings | no | Base URLs of static mirrors. Default empty. |
+
+A base URL:
+
+- is `https`, with a host name, no user or password part, no query and no fragment, at most 216 characters, and its path ends in `/`. The file URL is the base followed by the file name, with nothing between.
+- follows the rules for a URL the token is sent to, although the token is never sent there: no percent-encoded control character, no `%2f` or `%5c`, no `.` or `..` segment in any spelling. One rule set keeps one parser.
+- has no IP literal and no pins in version 1. Its certificate is validated by its chain, always. Static hosting with a certificate of its own has little use, and pins would bring the standby and notice rules of "A pinned endpoint" to hosts the panel does not run.
+- does not have the host and port of the link's endpoint or of an entry of `refresh_urls`, and is not listed twice. One host has one role, so a yes to a static host never has to be told apart from a yes to send it the token.
+
+A `static_mirrors` that breaks a rule refuses the document, as a bad `refresh_urls` does. A whole document has no static mirrors, whatever it lists, since it has no link to derive keys from.
+
+**Why a member of its own, and not a new kind of entry in `refresh_urls`.** A client of this version refuses a document whose `refresh_urls` holds an entry of a shape it does not know, so a new kind of entry there would make every older client refuse every document of a provider that uses it. An unknown top-level member is ignored. It is also a different promise: a host in `refresh_urls` is one the user agreed to send the token to, and a static host is not.
+
+**Confirmation.** The hosts of `static_mirrors` are shown on the import confirmation with the refresh hosts, marked as places that receive no secret. A static host that a later document adds is confirmed as a refresh host is: noted in the subscription's details, asked about at the next refresh the user starts, and not contacted before. What is confirmed is the host and port as a static mirror. A confirmed static host stays confirmed only while documents list it. The client keeps these confirmations in a form of their own, such as `host:port#static`, apart from the refresh hosts: the first implementation's `Held::restore` drops a confirmed host that its document does not list in `refresh_urls`, and would drop these.
+
+### Choosing a host
+
+What a censor sees of a static fetch is the host name in the TLS handshake. A host name that only this provider uses can be blocked at no cost to anyone else: its own domain, a name of its own under a hosting service such as `name.github.io`, a bucket addressed by its own host name, or a content delivery network's name for one customer. Once the censor learns such a name, the mirror is gone for every user.
+
+Blocking costs the censor something only when the host name is shared by many unrelated sites and what identifies the provider's folder is in the path, which TLS hides. Examples are storage addressed by path, `https://<shared storage host>/<bucket>/<folder>/`, and a code host's raw file service, `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<folder>/`. Even then, a censor that can read the handshake's fingerprint or the sizes of answers has more to go on, see "What each party learns".
+
+The panel carries a list of shared host names and warns about every base URL whose host is not on it: "only you use this host name. A censor that learns it can block it without blocking anything else."
+
+Every host is to be taken as one that keeps every version of every file and lists the files to anyone: a code host keeps every commit and shows the tree, and storage may keep versions and list its keys. See "What the host keeps".
+
+### How a client fetches a static mirror
+
+The rules of "How a fetch is made" hold, with these differences:
+
+- **A `GET` of the file URL, and nothing else.** No body, no token, no device key or secret, no `kids`, no cookie, no `Referer`, no `Accept-Language`, `Accept-Encoding: identity`, no `Range`, and no conditional field (`If-None-Match`, `If-Modified-Since`). The client stores no `ETag` or `Last-Modified` from a static host, because sending one back would give the host an identifier of the device that outlives the period.
+- **Status 200 only.** Any other status, a 404 included, is a failure of this mirror. The content type is not checked, since hosts differ, and an answer with a `Content-Encoding` field is refused as for any fetch.
+- **No redirect is followed.** The base URL in the document must be the address that serves the file, not one that redirects to it.
+- **The time limits and the size rule of "The file"** in place of the fetch timeouts and the response body limit.
+- **The certificate is validated by its chain,** with the client's browser-like TLS. Once the client has a browser's full fingerprint from its fingerprint pack, ALPN `h2` and the HTTP/2 settings included, a static fetch uses all of it. Until then a static fetch is not a browser's, see "What each party learns".
+- **The same address rules.** The host name is looked up once per fetch by the resolver in force. A refused address is refused, and a private address is asked about, with the yes kept per subscription as for the endpoint.
+
+**A failure is never a revocation.** A 404, a file of the wrong size, a file that does not open, padding that is not zero, and a document that fails a check are each a failure of that mirror and nothing more. The client goes on to the next place. It never takes a missing file to mean that the token was reset, the device removed or the subscription ended, since nothing about a missing file is authenticated. A static mirror can tell the client that the account is switched off or has expired only through a signed refusal, which is checked like any other.
+
+### Order and rate
+
+One refresh tries the places it may go in this order:
+
+1. The endpoint of the link.
+2. The confirmed entries of `refresh_urls`, in the document's order.
+3. The confirmed entries of `static_mirrors`, in the document's order.
+
+From the endpoint or a relay mirror, the refresh ends at the first accepted document, a newer one or the same bytes again, or at a signed refusal that verifies. A static mirror is tried only after every place before it failed in the same refresh, and from it the refresh ends only at a newer document that is accepted, or at a signed refusal that verifies:
+
+- **The document the client already holds** means only that this mirror has nothing newer. The client tries the remaining static mirrors. If none has a newer document, the refresh is not a successful one: the time of the last successful refresh stays as it was, the reason shown is the endpoint's, and the backoff goes on as after a failure.
+- **An older document**, which a stale cache gives, is refused by its serial, a failure of that mirror, and the next is tried.
+
+When every place has failed, the refresh has failed: the client keeps the last good document, shows the reason the endpoint failed and that no mirror had a newer document, and backs off as after any failure.
+
+The static mirrors add no fetches of their own. One refresh makes at most one `GET` per static mirror, for one name, and refreshes follow the interval, the backoff and the limit on refreshes by the user's request, as before. "When a fetch happens" holds unchanged: there is no automatic refresh outside the subscription's own tunnel, a refresh the user asks for outside a tunnel names the static hosts with the others before it goes out, and when another subscription's tunnel is up the user chooses the way. An automatic refresh inside the subscription's own tunnel reaches a static mirror through that tunnel when the endpoint has failed, and the host then sees the addresses of the provider's exits, see "What each party learns". A static mirror is never used for a first import, `"confirm"`, `"release"` or a new device name, which only the endpoint and the relay mirrors can serve.
+
+### Publishing
+
+The panel's publisher writes one folder for each base URL that its documents list, since the names depend on the base URL, and labels each folder in its interface by the host. The operator copies each folder to the host of its base URL, with any tool that also deletes what the folder no longer holds, such as a sync that deletes, or a git branch replaced in each round. A built-in upload may follow later. It would follow the same rules.
+
+**What the panel stores.** The panel never stores the token in the clear or the device secret, so it derives a device's `k_name` and `k_mirror` at a moment it has both: at each request from an enrolled device that carries the current token and the right secret, which includes the device's `"confirm"`. `device_pub` is the request's `device_public_key`. It stores the two keys sealed with the account's other secrets (see "Storing the token"), under `secret_key` with the associated data `"veilway v1 sub secret" || record_id || name`, where `name` is `mirror_name` or `mirror_key` followed by the 32 bytes of `device_pub`, so that a key moved to another device's row does not open. The names of each period it computes from `k_name` when it writes them. Neither key gives a way back to the token or the secret. This works with "show links once", since the derivation needs no stored copy of the token. A device that enrolled before the provider switched static mirrors on gets files after its next request to the endpoint or a relay mirror, and a client learns the base URLs from a document, so a device needs one successful refresh after the switch before a static mirror can help it.
+
+**Which files exist.** In each folder, for each period the round writes (see "Periods and clocks"):
+
+- One file per confirmed device of each account whose token is current. A pending device has none.
+- The document in it is the one the endpoint could answer to a `"fetch"` of that device, without its `usage` member. Usage is left out because a host may keep every version for good, and a record of a user's usage over time is what such a history would give whoever later opens it. While two signing keys are current, it is signed with the older of them, because a static fetch cannot say which keys the client holds, and every client that refreshed since the overlap began holds the older one. When nothing in the document has changed and more than half of its lifetime is left, the publisher may use the last one it signed for that device.
+- **Serials.** The panel keeps the last serial it signed for each device, for the endpoint and the publisher alike, and signs each new document of that device with the larger of the current time and that serial plus 1. A document without `usage` is another body than the endpoint's, so it takes its own serial, and no serial is ever signed for two bodies.
+- An account that is switched off or has expired: the signed refusal `"disabled"` or `"expired"`, signed afresh in every round so that it stays within the age limit of a refusal. No other refusal is ever put in a file.
+- A reset of the token, the removal of a device or the deletion of an account deletes the files concerned, of every period, in the next round, not at once, so that the moment of the deletion does not mark the moment of the action. The new token's files appear after each device's first request with it.
+
+**Rounds.** The publisher writes in rounds, every 1 to 12 hours as the operator sets, 6 by default. In every round it rewrites every file of every folder, real or decoy, with a fresh salt, whether its document changed or not, and writes nothing between rounds. So the host sees every file change in every round, and learns nothing about which documents changed or when. A round is at most 12 hours so that a refusal in a file is never older than its limit of a day, even behind a cache. Each round is written into a new directory, complete, and then put in place of the previous one in one step, a rename or a link that is switched, so that a copy made during a round never takes half of it. The operator's copy tool reads from the directory in place.
+
+**Decoys.** Each folder also holds decoy files: random bytes from a secure source, of the folder's size, under names of 16 random bytes in the same hexadecimal form. A decoy belongs to one period of one folder, is written in the same window as the real files of that period, and is gone with them. The rules, for one period of one folder:
+
+- With `R` real files, the number of decoys is at least the larger of 32 and `R / 4`, rounded up, and at most the larger of 64 and `R / 2`, rounded up.
+- When the period's files are first written, the number of decoys is drawn uniformly from that range.
+- In each round, the publisher draws, independently of each other and of every real change, whether one new decoy is born, with probability 1/4, and whether one decoy chosen at random dies, with probability 1/4. A birth and a death are never paired. When the count is then below the range, new decoys are drawn until it is inside. When it is above, decoys chosen at random are deleted.
+- Decoys are rewritten in every round, like real files.
+- A name the folder already holds is never chosen, by the publisher's own check, though at 16 random bytes that does not happen.
+
+Decoys hide something only from those who have no record of fetches: a reader of the host's file list, a scanner, anyone who reads the host's history. To them the number of files gives the number of devices only within a range, and a new or vanished file may be a decoy. The host and anyone with its logs see that no client ever fetches a decoy, and can tell decoys from real files within a period.
+
+**What a folder holds.** Only the files, named as above: no index, no listing, no manifest, no file that names the panel, the provider or the app. An operator's own web server serves the folder with directory listing off. A folder is never inside a path the panel serves.
+
+**Caching.** The operator sets the host to send `Cache-Control: max-age=600` or less where the host allows it. A cache that holds a file longer costs only freshness: a client gets an older document, which its serial check refuses or which is the one it holds, and goes on to the next mirror. A cache that holds a 404 for a new file costs that device the mirror until the cache lets it go.
+
+**What the host keeps.** Every host is taken to keep every version of every file, as a code host keeps every commit, and to list the files. A device's files open with `k_mirror`, which is fixed for the life of its token, so whoever later gets the link and the device secret, by a copy of the device's storage or as one who ends TLS for the endpoint, can open every version that a host still keeps, of every period: the transport secrets, the profiles and the device list of their time. That is why published documents carry no `usage`. A key that moves forward with each period, so that a later key opens no earlier file, is an open question and not part of version 1.
+
+**When the panel cannot publish.** A panel whose key file is missing or does not open its records publishes nothing and deletes nothing: it leaves the folders as they are and says so, as it does for the endpoint.
+
+### What each party learns
+
+| Who | Learns | Does not learn | Can do |
+|---|---|---|---|
+| The static host, its content delivery network, and anyone with its logs | The file names of each period, the folder's one size, the number of files, the time of each round, files that come and go. From its logs, for each file of a period: every fetch, with the address it came from and its time, and so which files are decoys. | A token, a device secret, a document, the size of any document, which files belong to one account, which file belongs to whom, which name of one period is which name of the next | Refuse to serve, delete files, serve an older version it kept, serve bytes that fail to open. Each of these is a failure of that mirror, or a document the serial check refuses. |
+| A network observer between the device and the host | The host's name in the TLS handshake, the handshake's fingerprint, the time of the fetch, and an answer close to one of five sizes | The file, the document, and whether the file is real | Block the host. That costs it nothing when the host name is the provider's alone, see "Choosing a host". |
+| Anyone who reads the host's file list or history (on public hosting, everyone) | Every file name and every version, when files come and go, and when they are rewritten, which is every round | Their contents, their owners, which are decoys, which files of two periods belong to one device | Fetch them, watch them, keep them, and report them to the host to have them taken down |
+| A holder of the leaked link, without the device secret | Nothing about static files | Any file name or key | Nothing here. It can still use the endpoint, see "What a provider can and cannot do". |
+| Someone with the link and the device secret: a copy of the device's storage, or whoever ends TLS for the endpoint or a relay mirror and saw a request | The device's file names and its key | Other devices' files | Open every version of that device's files that a host still keeps |
+
+**A file name is a pseudonym for one period.** Within a period, the host's logs tie every fetch of one device to one name: the addresses it fetched from, and when. A fetch from the device's own address gives the host that address, so a host that can tie an address to a person can tie the name to the person. At the change of period, every name of a folder changes in the same round, so the change marks nobody. Across periods, the host can still follow a device by what it saw in both: the same address, or the same habits of time. Names differ on every static mirror, so two hosts cannot match their files by name. A reset of the link gives the device new keys and so new names.
+
+**Fetches say when other paths fail.** A static mirror is tried only after the endpoint and the relay mirrors failed. A host that sees many of its files fetched in one hour learns that many users of this provider could not reach the endpoint then, and from where.
+
+**A fetch through the tunnel shows the provider's exits.** An automatic refresh that reaches a static mirror through the subscription's own tunnel comes from the address of one of the provider's exits. Over time the host learns which addresses are this provider's exits, and that the folder belongs to the provider who runs them.
+
+**The handshake is not yet a browser's.** Until the client's TLS offers `h2` and a browser's HTTP/2 settings, it offers ALPN `http/1.1` alone, where a browser offers `h2` (threat model G61), and the subscription fetch has gaps of its own in what it sends (G63). Until both are closed, a host or a network observer that reads the handshake can tell a static fetch from a browser's request to the same host. On a shared host that is what separates these fetches from the other traffic to it.
+
+**Replay.** The host can serve any version of a file it kept, and the cache can serve an old one. An old document passes the seal and the signature, and then meets the serial: lower than the one held is refused, the same bytes are no newer document. So a static host can hold a client on its current document until that document expires, exactly as anyone who answers a fetch can, and no further. It cannot serve one device's file as another's, or one period's as another's: the key and the id in the associated data differ.
+
+**Deletion as a signal.** A file that goes away can be a reset, a removed device, a deleted account or a decoy that died, to those who see only the file list. The host's logs tell more: a real file was fetched and a decoy never was. Decoys do not hide a mass event either: a provider that resets every link deletes every real file in one round.
+
+**Against a relay mirror.** A relay mirror sees the token and the device secret of every device that fetches through it, and every document. Whoever controls one holds every link that passed: it can read documents, enroll devices of its own and fill places. A static host holds no secret, sees no document, and can do nothing with what it holds but serve it or not. What a static mirror costs instead: its answers are older and carry no usage, it cannot serve a first import or enroll, its logs give each device a pseudonym for a period, and a host that keeps history keeps sealed documents that a later leak of the device's secrets opens.
+
+**What stays visible.** A folder of files with random names and one size, all rewritten at once on a schedule, is itself a pattern that a host scanning for it could find, even though no file names the app. A host that bans such folders takes the mirror down. That is a failure of the mirror, and the endpoint, the relay mirrors and a whole document remain.
+
+### Rules a static mirror keeps
+
+1. **Nothing secret goes to a static host.** A static fetch is a `GET` of the file URL and carries no token, device secret, device key, `kids`, cookie, conditional field or other identifier of the device.
+2. **A static mirror adds no trust.** The opened envelope goes through exactly the checks of an answer from the endpoint, by the same code. A file that opens is not trusted for having opened.
+3. **A static answer changes nothing unless a newer document is accepted.** A missing file, any status but 200, a wrong size, a file that does not open, padding that is not zero and a refused document are each a failure of that mirror. None of them is a revocation, removes anything or warns of more than a failed refresh. The document already held is no newer document and no successful refresh.
+4. **The order is fixed.** A static mirror is tried only after the endpoint and every confirmed relay mirror failed in the same refresh, and it is never used for a first import, `"confirm"`, `"release"` or a device name.
+5. **No new fetches, one name.** A static host is confirmed by the user before it is contacted, a refresh makes at most one `GET` per static mirror, for the name of the period of the client's clock, and every rule of "When a fetch happens" holds.
+6. **A file looks random.** It has no magic, no version and no length in the clear, and every file of a folder, decoys included, has the same size.
+7. **One key, one seal.** Every write of a file uses a salt that was never used before, and so a new `k_file`.
+8. **Every round rewrites every file,** real or decoy, into a new directory that takes the place of the old one in one step, and nothing writes a file between rounds.
+9. **The panel keeps no extra secret to publish.** It never stores the token in the clear or the device secret for this. It stores `k_name` and `k_mirror`, sealed under `secret_key`, derived from the key of the device's requests.
+10. **A file exists only for a confirmed device of an account whose token is current,** and holds only the endpoint's document for that device without `usage`, or the refusal `"disabled"` or `"expired"`. A reset, a removed device or a deleted account removes its files in the next round.
+11. **Names are per period and per mirror.** The files of a period exist from `W` before it to `W` after it, no file lives longer than `P + 2W`, and each base URL has its own folder and its own names.
+12. **Decoys belong to one period of one folder,** stay in their range, and are born and die independently, never in pairs, as "Publishing" says.
+13. **One serial, one body.** The endpoint and the publisher sign each device's documents from one counter, each serial the larger of the current time and the last one plus 1.
 
 ## Contents
 
@@ -480,6 +730,7 @@ If none of them is there, it shows `default`. The client never guesses what lang
 | `update_interval` | integer | no | Seconds between automatic refreshes. |
 | `endpoint_pins` | list of 1 or 2 pins | no | The pins of the link's endpoint, each standard base64, 44 characters, as the `pins` of a candidate. The two are different: a list that names one pin twice refuses the document. See "Pins, and a standby". A pinned endpoint always lists two, the active pin and a standby, and the client cannot enforce that. The list must include a pin the client holds for that endpoint. A document that has it when the link's endpoint is not pinned is refused. It is ignored in a whole document, which has no endpoint. Absent, it changes nothing. |
 | `refresh_urls` | list of at most 4 entries | no | Other endpoints of the same subscription. An entry is a URL string, for an endpoint whose certificate is validated by its chain, or an object with exactly `url` and `pins` (a list of 1 or 2 pins, standard base64), for a pinned one. A pin is not listed twice. An IP literal in a `url` follows the same one spelling as in the link, and is allowed only in an entry given as an object with `pins`. An entry of the link's own host and port that has pins must hold at least one pin the client holds for the link's endpoint, or the document is refused. That is the same rule as for the link, said per entry, and a document cannot move an entry from one kind to the other: an entry with the host and port of the link's endpoint, or of another entry, must be of the same kind as it, and an entry of any other shape or kind refuses the document. A `url` follows the URL rules below and has no fragment. Their hosts are shown on the import confirmation. A host that a later document adds is not contacted until the user has confirmed it: the app notes "the provider added a refresh host" in the subscription's details, as it notes a renewed key, and asks at the next refresh the user starts. Until then the client uses the hosts it already had. What the user confirms is a host and port together, with whether it is pinned. A host listed pinned that was confirmed unpinned, or the reverse, is asked about again, and a change of its pins is not. It stays confirmed only while documents list it: one that a document dropped and a later document lists again is asked about again. A whole document has no endpoints, whatever its `refresh_urls` say. |
+| `static_mirrors` | list of at most 4 strings | no | Base URLs of static mirrors, validated by chain, no pins. See "Listing static mirrors". |
 | `profiles` | list of 1 to 64 | yes | See "A profile". |
 | `devices` | list of at most 64 | no | Each: `name` (display text, at most 32 characters, may be empty), `enrolled_at` (Unix seconds), `this` (boolean, true for the asking device), `pending` (boolean, default `false`). See "Devices and their places". When more than one entry has `this` set, each of them is left out and the document is kept. |
 | `usage` | object | no | See "Usage". |
@@ -714,6 +965,7 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 - Point its own profiles at any public address, which the client will then dial when the user connects. With many users, that can be a third party's address, which then receives their connection attempts.
 - Choose the server name a client sends in clear when it connects. A name that is dangerous to be seen asking for is the user's risk, and the user does not see it unless they look at the profile's details.
 - List up to four more endpoints that the app will send the token to when it refreshes, once the user has seen and confirmed their hosts.
+- List up to four static mirrors that the app will send a plain `GET` to when everything else fails, once the user has confirmed their hosts. Each such host sees the device's address, or the address of the provider's exit, and a name for the device that holds for one period, see "What each party learns".
 - Show false names, numbers, notices and cards in its own area, and false names on its own profiles and exits. With translations it can show different text to readers of different languages.
 - See the time of every refresh, and tell users and devices apart. It may also learn a reader's language from the browser that opens one of its links and from the script of a device's name.
 - Give different users different documents.
@@ -723,7 +975,7 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 **It cannot:**
 
 - Run code, or show markup, remote images or its own interface elements. Content is typed data and plain text.
-- Open a URL without the user confirming a screen that shows the host, or make the app fetch anything other than its own subscription endpoints.
+- Open a URL without the user confirming a screen that shows the host, or make the app fetch anything other than its own subscription endpoints and the static mirrors its documents list, each only once the user has confirmed its host.
 - Make the app connect to the device itself, to its router or its neighbors, or to a private address without the user being asked.
 - Change a setting of the app: the kill switch, the resolver setting, routes, the theme, the language, the update channel, the fingerprint pack.
 - Raise a rating, or hide the class of a transport. It can only lower a rating with `rating_cap`. A lower-class transport in its list is still used only with the user's consent.
@@ -733,7 +985,7 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 - Replace its own earlier document with an older one, or move a device to a provider-issued key without a new import.
 - Import, enroll or connect without the user.
 
-**Someone who is neither the provider nor the user,** and can answer the fetch in the provider's place, can refuse to answer, can serve a document it has seen that is still valid and no older than the stored one, and can replay a signed refusal it has seen for up to a day, which shows the user a wrong message and changes nothing. On a first import of a link with provider-issued keys there is no stored document, so it can serve any older valid document of that account until that document expires. Nothing else.
+**Someone who is neither the provider nor the user,** and can answer the fetch in the provider's place, can refuse to answer, can serve a document it has seen that is still valid and no older than the stored one, and can replay a signed refusal it has seen for up to a day, which shows the user a wrong message and changes nothing. On a first import of a link with provider-issued keys there is no stored document, so it can serve any older valid document of that account until that document expires. Nothing else. A static host is one of these, and can do less: it is never asked for a first import, and it cannot send a refusal it was not given.
 
 **A holder of a leaked link can:**
 
@@ -752,13 +1004,14 @@ It cannot read what the user sent, change what the user's app holds, or sign any
 - **The panel can show a link again, at a price.** Copies of tokens, sealed under a key that is not in the database, are what let an operator copy a link again. A stolen database alone gives no secret, but a stolen database with the key file gives every token and every sealed secret. An operator who does not want to carry the tokens sets "show links once", and then cannot copy a link again, only reset it. The key file is a single point of loss: a restored database without it serves nothing, and the panel says so and never makes new keys by itself. See "Storing the token".
 - **A signing key that sits on the panel is as safe as the panel.** If the panel signs online, whoever takes the panel signs documents for every user, and a stolen key cannot be revoked. Enrollment needs a document per device, which pushes providers towards signing online. Where the signing key lives is the provider's largest decision (threat model Q9).
 - **What a self-signed endpoint costs.** It is the way for a provider with no domain, and it has three costs. The link is longer: 114 characters of fragment against 70, so a QR code is denser and harder to scan from a screen or a print. The key behind the pin is a long-lived secret on the panel's host: whoever has it and a place on the network can answer the fetch, receive the token, and serve stale documents. The standby pin, kept off the server, is what turns that theft into a switch and a reset of the tokens instead of a new link for every user. An operator who leaves the standby on the server loses that protection. And a self-signed endpoint is something a censor can look for: a prober that completes the handshake sees a certificate that no authority signed on a host that serves subscriptions, which ordinary sites rarely do, and the pin cannot hide it. On a server that also runs a node it marks the address, and the client caps the profiles at that address when it can see the match. The panel warns the operator of this, as the transports page has the node do. A pin adds no trust that the link did not already have, since whoever gave the link already chose the key and the host. A link altered on the way to lose its pin is no new case of that: it also fails closed unless the altering party can show a certificate the chain accepts, and one who can alter a link can alter its key as well.
+- **A static mirror trades freshness and a pseudonym for holding no secret.** Its host sees no token and no document, but its logs tie the fetches of a device in one period to one file name, with the address each came from. Every host is taken to keep every sealed version, and whoever later holds the link and the device secret opens them all, which is why they carry no usage. A host name that only the provider uses is blocked at no cost. See "Static mirrors".
 - **Stale documents.** A client that cannot refresh keeps working on old addresses and keys. Whoever can answer the fetch can keep it there for up to a document's lifetime before any warning shows. The warnings and the 30 day rule limit how quietly that continues.
 - **Presence.** An automatic refresh happens only inside the provider's own tunnel, where the provider already sees the device. A refresh the user asks for outside a tunnel is visible to the local network, and the app says so first.
-- **Every parser here needs a fuzz target** in the same change as the parser. The first implementation has targets for the link grammar, the envelope, the payload behind a valid signature, the legacy reader and the request. The logo decoder and the Encrypted Client Hello configuration have none yet, because their readers are not written. Each target asserts that no input changes stored state unless every check passed. The panel's parser of the request body needs one too (`fuzz_sub_request`).
+- **Every parser here needs a fuzz target** in the same change as the parser. The first implementation has targets for the link grammar, the envelope, the payload behind a valid signature, the legacy reader and the request. The logo decoder and the Encrypted Client Hello configuration have none yet, because their readers are not written. Each target asserts that no input changes stored state unless every check passed. The panel's parser of the request body needs one too (`fuzz_sub_request`), and so does the opening of a static file (`fuzz_sub_mirror`), which has none yet because it is not written.
 - **What the first implementation does with secrets.** Its types print no document, secret, dial address or path in debug output. Secrets are not wiped from memory when they are dropped, which is the same stated limit the threat model records as G36.
 - **Nothing here is invented cryptography.** The envelope is JWS with EdDSA as published, verified by the strict rule of RFC 8032. The rules around it (the key in the link, rotation, identity, enrollment) are policy, and they have been reviewed once, inside the project.
 
-Tests this page needs before it leaves Draft: a document with another header, a badly encoded part, a signature that only a lax verifier accepts, a lower serial, an equal serial and other bytes, another `subscription_id`, already expired, or under a key that is not held, is refused and changes nothing; a native link answered with a legacy list imports nothing; opening a deep link or scanning a code sends no packet until the user continues; declining an import frees the device place; a refresh that changes the device key or adds a private key fails; an unknown token and an unknown path get identical bytes and timing from the panel, while a valid token always gets a signed answer; no refresh leaves the device outside the subscription's own tunnel unless the user asked; a pinned link whose server shows another certificate, or the pinned certificate without its key, or does not negotiate TLS 1.3, fails with no byte of the request sent and the message of "A pinned endpoint", and is a failed fetch and not a refusal; a link with a pin cut short, or with a fourth field, is refused, and a link without a pin never trusts a self-signed certificate; no document moves a link from pinned to unpinned or back, and a document that lists no pin the client holds is refused; a dump of the panel's database holds no token, no transport secret and no private key in the clear, and a panel with accounts and no key file serves nothing and makes no key; a document list of `endpoint_pins` that leaves out the pin of the certificate the panel serves is never signed; a request is matched by the lookup value and an unknown token costs the same as a known one; a profile that dials loopback is refused and one that dials the device's own network is not dialed; one subscription's document cannot change another; no field of any document changes the kill switch, the resolver setting, the routes or a rating upward; the token appears in no log line, no URL and no request to a host the provider did not sign; a hostile corpus of text, URLs and logos is shown as plain text, refused or left out.
+Tests this page needs before it leaves Draft: a document with another header, a badly encoded part, a signature that only a lax verifier accepts, a lower serial, an equal serial and other bytes, another `subscription_id`, already expired, or under a key that is not held, is refused and changes nothing; a native link answered with a legacy list imports nothing; opening a deep link or scanning a code sends no packet until the user continues; declining an import frees the device place; a refresh that changes the device key or adds a private key fails; an unknown token and an unknown path get identical bytes and timing from the panel, while a valid token always gets a signed answer; no refresh leaves the device outside the subscription's own tunnel unless the user asked; a pinned link whose server shows another certificate, or the pinned certificate without its key, or does not negotiate TLS 1.3, fails with no byte of the request sent and the message of "A pinned endpoint", and is a failed fetch and not a refusal; a link with a pin cut short, or with a fourth field, is refused, and a link without a pin never trusts a self-signed certificate; no document moves a link from pinned to unpinned or back, and a document that lists no pin the client holds is refused; a dump of the panel's database holds no token, no transport secret and no private key in the clear, and a panel with accounts and no key file serves nothing and makes no key; a document list of `endpoint_pins` that leaves out the pin of the certificate the panel serves is never signed; a request is matched by the lookup value and an unknown token costs the same as a known one; a profile that dials loopback is refused and one that dials the device's own network is not dialed; one subscription's document cannot change another; no field of any document changes the kill switch, the resolver setting, the routes or a rating upward; the token appears in no log line, no URL and no request to a host the provider did not sign; a hostile corpus of text, URLs and logos is shown as plain text, refused or left out; a static fetch carries no token, device secret, device key, cookie or conditional field; a static file of a wrong size, with a bad tag, with padding that is not zero, under another file's name or another period's, or holding an older serial, changes nothing and the next mirror is tried; a static file with the document held is no successful refresh; a 404 from a static mirror is never taken as a revocation; a static mirror is never tried before the endpoint and the relay mirrors have failed in the same refresh, and never for an import; a refresh asks each static mirror for one name only, the one of the client's period; an older client ignores `static_mirrors` and keeps the document; a `static_mirrors` with pins, an IP literal or the host of the endpoint is refused; the derivation and one sealed file match vectors computed apart from the implementation; the publisher writes each period's files from `W` before it to `W` after it and no longer; every file of a published folder, decoys included, has one size and changes in every round, the decoy count stays in its range, and no decoy birth is paired with a death; a published document has no `usage`; a panel publishes no file for a pending device, and none after a reset or a removal; the endpoint and the publisher never sign one serial twice for a device.
 
 ## Open questions
 
@@ -773,7 +1026,14 @@ Each is listed with the default this draft takes. The first five are the ones a 
 | Can the endpoint really give the web server's own answer for an unknown path, in bytes and in time? | Required. Handing the request back to the web server is exact. Repeating a learned answer is an imitation that must be measured. |
 | Can "an unknown token answers like an unknown path" hold in timing, when a valid token leads to a signature and an unknown one does not? | Required of the panel. Not shown. The check of the token must cost the same either way, and the difference in what follows is visible only to someone who already holds a valid token. |
 | Is no automatic refresh outside the subscription's own tunnel too strict? A user whose profiles all die gets no new ones until they ask. | Kept. The app tells the user to refresh when every profile of a subscription has failed. |
-| May a fetch use the fronting options of the transports? (threat model Q15) | Not specified. `refresh_urls` and a whole document in a link are the only answers here. Candidates for the fetch would have to be in the link. |
+| May a fetch use the fronting options of the transports? (threat model Q15) | Not specified. `refresh_urls`, `static_mirrors` and a whole document in a link are the answers here. Candidates for the fetch would have to be in the link. |
+| A static mirror's file name could be fixed for the life of a token and a device, so that the host's logs follow one device for as long. Should names change per period? | Yes, in version 1. Names change every 604,800 s, derived with the period's number and the base URL, and every name of a folder changes in the same round, so the change marks nobody. It costs a client clock within a day of the panel's, which the format needs anyway, and two sets of files for two days around each change. See "Periods and clocks". |
+| May a client fetch a static mirror automatically outside a tunnel, since the request carries no secret? | No. The fetch still tells the local network and the host the device's address and when its other paths failed. Only when the user asks, as for any refresh. |
+| Should a link be able to name a static mirror, so that a first import works while the endpoint is blocked? | No. The derivation needs a device secret the provider has seen, so a device that never reached the endpoint has no file. A whole document in a link is the way for a first import. |
+| Is the decoy range enough, and are births and deaths at 1 in 4 rounds each the right shape? | Taken as written. No measurement is behind it. It hides the count and single events only from those without the host's logs, and hides no mass event. |
+| Rewriting every file in every round costs bandwidth: a folder of 1,000 files of 36,979 bytes is about 37 MB per round, and twice that in the two days around a change of period. Should a round rewrite only what changed? | No. Rewriting only changed files tells the host when each user's document changed, which follows their devices and profiles. The operator sets the round, from 1 to 12 hours. |
+| A host is taken to keep every sealed version, and `k_mirror` is fixed for the life of a token, so a later leak of the link and the device secret opens all of them. Should the key move forward with each period, by a hash chain, so that a later key opens no earlier file? | Not in version 1. The panel would keep the current key of the chain and drop the old one, and a client would step its key forward from the last period it knows, which a client that was away for long must step through. It is the way to give static files forward secrecy, and is the first thing to add. |
+| Should the publisher upload by itself? | Later, as an option. The first version writes a folder and the operator copies it, so the panel holds no credential of the host. |
 | Should a document over 30 days past its expiry stop working, not only ask? | It asks. Stopping would let whoever blocks the subscription host take the user's working connection away after a month. |
 | How does a panel change the key of a self-signed endpoint, or recover from its theft, without a new link? | By `endpoint_pins`: the panel always lists the active pin and a standby kept off the server, and a switch loads the standby. A client offline for the whole notice time, or an operator who left the standby on the stolen server, needs a new link. A new link at every change was passed over, because a link in a chat or on a wall cannot be recalled. |
 | Should the panel store a token only as a keyed hash? | Not by default. Operators want to copy a link again, so it also stores a sealed copy under a key outside the database. "Show links once" drops the copy. |

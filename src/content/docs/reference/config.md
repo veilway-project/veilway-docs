@@ -706,6 +706,8 @@ veilway schema
 veilway genkey
 veilway genkey --transport
 veilway gensecret
+veilway mirror --config mirror.json
+veilway mirror --config mirror.json --check
 ```
 
 `run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --replay <file>` sets the path of the replay file, `veilway-replay` next to the state file by default; only a config with an obfuscated transport uses it, see `replay`. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key. `genkey --transport` prints a new node transport key for `transport_keys` of one inbound of one node, and its public half, which is what the profiles of that inbound carry: it is an X25519 key of its own and never a WireGuard key. `gensecret` prints a new transport secret for one device of a `veilway` inbound.
@@ -777,3 +779,20 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 The four statuses: `ok` means the check passed. `warn` means the node starts and works, but something is likely not what you want. `fail` means the node would not start or would not work for the thing checked. `skipped` means the check was not tried because a step before it failed, or because of `--no-api`. A final line counts the statuses.
 
 The exit status is 0 when nothing failed, 1 when a check failed (a config that reads but does not validate counts), and 2 when the config could not be read at all. Warnings do not change it.
+
+## `veilway mirror`
+
+`veilway mirror --config mirror.json` runs a relay mirror of a subscription endpoint, see [Relay mirrors](../../manuals/panel/#relay-mirrors). `--check` only validates the file and prints every error and warning; it exits with a non-zero status on an error. The file holds the secret it shares with the panel, so the command refuses a file that group or others can read. It is JSON, unknown members are errors, and it is read once at start. The command exists on Unix only.
+
+| Member | Default | What it does |
+|---|---|---|
+| `name` | none | The name the panel lists the mirror under in `trusted_mirrors`: 1 to 32 characters from `a-z`, `0-9`, `-` and `_`. |
+| `listen` | none | The address the mirror listens on, plain HTTP. Use a loopback address and put your web server in front. |
+| `path` | none | The public path it serves, such as `/sub`. Only a `POST` to exactly this path is forwarded. |
+| `upstream` | none | The panel's subscription endpoint, an `https` URL with a path. The chain of its certificate is always validated against the Mozilla roots. |
+| `upstream_pins` | `[]` | Up to 4 SHA-256 hashes, in base64, of the SubjectPublicKeyInfo of the upstream's certificate. When given, the certificate must match one of them as well as validate. |
+| `trusted_proxies` | `[]` | Addresses and networks of your web server. Only they may connect, and only they are believed about the visitor's address. Empty is for a test with no web server: the mirror then answers requests it will not take with a 404 of its own. |
+| `client_address_header` | `X-Forwarded-For` | The header the visitor's address is read from, as for the `ws` transport's `client_address_header`. |
+| `secret` | none | 32 to 64 random bytes in unpadded base64url, the same as in the panel's `trusted_mirrors`. |
+
+The mirror forwards a `POST` with `Content-Type: application/json` and a body of at most 1,024 bytes. Anything else, and every request while the upstream fails, is handed back with status 599 for the web server to answer. The panel's status, `Content-Type` and body come back unchanged, with `Cache-Control: no-store`. The panel is sent `X-Veilway-Mirror: v1;name;address;timestamp;nonce;mac`, where `mac` is HMAC-SHA-256 under the secret over `veilway mirror v1`, then the name, address, timestamp (seconds) and nonce (16 random bytes), each after a line feed, with the nonce and the mac in unpadded base64url. The panel accepts it within 60 seconds of its clock and once per nonce.

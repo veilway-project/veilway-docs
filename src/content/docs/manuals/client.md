@@ -23,7 +23,7 @@ The Windows installer is per machine. It installs the app for every user of the 
 
 ### macOS
 
-The macOS build is an app in a `.dmg` disk image. Open the image and move Veilway to the Applications folder.
+The alpha has no macOS desktop app yet; it comes in a later update, after it has run on a real Mac. On macOS, use the command-line client from the release page (`veilway connect`, run as root).
 
 ## Administrator rights
 
@@ -196,7 +196,7 @@ Under **Theme**, pick **System**, **Dark** or **Light**. System follows your com
 
 **Check for updates when the app opens** is on by default. Press **Check for updates** at any time. The screen then shows **This is the newest version**, or **Version {version} is ready** with an **Install and restart** button.
 
-Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it is installed. On Windows the update installs without asking questions.
+Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it is installed. On Windows the update installs without asking questions. On Linux the app does not update itself: install the newer `.deb` or `.rpm` from the release page the same way as the first one.
 
 ## Log
 

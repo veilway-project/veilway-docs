@@ -972,6 +972,7 @@ If none of them is there, it shows `default`. The client never guesses what lang
 | `devices` | list of at most 64 | no | Each: `name` (display text, at most 32 characters, may be empty), `enrolled_at` (Unix seconds), `this` (boolean, true for the asking device), `pending` (boolean, default `false`). See "Devices and their places". When more than one entry has `this` set, each of them is left out and the document is kept. |
 | `usage` | object | no | See "Usage". |
 | `support` | list | no | See "Provider content". |
+| `agreement` | object | no | See "Provider content". |
 | `cards`, `logo`, `accent` | | no | See "Provider content". |
 | `notices` | list | no | See "Provider content". |
 
@@ -1088,6 +1089,7 @@ All of it is data. It is shown in an area that is visibly the provider's, apart 
 | Member | Type | Rule |
 |---|---|---|
 | `support` | list of at most 4 | Each: `label` (display text, at most 32 characters) and `url`. |
+| `agreement` | object | `terms` and `privacy`, each a `url`, at least one of them: the provider's terms of service and privacy policy. The app shows both and asks the user to accept them before the first connection with this subscription, and again when either changes; until then it does not connect. An `agreement` with no link, or with a member that is not a valid `url`, is left out. |
 | `cards` | list of at most 6 | See below. |
 | `logo` | object | `type`: `"png"` or `"jpeg"`. `data`: standard base64 of at most 65,536 bytes. The client decodes it with size limits, refuses more than 512 by 512 pixels or anything that is not a plain still image, and re-encodes it before it is shown. A logo that fails is left out. |
 | `accent` | string `#rrggbb` | One color. The client adjusts it until text on it meets the app's contrast rule. |
@@ -1102,11 +1104,11 @@ A card has a `type` and, by type:
 | `notice` | `severity`, `text` (cut to 280 bytes) |
 | `link` | `label`, `url` |
 
-Every `url` in `support`, in a `link` card and in `refresh_urls`:
+Every `url` in `support`, in `agreement`, in a `link` card and in `refresh_urls`:
 
 - is an `https` URL with a host name, no user or password part, at most 512 characters, or at most 256 for a refresh URL or the URL of a move, which are also held to the rules for a URL the token is sent to. Those two may also be `http`, as a plain link may, since what they carry is sealed. A pinned or plain one may have an IP literal as its host, as a pinned or plain link may;
 - is shown with its host in ASCII form, with the registrable domain marked so that a long name cannot hide whose it is;
-- in `support` and in a card, is opened only after the user confirms a screen that shows that host, in the system's browser, never inside the app, and is never fetched by the app;
+- in `support`, in `agreement` and in a card, is opened only after the user confirms a screen that shows that host, in the system's browser, never inside the app, and is never fetched by the app;
 - in `refresh_urls`, is fetched by the app under the rules of "Fetching" and only those.
 
 There are no icons, images, fonts or styles in provider content other than the one logo and the one color.

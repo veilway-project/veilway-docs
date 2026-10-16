@@ -7,7 +7,7 @@ description: Starting texts for a Terms of Service and a Privacy policy for a se
 These are starting texts. Replace every part in [brackets], remove what does not apply to you, and have a lawyer in each place where you operate and where your users live check the result before you publish it. The privacy section describes what the software keeps by default. Change it when your setup keeps more, for example when you turn on destination logging or keep your own logs.
 :::
 
-The Veilway project does not run your service and does not see your terms or your users. You publish these texts yourself and give their addresses under **Settings** in the panel, as the Terms of service URL and the Privacy policy URL. Your users then see them as support links in their subscription.
+The Veilway project does not run your service and does not see your terms or your users. You publish these texts yourself and give their addresses under **Settings** in the panel, as the Terms of service URL and the Privacy policy URL. Your users see them in the app and accept them before their first connection, and again after you change either one.
 
 ## Terms of Service
 

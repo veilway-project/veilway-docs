@@ -69,6 +69,7 @@ export default defineConfig({
 					translations: { fa: "حقوقی" },
 					items: [
 						{ label: "Operator terms", translations: { fa: "شرایط اپراتور" }, slug: "legal/operator-terms" },
+						{ label: "App privacy policy", translations: { fa: "حریم خصوصی برنامه" }, slug: "legal/app-privacy" },
 						{ label: "Provider templates", translations: { fa: "الگوهای ارائه‌دهنده" }, slug: "legal/provider-templates" },
 					],
 				},

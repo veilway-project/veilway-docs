@@ -21,7 +21,7 @@ The panel reads `panel.json` when it starts, so restart it after you edit the fi
 |---|---|---|
 | `listen` | `127.0.0.1:8480` | The address the panel listens on. Must be a loopback address, because the panel has no TLS of its own. |
 | `prefix` | `/panel` | The admin path. Random at install. No trailing slash. Letters, digits, `-`, `_`, `.` and `/` only. |
-| `sub_path` | `/sub` | The path of the subscription endpoint. Must differ from `prefix`, and must not sit inside it or the other way round. |
+| `sub_path` | `/sub` | The path your web server forwards subscription requests to. Each endpoint is reached at this path, a slash and the endpoint's name, such as `/sub/main`. Must differ from `prefix`, and must not sit inside it or the other way round. |
 | `database` | `panel.db` | The SQLite database. It holds no keys. |
 | `keys` | `panel.keys` | The keys for sealed secrets. Mode `600`. Kept apart from the database. |
 | `signing` | `signing.keys` | The subscription signing keys. Mode `600`. |
@@ -132,7 +132,7 @@ A mirror is another address for the same subscription. Apps try the mirrors when
 A mirror in the list above is only another address for the same panel. A relay mirror is a small program on another server and domain that serves the subscription path and forwards each request to your panel over HTTPS. Apps can then refresh through it while your main endpoint is blocked. Every request is sealed to your panel's gateway key and every answer to its own request, so the mirror reads no token, no device secret and no document, and cannot change or replay anything in a way that is accepted. It still sees each visitor's address and when they refresh, so run it on servers you trust with that.
 
 1. On the other server, run `sudo bash veilway.sh install mirror`. It installs the node's binary, a `veilway-mirror` service that runs as its own user with no capabilities, and a config at `/etc/veilway-mirror/mirror.json` with a new secret. See [the mirror's config](../../reference/config/#veilway-mirror).
-2. In that file, set `upstream` to your panel's endpoint URL and `path` to the path your web server gives the mirror. Check it with `veilway mirror --check --config /etc/veilway-mirror/mirror.json`, then start it with `sudo bash veilway.sh restart mirror`.
+2. In that file, set `upstream` to your panel's URL for the endpoint the mirror stands for, which ends in the panel's `sub_path`, a slash and that endpoint's name, such as `https://panel.example.org/sub/main`, and `path` to the path your web server gives the mirror. Check it with `veilway mirror --check --config /etc/veilway-mirror/mirror.json`, then start it with `sudo bash veilway.sh restart mirror`.
 3. In `panel.json`, add the mirror and its secret to `trusted_mirrors`, then restart the panel:
 
 ```json
@@ -249,7 +249,7 @@ Links carry the active key. Every signed document lists the active key, then the
 - `gateway.keys` holds the active key and the retired keys (private halves), plus the next key's public half and its id.
 - `gateway.next` holds the next key's private half. The panel writes it once, for you to move off the server and keep offline. While the panel still finds that file on the host, it warns on the **Gateway keys** page and in the log. A next key left on the server is taken together with the active one.
 
-Both files have mode `600` and sit outside the database. Neither is in the panel's backup. Back them up separately, apart from the database. Their paths are the `gateway` and `gateway_next` fields of the config.
+Both files have mode `600` and sit outside the database. The panel's backup holds `gateway.keys`, with the active and retired private keys and the public half of the next key. It never holds the next key's private half, which stays with you. Back `gateway.next` up apart from the server. Their paths are the `gateway` and `gateway_next` fields of the config.
 
 ### The page
 
@@ -259,7 +259,7 @@ Both files have mode `600` and sit outside the database. Neither is in the panel
 - The next key: its id, and whether its file is still on the host.
 - The retired keys: when each one is destroyed, and how many accounts sent a request under it in the last 30 days.
 - How many accounts have no device yet.
-- Failure counters: size, key, open, request, window, replay and source.
+- Failure counters: size, key, open, request, window, replay, source and full.
 - A clock warning, when the system reports its clock as not synchronized.
 
 ### Switch keys on a schedule
@@ -274,24 +274,25 @@ The page adds a notice when the active key is older than 180 days. That is the t
 
 ### A stolen key
 
-Choose **Key stolen** and load the next key as above. The old key is destroyed at once. Apps fall back to the next key.
+Choose **Key stolen** and load the next key as above. Every key the panel holds, the retired ones too, is destroyed at once, since whoever took the file took them all. Apps fall back to the next key.
 
 If the thief could have recordings of requests, every recorded request opens. That is the case when a request passed a content delivery network, a proxy that ends TLS, a relay mirror or a plain http path. The switch cannot undo that.
 
-The panel lists the accounts that sent a request under the stolen key. It offers one action, **Reset tokens of affected accounts**. It shows the count first, as a dry run, then gives new links. Only a theft that you know came with no recordings needs the switch alone.
+The panel lists the accounts that sent a request under any of the destroyed keys. It offers one action, **Reset tokens of affected accounts**. It shows the count first, as a dry run, then gives new links. Only a theft that you know came with no recordings needs the switch alone.
 
 ### A lost key
 
 If the panel has accounts but no readable active key, the endpoint answers every request as an unknown path. The page and every page banner say so, and the log says so every hour at error level. The panel never makes keys by itself.
 
 - With the next key in hand, load it. Apps follow by their fallback.
-- Without it, choose **Make new gateway keys**. Old links stop working for first imports. Apps learn the new key only from a newer document on a static mirror, or from a link shown again. Tokens and devices stay valid.
+- If you kept the private half of the key that was active, choose **Load a key I kept**, paste it and give the number the panel showed for it. It becomes the active key, a new next key is made, and the links that hold it work again. The panel asks you to confirm, and it writes the action to the audit log. This works only while no key file is on the server: a file that cannot be used must be repaired or moved aside first, and the panel never writes new keys over it.
+- Without a key, choose **Make new gateway keys**. Old links stop working for first imports. Apps learn the new key only from a newer document on a static mirror, or from a link shown again. Tokens and devices stay valid.
 
 ### Clock and replays
 
 The panel needs a synchronized clock (NTP). It acts on a request only when the request's time is within 300 seconds of its own clock. It judges by the highest clock value it has seen since it started, and logs a warning if the clock steps back. The panel warns on every page while the system reports its clock as not synchronized.
 
-The memory of seen requests is kept in RAM only. After a restart the panel refuses any request time before the start, so a device with a clock that runs behind gets nothing for at most 300 seconds.
+The memory of seen requests is kept in RAM only and holds at most 200,000 requests. A request that opens is recorded before its token is looked at, so anyone who knows a gateway key could otherwise fill it. When it is full the panel answers new requests as an unknown path until some expire (a request is forgotten after at most ten minutes), counts them as **full**, and logs a warning at most once a minute. The endpoint counts its sources in a limiter of its own, and an IPv6 source by its /48, so a flood on the endpoint cannot lock an admin out. After a restart the panel refuses any request time before the start, so a device with a clock that runs behind gets nothing for at most 300 seconds.
 
 ### Plain http and relay mirrors
 
@@ -321,7 +322,9 @@ Go to **Settings** > **Endpoints**. Each endpoint has:
 
 One endpoint is the default. Each endpoint needs its own host and port.
 
-The panel answers on every endpoint's host. Your web server maps each host to the panel's `sub_path`. The panel routes by path and tells the endpoints apart by the `Host` header.
+Each endpoint has its own path on the panel: `sub_path`, a slash and the endpoint's name. Your web server maps each endpoint's public host and path to that panel path, for example `https://sub.example.org/s` to `http://127.0.0.1:8480/sub/main`. The panel tells the endpoints apart by that path alone. It never reads the `Host` header for this, because the sender or a proxy in between can write anything there. A request to a path under `sub_path` that no endpoint has is answered as an unknown path. The bare `sub_path` reaches no named endpoint: it answers (a panel with no named endpoint is served there), and its documents list no pins. A document lists the pins of the endpoint the request reached.
+
+Pins of an endpoint can change only in a way that keeps one of the current pins, because an app accepts a new list of pins only when it holds one of them. A change that keeps none is refused. Loading the standby key keeps it. Each entry of the mirrors list is read by the rules the apps read it by: an entry with the host and port of an endpoint has that endpoint's kind of check, and when it is pinned, one of its pins. A setting that the apps would refuse in a signed document is refused when you save it.
 
 ### Plain http
 
@@ -506,20 +509,20 @@ The panel keeps five files apart, each readable only by its owner:
 - The database holds no key.
 - `panel.keys` holds the keys for sealed secrets.
 - `signing.keys` holds the subscription signing keys.
-- `gateway.keys` holds the gateway keys.
+- `gateway.keys` holds the gateway keys. The panel's backup holds this file.
 - `gateway.next` holds the next gateway key, until you move it off the server.
 
-Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes these files, so keep the archive private. The gateway files are the exception in the panel's own backup, see [Gateway keys](#gateway-keys).
+Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes these files, so keep the archive private. `gateway.next` is the exception: it is never in the panel's backup, see [Gateway keys](#gateway-keys).
 
 Passwords are hashed with Argon2id. Admin sign-in asks for a code as well as the password.
 
 ### Backup and restore from the panel
 
-On **Account**, **Backup and restore** makes one `.vwbackup` file with a consistent copy of the database, `panel.keys` and `signing.keys`. The gateway keys are not in it: back up `gateway.keys` separately, apart from the database. You choose a passphrase of at least 12 characters, and the file is encrypted with it (Argon2id and ChaCha20-Poly1305). Both actions ask you to confirm your password and code again, and both are written to the audit log. No API token can use them.
+On **Account**, **Backup and restore** makes one `.vwbackup` file with a consistent copy of the database, `panel.keys`, `signing.keys` and `gateway.keys`. The next gateway key's private half is not in it. You choose a passphrase of at least 12 characters, and the file is encrypted with it (Argon2id and ChaCha20-Poly1305). Both actions ask you to confirm your password and code again, and both are written to the audit log. No API token can use them.
 
 The file holds every user's secrets and the panel's keys. Keep it private. A lost passphrase cannot be recovered, and without it the file is useless.
 
-To restore, pick the file and enter its passphrase. The panel checks the file before it changes anything, saves the current database and keys in a `pre-restore-<time>` folder next to the database, swaps the files in, and restarts. The panel stops with a failure code so that the service manager (the install script sets `Restart=on-failure`) starts it again on the restored files. Every session ends, so you sign in again with an admin from the backup. A backup from a newer panel is refused.
+To restore, pick the file and enter its passphrase. The panel checks the file before it changes anything, saves the current database and keys in a `pre-restore-<time>` folder next to the database, swaps the files in, and restarts. The panel stops with a failure code so that the service manager (the install script sets `Restart=on-failure`) starts it again on the restored files. Every session ends, so you sign in again with an admin from the backup. A backup from a newer panel is refused. When the gateway keys on the server are not the ones in the backup, the panel restores the backup's and says so before you go on: links made under a key the backup lacks stop opening. The file it replaces is in the `pre-restore-<time>` folder.
 
 ### Updating the panel
 

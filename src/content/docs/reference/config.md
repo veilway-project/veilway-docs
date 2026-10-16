@@ -789,7 +789,7 @@ The exit status is 0 when nothing failed, 1 when a check failed (a config that r
 | `name` | none | The name the panel lists the mirror under in `trusted_mirrors`: 1 to 32 characters from `a-z`, `0-9`, `-` and `_`. |
 | `listen` | none | The address the mirror listens on, plain HTTP. Use a loopback address and put your web server in front. |
 | `path` | none | The public path it serves, such as `/sub`. Only a `POST` to exactly this path is forwarded. |
-| `upstream` | none | The panel's subscription endpoint, an `https` URL with a path. The chain of its certificate is always validated against the Mozilla roots. A host under `.invalid` is refused, since it is the template's placeholder. |
+| `upstream` | none | The panel's subscription endpoint, an `https` URL with a path. The path names the endpoint: the panel tells its endpoints apart by path and never by the `Host` header, so it is the panel's `sub_path`, a slash and the endpoint's name. The chain of its certificate is always validated against the Mozilla roots. A host under `.invalid` is refused, since it is the template's placeholder. |
 | `upstream_pins` | `[]` | Up to 4 SHA-256 hashes, in base64, of the SubjectPublicKeyInfo of the upstream's certificate. When given, the certificate must match one of them as well as validate. |
 | `trusted_proxies` | `[]` | Addresses and networks of your web server. Only they may connect, and only they are believed about the visitor's address. Empty is for a test with no web server: the mirror then answers requests it will not take with a 404 of its own. |
 | `client_address_header` | `X-Forwarded-For` | The header the visitor's address is read from, as for the `ws` transport's `client_address_header`. |

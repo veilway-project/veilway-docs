@@ -4,7 +4,7 @@ description: Running the official Xray beside a Veilway node, so that stock VLES
 ---
 
 :::note[Server side only]
-This page describes the server side as it is built. Its tests run in Docker containers (`scripts/gate-xray.sh`). It has not run on a real server yet. The Veilway apps do not connect to Xray links yet, and the client side is still to do.
+This page describes the server side as it is built. Its tests run in Docker containers (`scripts/gate-xray.sh`), over TCP and UDP. It has not run on a real server yet. The Veilway apps do not connect to Xray links yet, and the client side is still to do.
 :::
 
 ## What it is
@@ -51,14 +51,16 @@ Traffic from an Xray client works like traffic from a tunnel:
 - It leaves through the user's exit and follows the rules.
 - Names are resolved by the node, not by the client.
 
-**Limit: TCP only.** The add-on carries TCP connections and nothing else. Anything that needs UDP, such as QUIC, DNS over UDP, or some calls and games, does not go through an Xray inbound yet.
+UDP works too, with all three protocols: QUIC, DNS over UDP, calls and games. VLESS and Trojan carry UDP inside their own stream, so they need nothing more. A Shadowsocks inbound also listens on UDP, on the same port number as its TCP port, so open that port for UDP in your firewall as well. No other inbound of the node (a `udp` or `udp-obfs` transport) may use that port: the config is refused if one does.
+
+Each UDP destination of a user is a flow like any other. The gate refuses loopback and the like, the rules choose the exit, the user's exits and quota apply, and the bytes count for the user and the exit. UDP to port 53 follows the tunnel's rule: while `dns.hijack` is on (the default), a DNS query is answered by the node's own resolver with the user's DNS set, wherever it was sent. The caps are 256 UDP associations per user, 4096 in all, 64 flows in one association, and the user's flow cap, which UDP shares with TCP connections. A datagram that is malformed or fragmented is dropped and counted. If the exit's SOCKS5 upstream does not relay UDP, the exit's `unsupported.udp` policy decides, the node tries the upstream again every minute, and it logs the change.
 
 ## Creating an inbound
 
 In the panel, choose the protocol and fill in:
 
 - **Tag**: a short name for the inbound, such as `vless-443`.
-- **Port**: the TCP port Xray listens on. Open it in your firewall.
+- **Port**: the TCP port Xray listens on. Open it in your firewall. A Shadowsocks inbound uses the same number for UDP, so open UDP there too.
 - **Certificate file and key file** (VLESS and Trojan): the paths on the node, such as your certificate's full chain file. Shadowsocks needs neither, because it encrypts itself.
 - **Decoy web server** (VLESS and Trojan): the address of your own web server, such as `http://127.0.0.1:8080`. This is required for VLESS and Trojan. If you leave it empty, the panel uses the decoy of the node's `tls` transport.
 - **Host in links** (optional): the name or address the links give. Empty means the node's first public address.
@@ -92,13 +94,13 @@ On the user's page, **New Xray credentials** makes new credentials for the user 
 - Xray runs with an empty environment, and it cannot gain privileges.
 - Xray keeps no access log, and the addresses it writes are masked. The gate checks that no client address reaches the journal.
 - The host's service has a memory limit of 1 GB.
-- Each user's traffic leaves Xray through a local SOCKS hop on `127.0.0.1`. The node serves the hop. It checks every connection against the user's entitlement, quota, rules, exits and counters, the same as a tunnel.
+- Each user's traffic leaves Xray through a local SOCKS hop on `127.0.0.1`. The node serves the hop. It checks every connection and every UDP destination against the user's entitlement, quota, rules, exits and counters, the same as a tunnel.
 
 ## Known limits
 
-- **No UDP.** Only TCP is carried.
+- **UDP is carried for all three protocols**, but a UDP flow ends when the exit has no UDP and its policy says so. Names that a UDP datagram asks for are resolved by the node, like those of TCP connections.
 - **No VMess and no Reality.**
 - **No `l3` or `chain` exits for Xray users.** Xray traffic uses the user's `netstack` exits.
 - **Any change restarts Xray briefly.**
 - **The Veilway apps do not connect to Xray links yet.**
-- **Not tested yet:** removing the add-on with `remove`, the decoy for Shadowsocks, and UDP.
+- **Not tested yet:** removing the add-on with `remove`, and the decoy for Shadowsocks.

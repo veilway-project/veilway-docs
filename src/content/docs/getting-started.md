@@ -69,6 +69,7 @@ Run the script with no arguments to get this menu:
 | `doctor` | Runs `veilway doctor` on the node with the service's own paths. It only reads. |
 | `backup [file]` | Writes a `tar.gz` of the config, the node's usage state and the panel's data. The archive holds keys, so keep it private. |
 | `restore <file>` | Restores a backup after you confirm. It saves the current files first. |
+| `panel-prefix [/path]` | Moves the admin pages to a new path, random when none is given. It prints the lines to change in your web server, and puts the old path back if the panel does not start. |
 | `uninstall` | Removes the binaries and units. It asks before it deletes the config and data. Backups stay. |
 | `version` | Prints the script, node and panel versions. |
 
@@ -125,6 +126,7 @@ For nginx, the script prints this block with your admin path filled in:
 ```
 location ~ ^(/p-0123456789abcdef|/sub)(/|$) {
     proxy_pass http://127.0.0.1:8480;
+    client_max_body_size 100m;
     proxy_set_header Host $host;
     proxy_set_header X-Forwarded-For $remote_addr;
 }

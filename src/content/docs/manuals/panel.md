@@ -31,8 +31,25 @@ The panel reads `panel.json` when it starts, so restart it after you edit the fi
 | `not_found` | a plain 404 page | The status, headers and body of the answer for every path the panel does not serve. Copy your web server's 404 into it. |
 | `secure_cookies` | `true` | Keep `true`. Turn it off only for tests, or for plain HTTP on localhost. |
 | `direct` | `false` | Set `true` only when no proxy is in front of the panel. |
+| `two_step` | `"on"` | `"off"` turns the authenticator code off. Any other value keeps it on. See [Two-step sign-in off](#two-step-sign-in-off). |
 
 The panel refuses to start if `listen` is not a loopback address, if `prefix` and `sub_path` do not meet the rules above, or if `trusted_proxies` is empty and `direct` is not `true`.
+
+### Two-step sign-in off
+
+Only for tutorials and demos. With this on, anyone who learns an admin's password gets into the panel, and the panel can then reach your node and every user's links. Never use it on a panel that holds real users.
+
+Add this line to `panel.json`, then restart the panel with `sudo bash veilway.sh restart panel`:
+
+```json
+"two_step": "off"
+```
+
+Sign-in, first setup, adding an admin and re-authentication then ask for the password only. Everything else stays: passwords of 12 characters or more, sessions, CSRF checks, API tokens and the audit log. Sign-in is stricter in this mode: a source gets 5 tries in 15 minutes, and an account that is waiting after wrong tries refuses even the right password until the wait ends. Because of that, someone who keeps guessing can keep the admin waiting for up to 15 minutes at a time.
+
+The switch is read from `panel.json` only. No page or API route of the panel can change it, so whoever can write that file already owns the panel. While it is off, every page shows a red banner, the login page says so, the panel logs a warning at every start, and the audit log records `panel.two_step` with `off` or `on` whenever the value differs from the last start.
+
+To turn it on again, remove the line (or set it to `"on"`) and restart. Authenticator keys of existing admins are kept and work again. An admin who has none must set one up at their next sign-in before any other page works.
 
 ## First login
 
@@ -48,7 +65,7 @@ Some changes ask for your password and code again. The confirmation holds for fi
 
 ## Users and devices
 
-The **Users** page lists every user. You can search by name, group or note, and filter by enabled or disabled. Select one or more users to enable, disable, reset usage, delete, or change them in bulk: add or remove a group, set the quota, set the expiry, or set the device limit.
+The **Users** page lists every user. You can search by name, group or note, and filter by enabled or disabled. Select one or more users to enable, disable, reset usage, delete, or change them in bulk: add or remove a group, set the quota, set the expiry, set the device limit, or set the exits to all exits or a chosen set. A default exit the new set leaves out is cleared.
 
 ### Add a user
 
@@ -61,6 +78,7 @@ Fill in the form:
 - **Device limit**: `0` means the node's own limit of 16.
 - **Note**: only admins see it.
 - **Enabled**: a disabled user cannot connect, and their devices stay.
+- **Exits**: **All exits**, or **Only these** with the exits you tick. The user's app lists only these exits. Routing rules can still send their traffic to a specific exit. **Default exit** is where their devices leave when they pick none, among those exits. **Node default** leaves it to the node's routing default.
 
 When the user is saved, the panel shows the subscription link. It is shown once. See below.
 
@@ -70,7 +88,10 @@ When the user is saved, the panel shows the subscription link. It is shown once.
 - **Subscription link** holds the link and its QR code. The panel keeps no copy, so the link can be shown only when it is made or reset. Anyone with the link can enroll a device, so send it like a password. **Reset link** makes a new link and stops the old one at once. You choose whether devices enrolled with the old link are removed too.
 - **Devices** lists each device, whether it is waiting for the app to confirm, enrolled, and when it was last seen. A device either makes its own key, which never leaves the device, or uses a key the panel made. **Remove device** stops it from connecting at once.
 - **Add a device with a panel key** lets the panel make the private key and export it as a signed file. This is weaker than enrolling from the device, so use it only for a device that cannot open the link.
+- **Exits** sets which exits the user's app lists, with each exit's country and whether it is up. If an exit the user was limited to is deleted from the node, it shows as **Removed from the node**, and **Save exits** drops it from the user's list. A default exit that the node no longer has, or that the user may no longer use, is cleared the next time the panel updates the node.
 - **Delete user** stops the user's devices and links at once. This cannot be undone.
+
+The **Users** list shows each user's exits as **All exits** or a count.
 
 ## Subscriptions
 
@@ -159,9 +180,12 @@ Each rule has conditions, and every condition you add must hold for the rule to 
 
 A rule then sends traffic to one of these:
 
+- **A specific exit**: pick one of the node's exits, whatever the user picked. If that exit is deleted later, the review lists the rule and the node refuses the change until the rule points somewhere else.
 - **The exit the user picked**, within the exits that user is allowed.
 - **Nowhere, silently**: the traffic is dropped with no answer.
 - **Nowhere, refused**: the device is told it cannot connect, so apps give up at once.
+
+Each rule has a name, made from what the rule does until you type your own. To change the order, drag a rule by its handle, use the arrow buttons, or press Space on the handle and move it with the arrow keys; the new order goes through the review like any other change.
 
 A rule can be turned off. It stays in the list and is skipped. For a home network that a phone should reach through the node, see [Home network](../home-network/).
 
@@ -187,6 +211,20 @@ The tunnel addresses must come from a network that no inbound pool on either nod
 
 A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **Ended**. **Drop the pairing** removes it.
 
+**Manage** on a link changes it after pairing. **Link on** turns it off without losing its keys: it neither dials nor answers until you turn it on again. On the node that is the exit you also set where the link's traffic leaves when no rule names an exit, which exits it may use, whether rules may reach private networks through it, how many connections it may hold at once, a quota and its period. On both sides you can set an expiry and the MTU. **Remove** asks you to confirm with the other node's name and then goes through the review. The other node keeps its half until its operator removes it there, and linking again needs a new pairing.
+
+### Notices
+
+**Notices to users** on the dashboard holds up to four short notices, each an information or a warning. Connected apps show them within seconds, in the language you write them in. The text is one line of up to 280 bytes; a Persian letter takes two. The editor counts the bytes as you type and shows the notice the way apps show it. Changes go through the same review as the rest of the node's config.
+
+### DNS and logs
+
+The **DNS and logs** page holds three parts, each applied on its own through the review.
+
+- **DNS**: the resolvers the node asks for every tunnel, one to four, tried in order. **Answer every DNS question** answers DNS that an app sends to any server on port 53 at the node, so it cannot slip around these resolvers. **Resolvers for some users** sends the users, groups or inbounds a set names to their own resolvers. A set that names a user wins over one that names their group, which wins over one that names the inbound. Sets need **Answer every DNS question** on.
+- **Node log**: how much the node writes to its log. **Log where users go** lets log lines name the sites and DNS names users reach. Anyone who can read the server's logs then learns where each user went, so turn it on only while you look for a problem.
+- **Replay protection**: how many accepted proofs the obfuscated transports remember, and how many one source may bring. The number remembered takes effect after a node restart; the limits per source change at once.
+
 ## Traffic
 
 The **Traffic** page shows the speed now, the number of users online, and what each user, inbound, exit and outbound carried. Pick a period: day, week, month or year. Pick a name in the table to chart its average speed.
@@ -209,11 +247,12 @@ You can set an expiry, and a list of allowed source addresses, one address or ne
 
 ## Account
 
-The **Account** page has four tabs.
+The **Account** page has five tabs.
 
 - **Sessions** lists the browsers signed in to your account. You can end any session. This browser is marked.
 - **Password and code** changes your password, or makes a new key for your authenticator app. Changing the password ends every other session. A new key stops the old one from working and ends every other session too.
 - **Audit log** lists logins and every change made in the panel or through a token. The log never holds a link, token or key.
+- **Backup and restore** is described under [Backups and secrets](#backups-and-secrets).
 - **Display** sets the appearance (system, dark or light) and the language. In Persian, date fields use the Solar Hijri calendar, such as `1405/02/15`.
 
 ## The admin API
@@ -243,3 +282,18 @@ The panel keeps three files apart, each readable only by its owner:
 Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes all of these files, so keep the archive private.
 
 Passwords are hashed with Argon2id. Admin sign-in asks for a code as well as the password.
+
+### Backup and restore from the panel
+
+On **Account**, **Backup and restore** makes one `.vwbackup` file with a consistent copy of the database, `panel.keys` and `signing.keys`. You choose a passphrase of at least 12 characters, and the file is encrypted with it (Argon2id and ChaCha20-Poly1305). Both actions ask you to confirm your password and code again, and both are written to the audit log. No API token can use them.
+
+The file holds every user's secrets and the panel's keys. Keep it private. A lost passphrase cannot be recovered, and without it the file is useless.
+
+To restore, pick the file and enter its passphrase. The panel checks the file before it changes anything, saves the current database and keys in a `pre-restore-<time>` folder next to the database, swaps the files in, and restarts. The panel stops with a failure code so that the service manager (the install script sets `Restart=on-failure`) starts it again on the restored files. Every session ends, so you sign in again with an admin from the backup. A backup from a newer panel is refused.
+
+### Updating the panel
+
+The panel checks GitHub for a newer release at start and every 6 hours (set `update_check` to `false` in `panel.json` to turn this off). When one exists, a banner shows "Veilway Panel <version> is available" with a link to the release notes and an **Update** button. The button needs a recent re-authentication and is audited, and no API token can use it.
+
+The panel never updates itself. It writes the word `panel` to a file in `/var/lib/veilway-panel-update/`, and a root service started by a systemd path unit deletes the file and runs `veilway.sh update panel --yes`, which checks the release signature before it installs. Nothing in the file is used except that word. Servers installed before this feature need `sudo bash veilway.sh update panel` once to get the service.
+

@@ -25,17 +25,17 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 | Part | Tested so far | Not yet |
 |---|---|---|
-| Node on Linux | Tests in the code, and a check in Docker with two kernel WireGuard clients | A fresh server install checked against the release, and long use |
-| Panel | Built and reviewed once | A run against a real node |
+| Node on Linux | Tests in the code, a check in Docker with two kernel WireGuard clients, and the alpha gate: a fresh systemd server installed with the script from signed release files, through to a client connecting | Long use on a real server |
+| Panel | Used by hand on a demo server with a real node, driven through its API by the alpha gate, and reviewed for security | Long use, and many admins at once |
 | Desktop on Linux | A check of 70 points in Docker, against a real node and client | A real machine with systemd-resolved, and a reboot |
 | Desktop on macOS | Unit tests on a macOS runner | A real Mac. It has never connected |
-| Desktop on Windows | Unit tests on a Windows runner | A real PC. It has never connected |
-| Android | Builds in CI and in Docker | A real phone, with the app's blocking during a reconnect and Always-on VPN with Block connections without VPN on |
+| Desktop on Windows | Unit tests and a smoke test on a real Windows runner: the adapter, routes, DNS rule and kill switch take effect, nothing leaks, and disconnect undoes it | A connection to a real node on a real PC |
+| Android | Builds in CI and in Docker, and used on a real phone (Android 14) against a demo node | The app's blocking during a reconnect, and Always-on VPN with Block connections without VPN on |
 
 ## Known limits
 
 - **Every transport is rated Detectable.** A censor that looks closely can tell Veilway's traffic from ordinary traffic. Nothing in the alpha makes the traffic undetectable or unblockable.
-- **Desktop on macOS and Windows has never connected on a real machine.** Expect bugs in the routes, the firewall and DNS on those systems.
+- **Desktop on macOS and Windows has never connected to a node on a real machine.** On Windows the tunnel setup and its cleanup passed a smoke test; expect bugs in the routes, the firewall and DNS on both systems.
 - **`fronted` speaks HTTP/1.1 only, and it has not been run behind a real CDN.** `ws` and `fronted` were tested behind nginx and HAProxy in Docker. A real CDN may behave differently.
 - **Some TLS details still differ from a browser.** No TLS session is resumed, and the fetch of a pinned subscription page sends a TLS hello that no browser sends.
 - **Android has no camera QR scan and no deep links yet.** Import a subscription by pasting its link or choosing its file. While it runs, the app blocks traffic when the VPN drops. If the app is killed, use Android's Always-on VPN with Block connections without VPN, which is the full kill switch.

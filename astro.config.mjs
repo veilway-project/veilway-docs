@@ -20,6 +20,11 @@ export default defineConfig({
 				{ label: "The alpha release", translations: { fa: "نسخهٔ آلفا" }, slug: "alpha" },
 				{ label: "Getting started", translations: { fa: "شروع به کار" }, slug: "getting-started" },
 				{
+					label: "Guides",
+					translations: { fa: "آموزش‌ها" },
+					items: [{ label: "Entry node", translations: { fa: "گره ورودی" }, slug: "guides/entry-node" }],
+				},
+				{
 					label: "Protocol specification",
 					translations: { fa: "مشخصات پروتکل" },
 					items: [
@@ -57,6 +62,14 @@ export default defineConfig({
 					items: [
 						{ label: "Threat model", translations: { fa: "مدل تهدید" }, slug: "security/threat-model" },
 						{ label: "Obfuscation layer status", translations: { fa: "وضعیت لایه مبهم‌سازی" }, slug: "security/obfuscation" },
+					],
+				},
+				{
+					label: "Legal",
+					translations: { fa: "حقوقی" },
+					items: [
+						{ label: "Operator terms", translations: { fa: "شرایط اپراتور" }, slug: "legal/operator-terms" },
+						{ label: "Provider templates", translations: { fa: "الگوهای ارائه‌دهنده" }, slug: "legal/provider-templates" },
 					],
 				},
 			],

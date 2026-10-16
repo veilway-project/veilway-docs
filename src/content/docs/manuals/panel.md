@@ -25,6 +25,8 @@ The panel reads `panel.json` when it starts, so restart it after you edit the fi
 | `database` | `panel.db` | The SQLite database. It holds no keys. |
 | `keys` | `panel.keys` | The keys for sealed secrets. Mode `600`. Kept apart from the database. |
 | `signing` | `signing.keys` | The subscription signing keys. Mode `600`. |
+| `gateway` | `gateway.keys` | The gateway keys that open subscription requests. Mode `600`. See [Gateway keys](#gateway-keys). |
+| `gateway_next` | `gateway.next` | Where the panel writes the next gateway key's private half, once. Mode `600`. Move the file off the server. |
 | `node_socket` | `/run/veilway/control.sock` | The node's control socket. |
 | `allowed_hosts` | `[]` | Host names the admin pages answer to. Empty accepts any host, which is safe only behind a web server that checks it. |
 | `trusted_proxies` | `[]` | Addresses whose `X-Forwarded-For` the panel believes. Put your web server's address here. Required unless `direct` is `true`. |
@@ -58,7 +60,7 @@ To turn it on again, remove the line (or set it to `"on"`) and restart the panel
 2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, then choose **Make admin account**. The token is printed in the panel's log when it first starts, and the install script prints it too.
 3. The next page shows a TOTP key and a QR code for your authenticator app. The key is shown once. Add it to the app, then choose **I added it, go to login**. Without the key you cannot log in.
 4. Log in with your username, your password and the 6-digit code from the app. Login is rate limited, so after several wrong tries you must wait a few minutes.
-5. Before you add users, go to **Subscriptions** and set the endpoint URL and the device address pool. Then go to **Node** and check the profiles.
+5. Before you add users, go to **Settings** and add an endpoint under **Endpoints**, then go to **Subscriptions** and set the device address pool. Then go to **Node** and check the profiles.
 
 The same setup can be done by script. Send the token, a username and a password to `{prefix}/api/setup`. The answer holds the TOTP secret, shown once.
 
@@ -103,8 +105,7 @@ The **Subscriptions** page sets what every user's link points to, and how the do
 ### Endpoint
 
 - **Provider name** is shown next to the subscription in apps.
-- **Endpoint URL** is the public `https` address that your web server forwards to the panel's subscription path.
-- **Certificate pins** are needed only for an endpoint whose certificate is not from a certificate authority. Give up to two SHA-256 pins, one per line, in base64.
+- **Endpoints** are set under **Settings** > **Endpoints**, see [Endpoints and moves](#endpoints-and-moves). Each one has an address that your web server forwards to the panel's subscription path.
 - **Apps check for changes every** sets the refresh interval, in minutes. **Documents stay valid for** sets how many days a signed document can be used.
 - **Show links once** means the panel never keeps a copy of a link. A link is shown when it is made or reset, and never again.
 - **Device limit for new users** and **Device address pool** set the defaults for new users. The pool is an IPv4 network from `/16` to `/30`, and each device gets one address from it.
@@ -236,6 +237,121 @@ Use `-p tcp` in both rules for a TCP transport. Rules made this way are gone aft
 ### Profiles
 
 The profiles tab takes extra profiles as a JSON list of up to 64 objects. A profile here cannot name a device, because the panel adds each user's device to it.
+
+## Gateway keys
+
+Every subscription request is sealed to a gateway key, so the network and the servers in the middle cannot read it. The panel makes two keys at its first start, the active key and the next key. The full rules are in the [subscription format](../../protocol/subscription-format/).
+
+Links carry the active key. Every signed document lists the active key, then the next key, so apps hold the next key long before you need it.
+
+### Where the keys live
+
+- `gateway.keys` holds the active key and the retired keys (private halves), plus the next key's public half and its id.
+- `gateway.next` holds the next key's private half. The panel writes it once, for you to move off the server and keep offline. While the panel still finds that file on the host, it warns on the **Gateway keys** page and in the log. A next key left on the server is taken together with the active one.
+
+Both files have mode `600` and sit outside the database. Neither is in the panel's backup. Back them up separately, apart from the database. Their paths are the `gateway` and `gateway_next` fields of the config.
+
+### The page
+
+**Settings** > **Gateway keys** shows:
+
+- The active key: its id and fingerprint.
+- The next key: its id, and whether its file is still on the host.
+- The retired keys: when each one is destroyed, and how many accounts sent a request under it in the last 30 days.
+- How many accounts have no device yet.
+- Failure counters: size, key, open, request, window, replay and source.
+- A clock warning, when the system reports its clock as not synchronized.
+
+### Switch keys on a schedule
+
+1. Choose **Load next key**.
+2. Paste the next key's private half, or leave the field empty to read `gateway.next`.
+3. The panel makes that key active and makes a new next key. It writes the new next key's private half to `gateway.next` and shows it once. Move it off the server.
+
+The old key stays as a retired key for the number of days in **Keep a retired key**, from 30 to 365, 120 by default. Then it is destroyed. Old links keep working while it is kept. After that, a first import from an old link fails, and the link must be shown again.
+
+The page adds a notice when the active key is older than 180 days. That is the time to switch.
+
+### A stolen key
+
+Choose **Key stolen** and load the next key as above. The old key is destroyed at once. Apps fall back to the next key.
+
+If the thief could have recordings of requests, every recorded request opens. That is the case when a request passed a content delivery network, a proxy that ends TLS, a relay mirror or a plain http path. The switch cannot undo that.
+
+The panel lists the accounts that sent a request under the stolen key. It offers one action, **Reset tokens of affected accounts**. It shows the count first, as a dry run, then gives new links. Only a theft that you know came with no recordings needs the switch alone.
+
+### A lost key
+
+If the panel has accounts but no readable active key, the endpoint answers every request as an unknown path. The page and every page banner say so, and the log says so every hour at error level. The panel never makes keys by itself.
+
+- With the next key in hand, load it. Apps follow by their fallback.
+- Without it, choose **Make new gateway keys**. Old links stop working for first imports. Apps learn the new key only from a newer document on a static mirror, or from a link shown again. Tokens and devices stay valid.
+
+### Clock and replays
+
+The panel needs a synchronized clock (NTP). It acts on a request only when the request's time is within 300 seconds of its own clock. It judges by the highest clock value it has seen since it started, and logs a warning if the clock steps back. The panel warns on every page while the system reports its clock as not synchronized.
+
+The memory of seen requests is kept in RAM only. After a restart the panel refuses any request time before the start, so a device with a clock that runs behind gets nothing for at most 300 seconds.
+
+### Plain http and relay mirrors
+
+A relay mirror forwards the sealed bytes and sees no token. The hop from the mirror to the panel must be `https`. To a request with a valid mirror header, the panel answers anything it would answer as an unknown path with status 599. The mirror passes on only a 200 of one of the five answer sizes.
+
+What each party sees:
+
+| Who | Sees | Does not see |
+|---|---|---|
+| The network, on a `https` endpoint | The host name, the times, and sizes | The path, the request, the answer |
+| The network, on a plain `http` endpoint | The host, path, headers, key id, times and exact sizes | The token, the device key, the document |
+| A web server or CDN that ends TLS | Addresses, path, key id, sizes, whether the answer was sealed | The token, the device key, the document |
+| A relay mirror | The same, and it forwards the sealed bytes | The same |
+| The panel | Everything | Nothing |
+
+## Endpoints and moves
+
+An endpoint is a public address that apps use to reach the panel. You can have up to 16.
+
+### Add an endpoint
+
+Go to **Settings** > **Endpoints**. Each endpoint has:
+
+- A **name**: `a-z`, `0-9`, `-` and `_`.
+- A **URL**: `https://host/path`, or `http://host/path` for a plain endpoint.
+- **Pins** (optional): one or two SHA-256 SPKI pins in standard base64, for `https` only. They are required when the host is an IP address, which means a self-signed certificate.
+
+One endpoint is the default. Each endpoint needs its own host and port.
+
+The panel answers on every endpoint's host. Your web server maps each host to the panel's `sub_path`. The panel routes by path and tells the endpoints apart by the `Host` header.
+
+### Plain http
+
+A plain `http` endpoint shows this warning: "The network can tell that you use this app, now and later in its records."
+
+The exchange stays secret, but hiding is lost. Use it where there is no domain, or where the TLS handshake itself gets blocked. Its link form is `veilway://sub-plain/`.
+
+### Which endpoint a user gets
+
+The panel picks the first match:
+
+1. The user's own endpoint.
+2. The endpoint of the first group of the user that has one.
+3. The default endpoint.
+
+You can set an endpoint on the user page, in the add-user form and in the group list.
+
+### Move users to another endpoint
+
+Set an endpoint on a user, a group or a selection of users. For many at once, use **Move to endpoint**. It first shows a dry run: how many users move and how many stay.
+
+After a move, the users' documents carry a signed `main_endpoint`. What happens next:
+
+- The panel keeps answering on the old endpoint, so old links keep working there.
+- The first document asks the app to move. The user confirms once in the app.
+- Documents at the new endpoint are signed fresh, with a higher serial.
+
+The **Endpoints** page shows how many moved accounts still refresh on the old endpoint. When that is none, you can retire it. An endpoint that users still use cannot be removed.
+
+A link shown again carries the user's current endpoint and the active gateway key.
 
 ## Node
 
@@ -385,19 +501,21 @@ Each operation in the file says what it needs, in its `x-access` field:
 
 ## Backups and secrets
 
-The panel keeps three files apart, each readable only by its owner:
+The panel keeps five files apart, each readable only by its owner:
 
 - The database holds no key.
 - `panel.keys` holds the keys for sealed secrets.
 - `signing.keys` holds the subscription signing keys.
+- `gateway.keys` holds the gateway keys.
+- `gateway.next` holds the next gateway key, until you move it off the server.
 
-Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes all of these files, so keep the archive private.
+Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes these files, so keep the archive private. The gateway files are the exception in the panel's own backup, see [Gateway keys](#gateway-keys).
 
 Passwords are hashed with Argon2id. Admin sign-in asks for a code as well as the password.
 
 ### Backup and restore from the panel
 
-On **Account**, **Backup and restore** makes one `.vwbackup` file with a consistent copy of the database, `panel.keys` and `signing.keys`. You choose a passphrase of at least 12 characters, and the file is encrypted with it (Argon2id and ChaCha20-Poly1305). Both actions ask you to confirm your password and code again, and both are written to the audit log. No API token can use them.
+On **Account**, **Backup and restore** makes one `.vwbackup` file with a consistent copy of the database, `panel.keys` and `signing.keys`. The gateway keys are not in it: back up `gateway.keys` separately, apart from the database. You choose a passphrase of at least 12 characters, and the file is encrypted with it (Argon2id and ChaCha20-Poly1305). Both actions ask you to confirm your password and code again, and both are written to the audit log. No API token can use them.
 
 The file holds every user's secrets and the panel's keys. Keep it private. A lost passphrase cannot be recovered, and without it the file is useless.
 

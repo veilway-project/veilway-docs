@@ -65,6 +65,8 @@ npm run build
 
 ## Contributing
 
+Questions and help with setup go to [GitHub Discussions](https://github.com/veilway-project/veilway/discussions), in English or Persian. Issues are for bugs and concrete feature requests.
+
 Add or change a page in both languages in the same change. Examples must use placeholder names and addresses only (`example.com`, `192.0.2.0/24`), never real servers or keys.
 
 ## License

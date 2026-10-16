@@ -79,7 +79,7 @@ This policy says what [Provider name] keeps when you use the service, why, and f
 
 - The content of your traffic. The software does not record it.
 - The addresses and names you reach, unless we turn on destination logging in the node's log settings. That setting is off by default. [If you turn it on, say so here and say how long those lines are kept.]
-- [Add anything else you do not keep, such as payment card numbers if you take payments elsewhere.]
+- [Add anything else you do not keep.]
 
 ### 4. Why we use it
 
@@ -87,7 +87,7 @@ We use your information to run the service, apply your plan, keep the service an
 
 ### 5. Who sees it
 
-Only [the staff roles that need it] can see your information. [Name any company that processes data for you, such as the hosting provider or the email provider, and what it does.] We do not sell it. We share it only when the law requires us to, and [describe how you check a request from an authority].
+Only [the staff roles that need it] can see your information. [Name any organization that processes data for you, such as the hosting provider or the email provider, and what it does.] We share it only when the law requires us to, and [describe how you check a request from an authority].
 
 ### 6. How long we keep it
 

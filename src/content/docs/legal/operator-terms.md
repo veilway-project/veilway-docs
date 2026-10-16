@@ -9,13 +9,13 @@ This page says the terms in plain words. It is not a contract and gives no legal
 
 ## The software
 
-Veilway is free software under the Apache License 2.0. You may run it, change it and give it to others under that license, including for a paid service. It is provided as it is, with no warranty of any kind. The project and its contributors do not promise that it suits your purpose, that it is secure, or that it has no faults.
+Veilway is free software under the Apache License 2.0. You may run it, change it and give it to others under that license. It is provided as it is, with no warranty of any kind. The project and its contributors do not promise that it suits your purpose, that it is secure, or that it has no faults.
 
 ## The project runs no service
 
 The Veilway project does not run a node, a panel, a subscription endpoint, a relay or any other service for you or your users. It does not see your traffic, your users, your devices or your data, and nothing you run sends data to the project.
 
-The panel makes one request on its own. At start and every six hours it asks GitHub whether a newer release exists. That request carries the panel's version and nothing about your users, but GitHub sees the address the panel connects from, as with any web request. Set `update_check` to `false` in `panel.json` to turn it off. The software sends no other telemetry, usage statistics or crash reports.
+The panel makes one request on its own. At start and every six hours it asks GitHub whether a newer release exists. That request carries the panel's version and nothing about your users, but GitHub sees the address the panel connects from, as with any web request. Set `update_check` to `false` in `panel.json` to turn it off. The desktop and Android apps can also ask GitHub for a newer app release, and GitHub sees the address they connect from. The software sends no other telemetry, usage statistics or crash reports.
 
 ## You run it, so you answer for it
 
@@ -30,7 +30,7 @@ You alone are responsible for:
 
 ## The name
 
-You may say that your service works with Veilway, or runs Veilway software, when that is true. Do not use the name for a paid service or a company in a way that makes it look like the official Veilway service. If you change the code and give the result to others, give it its own name and logo, as the name and logo policy requires.
+You may say that your service works with Veilway, or runs Veilway software, when that is true. Do not use the name in a way that makes your service look like an official Veilway service. If you change the code and give the result to others, give it its own name and logo, as the name and logo policy requires.
 
 Your users see the provider name you set under **Settings** next to their subscription. Set it to your own name, not to Veilway.
 

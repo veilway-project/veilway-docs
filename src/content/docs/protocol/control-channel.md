@@ -4,7 +4,7 @@ description: The authenticated API a client reaches inside the tunnel, at the ga
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had three rounds of internal adversarial review, and its node side has been implemented and that implementation reviewed against this page. It has not been reviewed by anyone outside the project. The node side exists on `veilway` inbounds with the `udp` transport. No client exists yet. Do not rely on any property described here.
+This page is a draft specification. Both sides are built: the node serves the channel on `veilway` inbounds, and the client engine speaks it inside the tunnel. No one outside the project has reviewed it. Do not rely on any property described here.
 :::
 
 The control channel is what plain WireGuard lacks: a way for a connected client to check its addresses and resolver for IPv4 and IPv6, find a working MTU, see the exits it may use and pick one, see its usage and quota, and receive operator notices. It is a small binary protocol on one port of the gateway address, inside the tunnel. Read [Protocol overview](../overview/) first for the terms and the keys.
@@ -405,8 +405,8 @@ The opening exchange is the same for every client: a TCP handshake inside the tu
 - **Mutual, so that a misrouted connection cannot feed the client.** If the gateway address ever led somewhere other than the node, that party could not produce `node_mac`, and the client applies nothing before it has checked it.
 - **The channel configures nothing on the client's network.** It can lower the MTU inside a bound. Every other value is shown or compared, and the list is closed.
 - **Fixed layouts, not a general encoding.** Both parsers handle hostile input: the node's from a hostile client, the client's from a hostile node. Each gets a fuzz target in the same change as the parser (`fuzz_control_server`, `fuzz_control_client`), with the assertion that no message changes the rating, the kill switch, the resolver setting, the addresses or the routes.
-- **Stated gaps of the first node implementation.** On Linux the node now prohibits fragmentation of its own outer UDP packets on `veilway` inbounds, so a probe is confirmed only over a path that carries it whole. On other systems it does not yet and warns at start, and there a probe can be confirmed over a path that fragments it. The `l3` path that answers a packet above a device's MTU with an ICMP error has not been verified against a live kernel.
-- **Keys in memory.** In the first implementation, key material (`k_ctl` and the keys it comes from) is held in the cryptographic library's own types and is not wiped from memory when a session ends. This is a stated limit of that implementation. A compromised device or node is outside what Veilway defends, and this limit makes such a compromise worth slightly more.
+- **Stated gaps of the node.** On Linux the node now prohibits fragmentation of its own outer UDP packets on `veilway` inbounds, so a probe is confirmed only over a path that carries it whole. On other systems it does not yet and warns at start, and there a probe can be confirmed over a path that fragments it. The `l3` path that answers a packet above a device's MTU with an ICMP error has not been verified against a live kernel.
+- **Keys in memory.** In the code, key material (`k_ctl` and the keys it comes from) is held in the cryptographic library's own types and is not wiped from memory when a session ends. This is a stated limit of the code. A compromised device or node is outside what Veilway defends, and this limit makes such a compromise worth slightly more.
 - **A lost channel is not a lost tunnel, and never a leak.** If the channel fails, the tunnel keeps working with the profile's values, and the client says the channel is unavailable.
 
 Tests this page needs before it leaves Draft:
@@ -432,10 +432,10 @@ Each is listed with the default this draft takes.
 | Is re-confirming the MTU on a timer worth two large packets every few minutes on a datagram transport? | Yes. Without it a shrinking path breaks the tunnel until the next reconnect. |
 | Is probing right after connecting worth its pattern? | Yes when no result is remembered for the network, because a wrong MTU breaks the tunnel in ways users cannot diagnose. |
 | The credential is per connection, not a MAC on every message | Per connection, for the reason given under "The credential". |
-| Should the catalog carry load and whether an exit works, as the plan lists? | Yes, coarsely: one bit and four levels. What "working" means for each backend is not defined yet. |
+| Should the catalog carry load and whether an exit works, as an earlier design listed? | Yes, coarsely: one bit and four levels. What "working" means for each backend is not defined. |
 | May a hint name an address that is not in the signed profile? (threat model Q6) | No. |
 | Is `bye` worth what it tells a device about its account? | Yes. The device learns only what its own user could ask the provider. |
-| Where notices come from | A proposed top-level `notices` key in the config. Not in the config reference yet. A notice's `text`, and an exit's `name`, may be a string or a map of language tags to strings with a `default`. The node sends the default, and the panel puts the whole map in the subscription. |
+| Where notices come from | The top-level `notices` key in the config. A notice's `text`, and an exit's `name`, may be a string or a map of language tags to strings with a `default`. The node sends the default, and the panel puts the whole map in the subscription. |
 | Should a notice carry its translations on the wire, so that a new notice is translated at once? | Not in version 1. Matching the default text against the subscription needs no change on the wire. It leaves a new notice in its default language until the next refresh, and it depends on the node and the subscription holding the same text. If that proves too weak, carrying the translations in `notices` is the change to make, in a new control version. Stating the client's language to the node is not, because it tells the node something about the user. |
-| The usage state file gains a selection per device | An added `devices` key under the file's version 1, which older builds ignore. Not in the config reference yet. |
+| The usage state file gains a selection per device | A `devices` key under the file's version 1, which older builds ignore. |
 | The port number | 47873, the same for every installation. Inside the tunnel it is not visible to the path. |

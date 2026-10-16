@@ -60,6 +60,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | 409 | `stale_revision` | `If-Match` ریویژنِ در حال اجرا را نشان نمی‌دهد. |
 | 409 | `replay_absent` | ریست حافظهٔ replay روی گره‌ای که حافظه‌ای ندارد، چون هیچ ترنسپورت مبهم‌سازی‌شده‌ای اجرا نکرده است. چیزی تغییر نکرد. |
 | 409 | `replay_busy` | ریست حافظهٔ replay وقتی ریست قبلی هنوز معلوم نیست روی دیسک نشسته باشد، یا وقتی گره در حال توقف است. چیزی تغییر نکرد. |
+| 500 | `internal` | گره نتوانست پاسخش را بنویسد یا بررسی یک سند را تمام کند. |
 | 500 | `replay_unwritten` | ریست حافظهٔ replay که فایلش نوشته نشد. بخش همان مسیر را ببینید. |
 | 500 | `replay_writing` | ریست حافظهٔ replay که نوشتنش بعد از 10 ثانیه تمام نشده و هنوز ممکن است بنشیند. دوباره نخواهید. بخش همان مسیر را ببینید. |
 | 413 | `body_too_large` | بدنه از 4 MiB بزرگ‌تر است. |
@@ -87,6 +88,8 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | GET | `/v1/stats` | همهٔ شمارنده‌ها با نرخ زنده |
 | GET | `/v1/sessions` | دستگاه‌های دارای نشست زنده |
 | GET | `/v1/exits` | هر نقطهٔ خروج با سلامت upstream آن |
+| GET | `/v1/inbounds` | هر ورودی با کلیدهای عمومی‌اش و رتبهٔ هر ترنسپورت |
+| GET | `/v1/links` | هر لینک گرهِ فعال با وضعیت و شمارنده‌هایش |
 | GET | `/v1/events` | Server-Sent Events |
 | GET | `/v1/openapi.json` | سند OpenAPI 3.1 |
 
@@ -102,6 +105,9 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | `uptime_secs` | integer | ثانیه‌های گذشته از راه‌افتادن موتور. |
 | `inbounds`، `exits`، `users` | integer | پیکربندی در حال اجرا چندتا دارد. |
 | `flows` | integer | فلوهای جدول فلو در همین لحظه. |
+| `public_addresses` | فهرستی از string | آدرس‌های عمومی گره، همان‌طور که پیکربندی نام می‌برد: نام میزبان یا آدرس IP، بدون پورت. برای گرهی که آدرسی نام نبرده خالی است. |
+| `certificates` | فهرست | گواهی‌های خودامضایی که گره برای ترنسپورت‌های `tls` با `"self_signed": true` ساخته، یکی برای هر آدرس شنود، به شکل `{"listen", "pin", "not_before", "not_after"}`. `pin` همان SHA-256 از SubjectPublicKeyInfo کلید است با base64 استاندارد، و وقتی گواهی دوباره ساخته شود همان می‌ماند. `not_before` و `not_after` ثانیهٔ یونیکس‌اند. برای گره‌ای که گواهی ندارد خالی است. |
+| `addons` | object | `{"xray": {"installed", "release"}}`: آیا فایل اجرایی افزونهٔ Xray در پوشهٔ افزونه‌هاست، و گره کدام نسخهٔ Xray-core را اجرا می‌کند. |
 
 ### `GET /v1/config`
 
@@ -125,7 +131,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | فیلد `diff` | معنی |
 |---|---|
 | `inbounds`، `outbounds`، `exits`، `rules`، `users` | `{"added", "changed", "removed"}`، هرکدام فهرستی از تگ‌ها (برای کاربران نام‌ها). |
-| `dns`، `log`، `routing_default`، `rules_reordered`، `notices`، `replay` | وقتی آن بخش تغییر کرده `true` است. برای `replay`، نرخ هر مبدأ بلافاصله اعمال می‌شود و اندازهٔ cache از شروع بعدی گره. |
+| `dns`، `log`، `routing_default`، `rules_reordered`، `notices`، `public_addresses`، `replay` | وقتی آن بخش تغییر کرده `true` است. برای `replay`، نرخ هر مبدأ بلافاصله اعمال می‌شود و اندازهٔ cache از شروع بعدی گره. |
 | `inbound_changes` | برای هر ورودی تغییرکرده: `tag`، `restart` (تونل دوباره راه می‌افتد و نشست‌هایش قطع می‌شوند)، `transports_stopped` و `transports_started` (اندیس‌ها). ورودی‌ای که فقط `type`، `padding`، `transport_keys`، `upgrade_cookie` یا `upgrade_headers` آن عوض شده با `restart` برابر false و هر دو فهرست خالی می‌آید. افزودن ترنسپورت `udp-obfs` به ورودی‌ای که `mtu` نوشته‌شده ندارد `restart` است: `mtu` آن از 1420 به 1390 می‌رود. |
 | `user_changes` | برای هر کاربر تغییرکرده: `name`، `devices_added`، `devices_removed`، `devices_readdressed`، `devices_rekeyed`، `devices_secrets_changed` (دستگاه‌ها با کلید عمومی) و `lost_access`. `devices_secrets_changed` دستگاه‌های مانده‌ای است که `transport_secrets` آن‌ها دیگر همان قبلی نیست؛ اتصال کنترلی که رازی را ثابت کرده که دیگر نیست بسته می‌شود، و نشست `udp-obfs` ای که با آن راز باز شده تمام می‌شود. |
 
@@ -266,7 +272,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 |---|---|
 | `window_secs` | ثانیه‌هایی که نرخ‌ها روی آن‌ها گرفته شد: وقتی گره این‌قدر کار کرده باشد 5، پیش از نمونهٔ دومش 0. |
 | `users`، `inbounds`، `exits` | فهرست‌هایی از `{"name", "traffic", "up_bytes_per_sec", "down_bytes_per_sec"}`. `name` نام کاربر یا تگ است. نامی که در این بازه تازه است نرخ 0 دارد. |
-| `outbounds` | برای هر outbound پیکربندی در حال اجرا یک مورد، به همان ترتیب: همان چهار فیلدِ یک خروجی، که `name` در آن تگ outbound است، به‌همراه `udp`، `udp_down_secs` و `udp_flips`. `traffic` و دو نرخ، جمع خروجی‌هایی است که بک‌اندشان این outbound را نام می‌برد. outbound ای که هیچ خروجی از آن استفاده نمی‌کند با صفر فهرست می‌شود، و خروجی با بک‌اند `l3` یا `block` هیچ outbound ای ندارد و زیر هیچ‌کدام شمرده نمی‌شود. گره برای outbound شمارندهٔ جدایی ندارد، پس این جمع هرچه را آن خروجی‌ها می‌شمارند در خود دارد، از جمله ترافیکی که سیاست `unsupported` یک خروجی با `"direct"` از کنار پروکسی فرستاده است. گره اینکه یک پروکسی UDP را رله می‌کند یا نه را برای هر خروجی جدا و از فلوهای همان خروجی می‌فهمد، پس این سه فیلد UDP چیزی است که خروجی‌های این outbound روی هم می‌دانند: تا وقتی آخرین تلاش یکی از آن‌ها رد شده باشد `udp` برابر `false` است و برای outbound ای که پروکسی SOCKS5 نیست `null`، `udp_down_secs` از تازه‌ترین رد می‌شمارد، و `udp_flips` جمع جابه‌جایی‌های خروجی‌هاست، پس یک تغییر پروکسی که دو خروجی متوجهش شوند دو بار شمرده می‌شود. وضعیت هر خروجی در `/v1/exits` است. |
+| `outbounds` | برای هر outbound پیکربندی در حال اجرا یک مورد، به همان ترتیب: همان چهار فیلدِ یک خروجی، که `name` در آن تگ outbound است، به‌همراه `udp`، `udp_down_secs`، `udp_flips`، `latency_ms` و `measured_at`. `traffic` و دو نرخ، جمع خروجی‌هایی است که بک‌اندشان این outbound را نام می‌برد. outbound ای که هیچ خروجی از آن استفاده نمی‌کند با صفر فهرست می‌شود، و خروجی با بک‌اند `l3`، `block` یا `chain` هیچ outbound ای ندارد و زیر هیچ‌کدام شمرده نمی‌شود. گره برای outbound شمارندهٔ جدایی ندارد، پس این جمع هرچه را آن خروجی‌ها می‌شمارند در خود دارد، از جمله ترافیکی که سیاست `unsupported` یک خروجی با `"direct"` از کنار پروکسی فرستاده است. گره اینکه یک پروکسی UDP را رله می‌کند یا نه را برای هر خروجی جدا و از فلوهای همان خروجی می‌فهمد، پس این سه فیلد UDP چیزی است که خروجی‌های این outbound روی هم می‌دانند: تا وقتی آخرین تلاش یکی از آن‌ها رد شده باشد `udp` برابر `false` است و برای outbound ای که پروکسی SOCKS5 نیست `null`، `udp_down_secs` از تازه‌ترین رد می‌شمارد، و `udp_flips` جمع جابه‌جایی‌های خروجی‌هاست، پس یک تغییر پروکسی که دو خروجی متوجهش شوند دو بار شمرده می‌شود. وضعیت هر خروجی در `/v1/exits` است. `latency_ms` مدتی است که پروکسی برای پاسخ به greeting آخرین فلوی دایل‌کننده‌اش طول کشید، به میلی‌ثانیه، و `measured_at` زمان آن است، به ثانیهٔ یونیکس. برای outbound مستقیم و تا وقتی فلویی از پروکسی استفاده نکرده هر دو `null` هستند. reload آن‌ها را از نو شروع می‌کند. |
 | `drops` | بسته‌هایی که از شروع حمل نشدند، به تفکیک نام دلیل. |
 | `dns` | `answered`، `refused`، `failed`، `malformed`، `throttled`. |
 | `flows` | فلوهای جدول فلو در همین لحظه. |
@@ -345,7 +351,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | فیلد | معنی |
 |---|---|
 | `tag`، `name` | اگر پیکربندی نامی ندهد `name` همان تگ است. |
-| `backend` | `netstack`، `l3` یا `block`. |
+| `backend` | `netstack`، `l3`، `block` یا `chain`. |
 | `outbound` | تگ outbound بک‌اند `netstack`، وگرنه `null`. |
 | `udp` | تا آنجا که گره می‌داند، آیا پروکسی SOCKS5 این خروجی UDP را رله می‌کند. برای خروجی بدون پروکسی SOCKS5 `null`. |
 | `udp_down_secs` | ثانیه‌های گذشته از آخرین باری که پروکسی رله‌کردن UDP را رد کرد. گره هر یک دقیقه دوباره امتحان می‌کند. مگر وقتی `udp` برابر `false` باشد `null` است. |
@@ -353,7 +359,42 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `interface_up` | آیا رابط بک‌اند `l3` بالا است. تا وقتی `false` است، ترافیکی که به این خروجی مسیریابی شده پاسخ «غیرقابل دسترس» می‌گیرد و گره دوباره برای برپا کردن رابط تلاش می‌کند: 2 ثانیه پس از افتادن، بعد هر بار با دو برابر فاصلهٔ قبلی، حداکثر هر یک دقیقه یک بار. برای هر بک‌اند دیگر `null`. |
 | `interface_down_secs` | ثانیه‌های گذشته از افتادن رابط. مگر وقتی `interface_up` برابر `false` باشد `null` است. |
 | `interface_flips` | چند بار رابط بین بالا و پایین جابه‌جا شد. |
+| `links` | تگ لینک‌های گرهِ یک بک‌اند `chain` که `/v1/links` دربارهٔ آن‌ها گزارش می‌دهد. برای هر بک‌اند دیگر خالی است. |
+| `link_up` | آیا یکی از آن لینک‌ها بالا است. تا وقتی هیچ‌کدام بالا نباشد، ترافیکی که به این خروجی مسیریابی شده پاسخ «غیرقابل دسترس» می‌گیرد و راه دیگری ندارد. برای هر بک‌اند دیگر `null`. |
+| `latency_ms`، `measured_at` | مثل outbound در `/v1/stats`، برای outbound بک‌اند `netstack`. وگرنه `null`. |
 | `traffic` | شمارنده‌ها، مثل کاربر. |
+
+### `GET /v1/inbounds`
+
+`{"inbounds": [...], "public_addresses": [...]}`. `public_addresses` همان فهرست `GET /v1/status` است. برای هر ورودی پیکربندی در حال اجرا یک مورد هست. هیچ کلید خصوصی جزو آن نیست.
+
+| فیلد | معنی |
+|---|---|
+| `tag` | تگ ورودی. |
+| `kind` | `wireguard` یا `veilway`، یعنی `type` ورودی. |
+| `public_key` | کلید عمومی WireGuard ورودی. |
+| `transport_public_key` | نیمهٔ عمومی کلید ترنسپورت گره که پروفایل با خود دارد. برای ورودی بدون `transport_keys` برابر `null` است. |
+| `transports` | برای هر ترنسپورت یک `{"transport", "rating"}`، به ترتیب پیکربندی. `transport` یکی از `udp`، `ws`، `udp-obfs`، `tls` یا `fronted` است. `rating` آن چیزی است که سانسورچی از اتصال یک پروفایل می‌تواند ببیند: `protected`، `detectable` یا `unsafe`. در این نسخه همهٔ ترنسپورت‌ها `detectable` رتبه می‌گیرند. |
+
+### `GET /v1/links`
+
+`{"links": [...]}`، برای هر [لینک گرهِ](../../protocol/node-links/) فعال یک مورد. هیچ کلید و رازی جزو آن نیست.
+
+| فیلد | معنی |
+|---|---|
+| `tag`، `id` | تگ لینک و شناسهٔ آن (22 نویسه base64url). |
+| `half` | `entry` وقتی این گره کاربران را دارد و بسته‌هایشان را از راه یک خروجی با بک‌اند `chain` به لینک می‌فرستد. `exit` وقتی آنچه از لینک می‌رسد از این گره بیرون می‌رود. |
+| `role` | `listener` وقتی لینک به یک ورودی این گره وصل می‌شود، `dialler` وقتی این گره به گره دیگر وصل می‌شود. |
+| `state` | `up` (یک handshake وایرگارد در 180 ثانیهٔ گذشته کامل شده)، `connecting`، `unreachable` (هیچ کاندیدای گرهٔ دیگر پاسخ نمی‌دهد)، `refused` (گرهٔ دیگر پاسخ می‌دهد و اثبات را نمی‌پذیرد) یا `ended` (24 ساعت handshake نبوده، یا این گره لینک را به‌خاطر سهمیه یا انقضا قطع کرده). گره‌ای که وصل می‌شود از `ended` به بعد روزی یک بار دوباره امتحان می‌کند. |
+| `state_secs`، `state_flips` | ثانیه‌هایی که لینک در `state` بوده، و چند بار `state` عوض شده. |
+| `handshake_secs` | ثانیه‌های گذشته از آخرین handshake کامل تونل لینک. بدون نشست `null`. |
+| `transport`، `transport_index`، `candidate_index` | روی گرهٔ وصل‌شونده: ترنسپورتی که روی آن است، و جای آن ترنسپورت و کاندیدایش در فهرست گرهٔ دیگر، از 0. روی گرهٔ پذیرنده همه `null` هستند. |
+| `size_warning` | `true` وقتی سیستم در 600 ثانیهٔ گذشته یک بستهٔ بیرونی لینک را به‌خاطر اندازه رد کرده، که نشان می‌دهد `mtu` لینک برای مسیر زیاد است. هر کسی روی مسیر می‌تواند چنین گزارشی را جعل کند، پس فقط هشدار می‌دهد. |
+| `denied` | روی نیمهٔ خروج: چرا این گره لینک را قطع کرده (`disabled`، `expired` یا `quota`). برای لینکی که اجازهٔ کار دارد `null`. |
+| `exit` | روی نیمهٔ ورود: خروجی با بک‌اند `chain` که لینک پشت آن است. |
+| `flows` | فلوهایی که لینک حمل می‌کند. |
+| `dropped` | بسته‌هایی که از لینک بیرون آمدند و حمل نشدند. |
+| `traffic` | بسته‌های داخلی. up آنچه این گره به لینک فرستاد، down آنچه از آن گرفت. |
 
 ## رویدادها
 
@@ -397,7 +438,7 @@ data: {"user":"alice","reason":"quota"}
 
 ## کلاینت TypeScript
 
-`@veilway/sdk` یک کلاینت تایپ‌دار است که از سند OpenAPI ساخته می‌شود. وابستگی زمان اجرا ندارد. یک تابع `fetch` و یک آدرس پایه می‌گیرد، پس راه رسیدن به سوکت یونیکس با شماست. مثال زیر از `undici` استفاده می‌کند:
+`@veilway/sdk` (نسخهٔ `0.1.0-alpha`، [صفحهٔ آن](../../sdk/typescript/)) یک کلاینت تایپ‌دار است که از سند OpenAPI ساخته می‌شود. وابستگی زمان اجرا ندارد. یک تابع `fetch` و یک آدرس پایه می‌گیرد، پس راه رسیدن به سوکت یونیکس با شماست. مثال زیر از `undici` استفاده می‌کند:
 
 ```ts
 import {Agent, fetch as undiciFetch} from "undici";
@@ -417,10 +458,11 @@ for await (const event of client.events()) {
 }
 ```
 
-متدها: `status`، `getConfig`، `validateConfig`، `diffConfig`، `applyConfig`، `listUsers`، `getUser`، `resetUsage`، `resetReplay`، `stats`، `listSessions`، `listExits` و `events`. هر شکستی به شکل `VeilwayError` با `status`، `code`، `message` و `details` پرتاب می‌شود. `resetUsage(name, {totals: true})` مصرف یک کاربر را ریست می‌کند و کاربر را برمی‌گرداند. `resetReplay()` حافظهٔ replay را ریست می‌کند و آن را برمی‌گرداند؛ اول هزینه‌اش را زیر `POST /v1/replay/reset` بخوانید. `events` وقتی گره جریان را ببندد یا signal لغو شود تمام می‌شود و رویدادهای `lagged` را هم می‌دهد.
+متدها: `status`، `getConfig`، `validateConfig`، `diffConfig`، `applyConfig`، `listUsers`، `getUser`، `resetUsage`، `resetReplay`، `stats`، `listSessions`، `listExits`، `listInbounds`، `listLinks` و `events`. هر شکستی به شکل `VeilwayError` با `status`، `code`، `message` و `details` پرتاب می‌شود. `resetUsage(name, {totals: true})` مصرف یک کاربر را ریست می‌کند و کاربر را برمی‌گرداند. `resetReplay()` حافظهٔ replay را ریست می‌کند و آن را برمی‌گرداند؛ اول هزینه‌اش را زیر `POST /v1/replay/reset` بخوانید. `events` وقتی گره جریان را ببندد یا signal لغو شود تمام می‌شود و رویدادهای `lagged` را هم می‌دهد.
 
 ## هنوز ساخته نشده
 
 - دسترسی از راه دور: شنونده TCP، توکن و TLS دوطرفه. فعلاً سوکت تنها راه ورود است.
 - مسیر لاگ‌ها.
 - قطع دستی یک نشست.
+- تغییر یک کاربر، ورودی یا لینک به‌تنهایی. نوشتن‌ها فقط یک پیکربندی کامل (`PUT /v1/config`)، ریست مصرف و ریست replay هستند.

@@ -3,8 +3,8 @@ title: Client manual
 description: Installing and using the Veilway desktop app.
 ---
 
-:::caution[Not released]
-The desktop app is built, but no release is published, so there is no installer to download yet. It has not run on a real machine. The Linux layer is tested in Docker. The Windows and macOS layers build and pass their unit tests on CI runners, but they have never connected on a real Windows PC or Mac. Steps may change before the first release. The Android app is still being built and is not covered here.
+:::caution[Alpha status]
+The desktop app is part of the [alpha](../../alpha/). On Linux, a 70-point check in Docker runs the app's connection against a real node. On Windows, unit tests and a smoke test on a real Windows runner pass, but the app has never connected to a node. On macOS, unit tests pass on a macOS runner, but the app has never run on a real Mac. Expect bugs in routes, the firewall and DNS on both. The Android app has its own [manual](../android/).
 :::
 
 This manual covers the Veilway desktop app for Linux, Windows and macOS. The app connects this computer to a Veilway node, using a subscription from your provider.
@@ -53,7 +53,7 @@ Your provider gives you a subscription in one of three ways: a link, a file, or 
 To add one, use one of these:
 
 - Paste the link into **Subscription link** and press **Continue**.
-- Press **Open a file** and choose the file from your provider.
+- Press **Open a file** and choose the file from your provider. A file locked with a password (a sealed file, ending in `.vwsealed`) first asks for the password. The password only protects the file on its way to you, and nothing is added until you agree on the next screen.
 - Press **Open a QR picture** and choose the picture (PNG, JPEG, GIF, BMP or WebP). You can also copy the picture and paste it with Ctrl+V.
 
 Nothing is sent anywhere until you agree. **Cancel** stops at any step and adds nothing.
@@ -65,7 +65,7 @@ The app asks one of two questions:
 - **"Contact {host}?"** The connections are fetched from that server. The server sees this computer's address. Nothing has been sent yet. The button says **Contact {host}**.
 - **"Read this subscription?"** The connections are inside the link or the file, so nothing is fetched from anywhere. The button says **Read it**.
 
-If the link names the server's certificate, the screen says so. A stand-in server is then refused.
+If the link names the server's certificate, the screen says so. A stand-in server is then refused. If the link does not use TLS, the screen warns you: the request stays sealed, but the network can tell that you use this app, now and later in its records.
 
 ### Step 2: keep it or not
 
@@ -75,6 +75,7 @@ The screen also lists the connections and their exits. It may show one of these 
 
 - This replaces the subscription you already have from this provider.
 - The update address has changed. Keep it only if your provider told you about this change.
+- Your provider is moving this subscription to a new address. Keep it only if your provider told you about this move.
 - Some connections were left out, because this app cannot use them.
 
 Press **Keep subscription** to save it. The app confirms with a short message.
@@ -121,6 +122,10 @@ Under the heading, the app may show a reason. This table explains each one.
 | This computer's clock and the server's are drifting apart | The two clocks disagree. | Check the date and time. |
 
 Where the screen says **Trying again at {time}**, the app tries again at that time. Where it says the app will not try again by itself, press **Disconnect**, then connect when you are ready.
+
+### Connection details
+
+While the app is trying a server and while you are connected, the **Connection** screen has a **Connection details** section you can open. It shows the **Server**, **Host name**, **Transport**, **Front** and **TLS server name** of the connection in use, how its **Certificate** is checked (**Public certificate**, **Public certificate and pin**, or **Pinned self-signed**), the **Tunnel MTU**, and how long the session has been up. Rows that do not apply are left out. **Copy details** copies them as text, in English, for a report to your provider.
 
 ## Questions the app asks
 
@@ -191,7 +196,7 @@ Under **Theme**, pick **System**, **Dark** or **Light**. System follows your com
 
 **Check for updates when the app opens** is on by default. Press **Check for updates** at any time. The screen then shows **This is the newest version**, or **Version {version} is ready** with an **Install and restart** button.
 
-Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it is installed. On Windows the update installs without asking questions. No release is published yet, so the check finds nothing for now.
+Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it is installed. On Windows the update installs without asking questions.
 
 ## Log
 
@@ -202,13 +207,36 @@ Press **Show the log** in **Settings**. The log lists what the app recorded. It 
 The **Subscriptions** screen lists each subscription with its provider, its logo, its standing, its end date and its number of connections. The standing is one of **Up to date**, **Needs a refresh** or **Out of date**.
 
 - **Refresh** (the icon on the row) gets the provider's current settings. It appears only when the provider allows it.
+- **Share** gives the subscription to another device. It appears on a subscription that was added with a link. See [Share a subscription](#share-a-subscription).
+- **Backup update addresses** appear on a row when your provider has added addresses that the app can use to refresh the subscription while the main address is blocked. See [Backup update addresses](#backup-update-addresses).
 - **Remove** deletes the subscription, its connections and its keys from this computer. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first.
 - **Let apps reach devices on this network** (a checkbox on the row) is off by default. Off, everything goes through the tunnel, your local network included, so a printer or your router is not reachable while you are connected. On, apps can reach the devices on the networks you are connected to (a printer, your router) outside the VPN. Only the private subnets you are on go outside, not the whole private ranges, and the list is read again when you change networks. The network can see that traffic, because it does not go through the VPN. Names are still only looked up through the tunnel. On Android nothing goes outside the VPN while you are on mobile data. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops.
 
+### Share a subscription
+
+**Share** opens a dialog with three ways to give the subscription to someone else:
+
+- **Text** shows the subscription link, with a **Copy** button.
+- **QR code** shows the link as a QR code.
+- **Sealed file** saves the link as a file named `veilway-subscription.vwsealed`, locked with a password you choose (at least 10 characters, typed twice). Send the password by a different way than the file, for example by voice. Anyone who has the file and guesses the password can use the link, so a long password is the only protection.
+
+Only the subscription link is shared, never this device's keys. The other device joins as a new device and counts against your device limit. A subscription that was added from a file has no link, so it has no **Share**.
+
+### Backup update addresses
+
+A provider can list more addresses that serve its subscription, such as mirrors, and sometimes a new main address. The app never uses one until you allow it. When the provider adds some, the row says **Your provider added backup update addresses** with a **Review** button. The dialog lists each address with what it can see:
+
+- **Update server** sees your subscription link's token, as the main server does.
+- **New main address** is where your provider is moving the subscription. Once you allow it, it is tried first.
+- **Static mirror** never sees your token.
+- An address with no TLS carries a warning: the network can tell that you use this app.
+
+Every address sees your device's address. Tick the ones you allow and press **Save choices**, or press **Allow all**. **Not now** leaves the question for later. Afterward the row shows how many are allowed, and **Manage** lets you change your choice.
+
 ## Known limits
 
-- The app has not run on a real machine yet, and no release is published.
+- On Windows the app has never connected to a node, and on macOS it has never run on a real Mac.
 - On Linux, a real desktop with systemd-resolved and a reboot have not been tested.
 - On Android, with Always-on VPN and Block connections without VPN, the system may block the local network even when the box is on. The app has not been tried with that on a real phone.
 - On Android, when the connection drops, the app keeps the VPN interface up and drops your traffic until you tap Disconnect. The notification says the internet is blocked. If the system kills the app, only Always-on VPN with Block connections without VPN keeps traffic from leaving.
-- The Android app is not covered here.
+- The Android app has its own [manual](../android/).

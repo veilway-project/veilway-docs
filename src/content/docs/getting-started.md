@@ -60,16 +60,17 @@ Run the script with no arguments to get this menu:
 
 | Command | What it does |
 |---|---|
-| `install node\|panel\|both [--version vX.Y.Z]` | Installs the chosen parts from the latest release, or from the tag you give. |
-| `update [node\|panel\|both]` | Installs the latest release, or the tag you give, and restarts the service. |
+| `install node\|panel\|both\|mirror [--version vX.Y.Z]` | Installs the chosen parts from the latest release, or from the tag you give. `mirror` installs a relay mirror of the subscription endpoint, see [Relay mirrors](../manuals/panel/#relay-mirrors). |
+| `update [node\|panel\|mirror\|both]` | Installs the latest release, or the tag you give, and restarts the service. The panel's **Update** button runs this for the panel, see [Updating the panel](../manuals/panel/#updating-the-panel). |
 | `status` | Shows the state of each service, its version, and the config and state folders. Does not need root. |
-| `logs [node\|panel]` | Follows the last 100 journal lines of the service. |
-| `restart [node\|panel\|both]` | Restarts the service. A node restart drops every live tunnel for a moment. |
+| `logs [node\|panel\|mirror]` | Follows the last 100 journal lines of the service. |
+| `restart [node\|panel\|mirror\|both]` | Restarts the service. A node restart drops every live tunnel for a moment. |
 | `check` | Runs `veilway check` on the node's config. |
 | `doctor` | Runs `veilway doctor` on the node with the service's own paths. It only reads. |
-| `backup [file]` | Writes a `tar.gz` of the config, the node's usage state and the panel's data. The archive holds keys, so keep it private. |
+| `backup [file]` | Writes a `tar.gz` of the config, the node's usage state, the panel's data and the mirror's config. The archive holds keys, and `gateway.next` too while it is still on the server, so keep it private. |
 | `restore <file>` | Restores a backup after you confirm. It saves the current files first. |
 | `panel-prefix [/path]` | Moves the admin pages to a new path, random when none is given. It prints the lines to change in your web server, and puts the old path back if the panel does not start. |
+| `addon xray [install\|remove\|status]` | Installs, removes or shows the Xray add-on. `install` is the default. It downloads one pinned release of the official Xray-core, refuses it unless its SHA-256 matches the one built into the script, and puts the `xray` executable in `/usr/local/lib/veilway/addons/xray`, owned by root. Xray then runs as its own user, `veilway-xray`, and the node starts it when its config has an Xray inbound. See [Xray add-on](../manuals/xray/). |
 | `uninstall` | Removes the binaries and units. It asks before it deletes the config and data. Backups stay. |
 | `version` | Prints the script, node and panel versions. |
 
@@ -107,7 +108,7 @@ To check the config at any time, run `sudo bash veilway.sh check`.
 
 ## Set up the panel
 
-`install panel` writes `/etc/veilway/panel.json` once. An existing file is never changed. The panel listens on `127.0.0.1:8480` only, and its admin path is random, such as `/p-0123456789abcdef`.
+`install panel` writes `/etc/veilway/panel.json` once. An existing file is never changed. The panel listens on `127.0.0.1:8480` only, its cookies are marked secure, and its admin path is random, such as `/p-0123456789abcdef`. To move the admin pages later, run `sudo bash veilway.sh panel-prefix [/new-path]`.
 
 The script prints the admin path and a one-time setup token at the end of the install. To read the token again, run:
 
@@ -145,7 +146,7 @@ panel.example.com {
 }
 ```
 
-Then open `https://panel.example.com/p-0123456789abcdef/`, enter the setup token, and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
+Then open `https://panel.example.com/p-0123456789abcdef/`, enter the setup token with a username and a password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
 
 ## Install with Docker
 
@@ -194,6 +195,10 @@ The panel uses host networking. It listens on loopback only, and a container's l
 | `/var/lib/veilway-panel/panel.db` | The panel's database |
 | `/var/lib/veilway-panel/panel.keys` | The panel's keys for sealed secrets |
 | `/var/lib/veilway-panel/signing.keys` | The subscription signing keys |
+| `/var/lib/veilway-panel/gateway.keys` | The gateway keys that open subscription requests |
+| `/var/lib/veilway-panel/gateway.next` | The next gateway key's private half, until you move it off the server |
+| `/etc/veilway-mirror/mirror.json` | A relay mirror's config, if you installed one |
+| `/usr/local/lib/veilway/addons/xray` | The Xray add-on, if you installed it |
 | `/run/veilway/control.sock` | The node's control socket, group `veilway` |
 | `/etc/systemd/system/veilway.service` | The node's unit |
 | `/etc/systemd/system/veilway-panel.service` | The panel's unit |

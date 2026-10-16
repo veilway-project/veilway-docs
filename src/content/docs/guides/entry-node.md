@@ -16,7 +16,7 @@ Use an entry node when users can still reach servers inside the country but not 
 
 Data centers inside a country often keep an international path when home and mobile lines lose theirs. If the entry has no path abroad at all, in either direction, no link can help.
 
-If users can reach your server abroad directly, you do not need an entry node.
+If users can reach your server abroad directly, you do not need an entry node. If their networks only block your node's own address, a [relay](../../manuals/panel/#relays) on another address may be enough.
 
 ## What to rent where
 

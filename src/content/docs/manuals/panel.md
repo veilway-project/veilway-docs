@@ -4,7 +4,7 @@ description: Running a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.1.0-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). It has been built and reviewed, but it has not yet been run against a real node. [The alpha release](../../alpha/) lists its limits.
+The panel ships in the alpha, `v0.1.0-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.
@@ -32,11 +32,17 @@ The panel reads `panel.json` when it starts, so restart it after you edit the fi
 | `trusted_proxies` | `[]` | Addresses whose `X-Forwarded-For` the panel believes. Put your web server's address here. Required unless `direct` is `true`. |
 | `not_found` | a plain 404 page | The status, headers and body of the answer for every path the panel does not serve. Copy your web server's 404 into it. |
 | `trusted_mirrors` | `[]` | Up to 8 relay mirrors, each `{"name": "...", "secret": "..."}`. The secret is 32 to 64 random bytes in unpadded base64url. See [Relay mirrors](#relay-mirrors). |
-| `secure_cookies` | `true` | Keep `true`. Turn it off only for tests, or for plain HTTP on localhost. |
+| `secure_cookies` | `true` | Keep `true`. The session cookie is then marked secure. Turn it off only for tests, or for plain HTTP on localhost. |
 | `direct` | `false` | Set `true` only when no proxy is in front of the panel. |
+| `update_check` | `true` | Asks GitHub every 6 hours whether a newer panel release exists. Nothing else about the panel is sent. See [Updating the panel](#updating-the-panel). |
+| `update_request` | `/var/lib/veilway-panel-update/request` | Where the panel writes an update request. The install script makes the folder. |
 | `two_step` | `"on"` | `"off"` turns the authenticator code off. Any other value keeps it on. See [Two-step sign-in off](#two-step-sign-in-off). |
 
 The panel refuses to start if `listen` is not a loopback address, if `prefix` and `sub_path` do not meet the rules above, or if `trusted_proxies` is empty and `direct` is not `true`.
+
+### Moving the admin pages
+
+To move the admin pages to another path, run `sudo bash veilway.sh panel-prefix /new-path`. Without a path, the script picks a random one. It asks you to confirm, changes `prefix` in `panel.json`, restarts the panel and prints the lines your web server needs for the new path. If the panel does not start with the new path, the script puts the old one back. The new path follows the rules of `prefix` and must not be, sit inside or hold `sub_path`. Bookmarks and your web server's config must follow.
 
 ### Two-step sign-in off
 
@@ -57,16 +63,20 @@ To turn it on again, remove the line (or set it to `"on"`) and restart the panel
 ## First login
 
 1. Open `https://your-domain/<prefix>/`. The admin path is the `prefix` value.
-2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, then choose **Make admin account**. The token is printed in the panel's log when it first starts, and the install script prints it too.
+2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, tick **I have read and accept these terms**, then choose **Make admin account**. The token is printed in the panel's log when it first starts, and the install script prints it too.
 3. The next page shows a TOTP key and a QR code for your authenticator app. The key is shown once. Add it to the app, then choose **I added it, go to login**. Without the key you cannot log in.
 4. Log in with your username, your password and the 6-digit code from the app. Login is rate limited, so after several wrong tries you must wait a few minutes.
-5. Before you add users, go to **Settings** and add an endpoint under **Endpoints**, then go to **Subscriptions** and set the device address pool. Then go to **Node** and check the profiles.
+5. Before you add users, go to **Settings**. Set the node address under **Provider**, add an endpoint under **Endpoints**, and set the device address pool under **New users**. Then add an inbound on **Inbounds** and publish its profile on **Profiles**.
 
 The same setup can be done by script. Send the token, a username and a password to `{prefix}/api/setup`. The answer holds the TOTP secret, shown once.
 
 Some changes ask for your password and code again. The confirmation holds for five minutes.
 
-Setup asks you to read and accept the [Veilway operator terms](../../legal/operator-terms/) before it makes the admin account. The acceptance, with its time and the version of the terms, goes in the audit log. A script must send `accepted_terms: true`.
+Setup asks you to read and accept the [Veilway operator terms](../../legal/operator-terms/) before it makes the admin account, and it does not go on until the box is ticked. The acceptance, with its time and the version of the terms, goes in the audit log. A script must send `accepted_terms: true`.
+
+## Dashboard
+
+The **Dashboard** is the first page after sign-in. It shows the speed now and the peak today, how much the node carried this month, how many devices wait for their app to confirm, the users who have used more than 85 percent of their quota, where traffic leaves according to the node's last report, and the newest entries of the audit log. The figures refresh every 10 seconds. [Notices](#notices) to users are edited here too.
 
 ## Users and devices
 
@@ -85,12 +95,14 @@ Fill in the form:
 - **Enabled**: a disabled user cannot connect, and their devices stay.
 - **Exits**: **All exits**, or **Only these** with the exits you tick. The user's app lists only these exits. Routing rules can still send their traffic to a specific exit. **Default exit** is where their devices leave when they pick none, among those exits. **Node default** leaves it to the node's routing default.
 
-When the user is saved, the panel shows the subscription link. It is shown once. See below.
+When the user is saved, the panel shows the subscription link so you can copy it. See below.
 
 ### The user page
 
 - **Usage** shows what counts toward the quota, since when, and the total sent and received. **Reset usage** starts the quota count over. A user who was cut off for going over the quota can connect again. You can also set the total back to zero.
-- **Subscription link** holds the link and its QR code. The panel keeps no copy, so the link can be shown only when it is made or reset. Anyone with the link can enroll a device, so send it like a password. **Reset link** makes a new link and stops the old one at once. You choose whether devices enrolled with the old link are removed too.
+- **Subscription link** holds the link and its QR code. Anyone with the link can enroll a device, so send it like a password. The panel keeps the link sealed with the keys in `panel.keys`, and **Show link and QR** opens it again after you confirm your password and code. With **Show links once** on (see [Subscription settings](#subscription-settings)) the panel keeps no copy, and the link can be shown only when it is made or reset. The dialog gives the Veilway link, and a web link for apps that open a browser first. **Reset link** makes a new link and stops the old one at once. You choose whether devices enrolled with the old link are removed too. The user's Xray credentials are made new as well.
+- **Download sealed file** makes a `.vwsealed` file that holds the link, locked with a password you choose (at least 10 characters). The app asks for the password when it opens the file, and then goes on as with any link. The panel keeps no copy of the password. It asks for your password and code again, and the audit log records that a file was made, not the password or the link. Send the password by another route than the file, because anyone who has both gets the link, and the link is the account. No API token can do this. The format is in the [subscription format](../../protocol/subscription-format/).
+- **Xray links** shows the user's link for each Xray inbound, as text and as a QR code. A user gets links once they have a device and an Xray inbound exists. It asks for your password and code again. **New Xray credentials** makes new ones and the old links stop working. See [Xray inbounds](#xray-inbounds).
 - **Devices** lists each device, whether it is waiting for the app to confirm, enrolled, and when it was last seen. A device either makes its own key, which never leaves the device, or uses a key the panel made. **Remove device** stops it from connecting at once.
 - **Add a device with a panel key** lets the panel make the private key and export it as a signed file. This is weaker than enrolling from the device, so use it only for a device that cannot open the link.
 - **Exits** sets which exits the user's app lists, with each exit's country and whether it is up. If an exit the user was limited to is deleted from the node, it shows as **Removed from the node**, and **Save exits** drops it from the user's list. A default exit that the node no longer has, or that the user may no longer use, is cleared the next time the panel updates the node.
@@ -98,18 +110,19 @@ When the user is saved, the panel shows the subscription link. It is shown once.
 
 The **Users** list shows each user's exits as **All exits** or a count.
 
-## Subscriptions
+## Subscription settings
 
-The **Subscriptions** page sets what every user's link points to, and how the documents are signed. It has four tabs.
+**Settings** is one page that sets what every user's link points to, and how the documents are signed. A list of its sections at the top jumps to each: **Provider**, **Endpoints**, **Refresh**, **New users**, **Mirrors**, **Static mirrors**, **Relays**, **Answer to strangers**, **Published profiles**, **Gateway keys** and **Signing keys**. Change the form and save it from the bar that appears. Gateway keys and signing keys act on their own.
 
-### Endpoint
+### Provider, refresh and new users
 
 - **Provider name** is shown next to the subscription in apps.
-- **Endpoints** are set under **Settings** > **Endpoints**, see [Endpoints and moves](#endpoints-and-moves). Each one has an address that your web server forwards to the panel's subscription path.
+- **Node address** is the public host name or IP address that devices reach this node on. Profiles are made with it.
+- **Endpoints** are set under **Endpoints**, see [Endpoints and moves](#endpoints-and-moves). Each one has an address that your web server forwards to the panel's subscription path.
 - **Apps check for changes every** sets the refresh interval, in minutes. **Documents stay valid for** sets how many days a signed document can be used.
-- **Show links once** means the panel never keeps a copy of a link. A link is shown when it is made or reset, and never again.
+- **Show links once** means the panel never keeps a copy of a link. A link is shown when it is made or reset, and never again. Off is the default.
 - **Device limit for new users** and **Device address pool** set the defaults for new users. The pool is an IPv4 network from `/16` to `/30`, and each device gets one address from it.
-- **Answer to everything else** shows the 404 your web server gives. The endpoint answers every request without a valid token that way.
+- **Answer to strangers** is the answer to a request without a valid token. It is the 404 your web server gives on an unknown path, so a stranger cannot tell the panel is there. Turn on **Set the answer here** to set the status, headers and body in the panel. Off uses `not_found` from `panel.json`.
 
 **Terms of service URL** and **Privacy policy URL** are your own pages as the provider. Enter an `https` address for each, or leave it empty. Every subscription then shows them as support links. Starting texts are on the [provider templates](../../legal/provider-templates/) page.
 
@@ -234,9 +247,9 @@ iptables -t nat -A POSTROUTING -p udp -d 192.0.2.10 --dport 51821 -j MASQUERADE
 
 Use `-p tcp` in both rules for a TCP transport. Rules made this way are gone after a reboot unless you save them, for example with `iptables-save`.
 
-### Profiles
+### Published profiles
 
-The profiles tab takes extra profiles as a JSON list of up to 64 objects. A profile here cannot name a device, because the panel adds each user's device to it.
+**Published profiles** holds what the subscription serves, as a form or as a JSON list of up to 64 objects. **Publish profiles** on the **Profiles** page writes it for you. A profile here cannot name a device, because the panel adds each user's device to it.
 
 ## Gateway keys
 
@@ -340,7 +353,7 @@ The panel picks the first match:
 2. The endpoint of the first group of the user that has one.
 3. The default endpoint.
 
-You can set an endpoint on the user page, in the add-user form and in the group list.
+You can set an endpoint on the user page, in the add-user form and under **Endpoint per group**.
 
 ### Move users to another endpoint
 
@@ -352,13 +365,13 @@ After a move, the users' documents carry a signed `main_endpoint`. What happens 
 - The first document asks the app to move. The user confirms once in the app.
 - Documents at the new endpoint are signed fresh, with a higher serial.
 
-The **Endpoints** page shows how many moved accounts still refresh on the old endpoint. When that is none, you can retire it. An endpoint that users still use cannot be removed.
+The **Endpoints** section shows how many moved accounts still refresh on the old endpoint. When that is none, you can retire it. An endpoint that users still use cannot be removed.
 
 A link shown again carries the user's current endpoint and the active gateway key.
 
 ## Node
 
-The **Node** page shows what the node runs. It has six tabs: inbounds, outbounds, exits, routing, profiles and node links.
+Five pages show what the node runs: **Inbounds**, **Exits and routing** (with the tabs **Exits**, **Routing** and **Outbounds**), **DNS and logs**, **Profiles** and **Nodes**.
 
 Every change goes through a review before it reaches the node. Choose **Edit** or **Remove**, and the panel opens **Review changes**. Nothing is sent to the node until you choose **Apply to the node**. The review shows:
 
@@ -371,7 +384,7 @@ If the config changed since you opened the page, the review says so. Reload the 
 
 ### Inbounds
 
-An inbound is a tunnel that devices connect to, with the transports it is reached on.
+An inbound is a tunnel that devices connect to, with the transports it is reached on. The **Inbounds** page lists the node's own inbounds and those of the Xray add-on together, and **Show** filters them by type.
 
 - **Veilway** is WireGuard with the control channel. The obfuscated transports need it.
 - **Plain WireGuard** is for stock WireGuard apps. Its handshake is easy to spot.
@@ -390,13 +403,19 @@ The transports are:
 
 The `tls`, `ws` and `fronted` transports need more than the form holds: their certificate, decoy origin, trusted proxies and transport keys. Set those in the JSON view.
 
+### Xray inbounds
+
+If the Xray add-on is installed (`sudo bash veilway.sh addon xray install`, see the [Xray add-on](../xray/)), the **Xray add-on** section of the **Inbounds** page shows its release and the inbounds made here, with an **Add Xray inbound** button. Without the add-on that section says so and shows the install command. Choose VLESS, Trojan or Shadowsocks, a port, and for VLESS and Trojan the certificate and key files on the node and a decoy web server. Every current user gets a credential for the inbound, and users added later get one too. **Host in links** is the host name the links carry, and empty uses the node's first public address. Shadowsocks uses its port for UDP as well, so open both. You can edit an Xray inbound later: the port, listen address, certificate files, decoy, host, and for Shadowsocks a new server key. Users keep their credentials, but their links change when the port, the host or the server key does. Each user's links are on the user page.
+
+An Xray inbound answers on the server's own address, next to the profiles you serve. Anyone who finds it can tell the address is a proxy server, so the panel caps every profile in the subscriptions at Detectable. The review says so before you apply.
+
 ### Outbounds
 
-An outbound is how the node dials out. **Direct** dials from the node's own address. **SOCKS5 proxy** dials through a proxy you run or rent. For a SOCKS5 proxy, give its address and, if it has them, a username and password. A source address is optional.
+The **Outbounds** tab of **Exits and routing** lists how the node dials out. **Direct** dials from the node's own address. **SOCKS5 proxy** dials through a proxy you run or rent. For a SOCKS5 proxy, give its address and, if it has them, a username and password. A source address is optional.
 
 ### Exits
 
-An exit is where a user's traffic leaves. Users pick among the exits their routing allows. Each exit has a name that users see, and a two-letter country code such as `DE`. It leaves through one of these:
+The **Exits** tab lists where a user's traffic leaves. Users pick among the exits their routing allows. Each exit has a name that users see, and a two-letter country code such as `DE`. It leaves through one of these:
 
 - **An outbound**: each flow is dialed again through an outbound.
 - **The kernel**: packets go to a TUN device and the kernel forwards them. This is Linux only. The default interface is `veilway0`.
@@ -411,7 +430,7 @@ Each rule has conditions, and every condition you add must hold for the rule to 
 
 A rule then sends traffic to one of these:
 
-- **A specific exit**: pick one of the node's exits, whatever the user picked. If that exit is deleted later, the review lists the rule and the node refuses the change until the rule points somewhere else.
+- **This exit**: pick one of the node's exits, whatever the user picked. If that exit is deleted later, the review lists the rule and the node refuses the change until the rule points somewhere else.
 - **The exit the user picked**, within the exits that user is allowed.
 - **Nowhere, silently**: the traffic is dropped with no answer.
 - **Nowhere, refused**: the device is told it cannot connect, so apps give up at once.
@@ -422,11 +441,11 @@ A rule can be turned off. It stays in the list and is skipped. For a home networ
 
 ### Profiles
 
-The profiles tab has one profile for each Veilway inbound, made from the node's config. Apps get these profiles through their subscription once you publish them. A profile is ready when it has what it needs. The panel lists what is still missing for each one: the inbound's public key, the transport's public key for `tls` and `ws`, and the node's public address, which you set under **Subscriptions**. Choose **Publish profiles** when all are ready. Apps pick up the change at their next refresh.
+The **Profiles** page has one profile for each Veilway inbound, made from the node's config. Apps get these profiles through their subscription once you publish them. A profile is ready when it has what it needs. The panel lists what is still missing for each one: the inbound's public key, the transport's public key for `tls` and `ws`, and the node's public address, which you set as **Node address** under **Settings**. Each profile also has **Overrides**, a JSON object of fields that replace the derived ones. It cannot hold `id` or `device`. Choose **Publish profiles** when all are ready. Apps pick up the change at their next refresh.
 
 ### Node links
 
-A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/): the **Nodes** page has a guided setup for each side and for a reverse tunnel. The two operators pair the nodes in four steps:
+The **Nodes** page lists the node's links. A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/): the **Nodes** page has a **Guided setup** with three starts: **Set up as entry node**, **Set up as exit for an entry node** and **Reverse tunnel**. Each walks through the direction, the codes and the fingerprints, then adds the exit that leaves through the link (on the entry) or picks what the link may use (on the exit), all as one reviewed change. By hand, the two operators pair the nodes in four steps:
 
 1. One operator chooses **Make an offer**. They pick the inbound the link connects to, the direction, the transports, and the tunnel addresses. They choose how long the offer stays open, then send the offer code to the other operator. The offer holds no secret, but send it over a channel you trust.
 2. The other operator chooses **Paste an offer**, and reads it. The panel shows where their node would connect before anything is answered. They accept, and send back an answer code.
@@ -440,13 +459,13 @@ The two directions are:
 
 The tunnel addresses must come from a network that no inbound pool on either node uses. A private address works only when both nodes share that network. If a transport is WebSocket, it runs through the other operator's web server, which can see the timing of the traffic.
 
-A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **Ended**. **Drop the pairing** removes it.
+A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **Ended**. **Drop the pairing** removes a pairing that is still waiting.
 
 **Manage** on a link changes it after pairing. **Link on** turns it off without losing its keys: it neither dials nor answers until you turn it on again. On the node that is the exit you also set where the link's traffic leaves when no rule names an exit, which exits it may use, whether rules may reach private networks through it, how many connections it may hold at once, a quota and its period. On both sides you can set an expiry and the MTU. **Remove** asks you to confirm with the other node's name and then goes through the review. The other node keeps its half until its operator removes it there, and linking again needs a new pairing.
 
 ### Notices
 
-**Notices to users** on the dashboard holds up to four short notices, each an information or a warning. Connected apps show them within seconds, in the language you write them in. The text is one line of up to 280 bytes; a Persian letter takes two. The editor counts the bytes as you type and shows the notice the way apps show it. Changes go through the same review as the rest of the node's config.
+**Notices to users** on the **Dashboard** holds up to four short notices, each an information or a warning. Connected apps show them within seconds, in the language you write them in. The text is one line of up to 280 bytes; a Persian letter takes two. The editor counts the bytes as you type and shows the notice the way apps show it. Changes go through the same review as the rest of the node's config.
 
 ### DNS and logs
 
@@ -478,10 +497,11 @@ You can set an expiry, and a list of allowed source addresses, one address or ne
 
 ## Account
 
-The **Account** page has five tabs.
+The **Account** page has six tabs.
 
 - **Sessions** lists the browsers signed in to your account. You can end any session. This browser is marked.
 - **Password and code** changes your password, or makes a new key for your authenticator app. Changing the password ends every other session. A new key stops the old one from working and ends every other session too.
+- **Admins** lists everyone who can sign in. **Add admin** takes a name (3 to 32 characters of a to z, 0 to 9, dot, dash and underscore) and a password of 12 to 256 characters, then shows the new admin's authenticator key once. Hand over the password and the key in person or over a channel you trust. **Reset** gives an admin a new password and a new authenticator key, shown once, and ends their sessions. **Remove** ends their sessions and API tokens, and their lines in the audit log stay. You cannot remove yourself or the last admin. Each of these asks for your password and code again, and no API token can do them.
 - **Audit log** lists logins and every change made in the panel or through a token. The log never holds a link, token or key.
 - **Backup and restore** is described under [Backups and secrets](#backups-and-secrets).
 - **Display** sets the appearance (system, dark or light) and the language. In Persian, date fields use the Solar Hijri calendar, such as `1405/02/15`.
@@ -512,7 +532,7 @@ The panel keeps five files apart, each readable only by its owner:
 - `gateway.keys` holds the gateway keys. The panel's backup holds this file.
 - `gateway.next` holds the next gateway key, until you move it off the server.
 
-Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) includes these files, so keep the archive private. `gateway.next` is the exception: it is never in the panel's backup, see [Gateway keys](#gateway-keys).
+Back up `panel.keys` as well as the database. Without `panel.keys`, the subscription endpoint answers like an unknown path, and no secret can be opened. The install script's [backup](../../getting-started/) holds the whole panel data folder, so it has these files, and `gateway.next` too while that file is still on the server. Keep the archive private. The panel's own backup never holds `gateway.next`, see [Gateway keys](#gateway-keys).
 
 Passwords are hashed with Argon2id. Admin sign-in asks for a code as well as the password.
 
@@ -522,11 +542,11 @@ On **Account**, **Backup and restore** makes one `.vwbackup` file with a consist
 
 The file holds every user's secrets and the panel's keys. Keep it private. A lost passphrase cannot be recovered, and without it the file is useless.
 
-To restore, pick the file and enter its passphrase. The panel checks the file before it changes anything, saves the current database and keys in a `pre-restore-<time>` folder next to the database, swaps the files in, and restarts. The panel stops with a failure code so that the service manager (the install script sets `Restart=on-failure`) starts it again on the restored files. Every session ends, so you sign in again with an admin from the backup. A backup from a newer panel is refused. When the gateway keys on the server are not the ones in the backup, the panel restores the backup's and says so before you go on: links made under a key the backup lacks stop opening. The file it replaces is in the `pre-restore-<time>` folder.
+To restore, pick the file and enter its passphrase. The panel checks the file before it changes anything, saves the current database and keys in a `pre-restore-<time>` folder next to the database, swaps the files in, and restarts. The panel stops with a failure code so that the service manager (the install script sets `Restart=on-failure`) starts it again on the restored files. Every session ends and every API token is revoked, so you sign in again with an admin from the backup. A backup from a newer panel is refused. When the gateway keys on the server are not the ones in the backup, the panel restores the backup's and says so before you go on: links made under a key the backup lacks stop opening. The file it replaces is in the `pre-restore-<time>` folder.
 
 ### Updating the panel
 
-The panel checks GitHub for a newer release at start and every 6 hours (set `update_check` to `false` in `panel.json` to turn this off). When one exists, a banner shows "Veilway Panel <version> is available" with a link to the release notes and an **Update** button. The button needs a recent re-authentication and is audited, and no API token can use it.
+The panel checks GitHub for a newer published release (not a draft or a prerelease) at start and every 6 hours (set `update_check` to `false` in `panel.json` to turn this off). When one exists, a banner shows "Veilway Panel <version> is available" with a link to the release notes and an **Update** button. The button needs a recent re-authentication and is audited, and no API token can use it.
 
-The panel never updates itself. It writes the word `panel` to a file in `/var/lib/veilway-panel-update/`, and a root service started by a systemd path unit deletes the file and runs `veilway.sh update panel --yes`, which checks the release signature before it installs. Nothing in the file is used except that word. Servers installed before this feature need `sudo bash veilway.sh update panel` once to get the service.
+The panel never updates itself. It writes the word `panel` to a file in `/var/lib/veilway-panel-update/`, and a root service started by a systemd path unit deletes the file and runs the script's `panel-update-request` command. That does what `veilway.sh update panel --yes` does, and checks the release signature before it installs. Nothing in the file is used except that word. Servers installed before this feature need `sudo bash veilway.sh update panel` once to get the service.
 

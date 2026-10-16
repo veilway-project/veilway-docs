@@ -4,7 +4,7 @@ description: How two Veilway nodes are joined so that users connect to one and t
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review and was revised against both. The revision has not been reviewed again, nobody outside the project has reviewed it, and nothing in it is implemented. Do not rely on any property described here.
+This page is a draft specification. Node links are built: the entry's translation and the link state in the node (`veilway-core`), `veilway link offer` and `veilway link answer`, and the panel's pairing screens. No one outside the project has reviewed it, and the key agreement at pairing is new. Do not rely on any property described here.
 :::
 
 A node link joins two nodes. Users connect to one of them, the **entry**, and their traffic leaves from the other, the **exit**. The two nodes may belong to two operators. Each has its own config and its own panel, and neither controls the other. Read [Protocol overview](../overview/) and [Transports](../transports/) first: on the wire a link is nothing new. It is one device session on a native transport, with WireGuard inside, exactly as a user's connection is.
@@ -290,11 +290,11 @@ What a user can send end to end is the smaller of their own tunnel's MTU and the
 
 **TCP inside TCP inside TCP.** A user on a stream transport, behind a link on a stream transport, has their TCP connections inside two TCP connections, one after the other. Each stalls everything behind a lost segment, and the stalls add. This is plainly bad for anything interactive. Between two servers a datagram transport is more often possible than between a user and a server, and a link should list `udp-obfs` first wherever the path between the nodes allows it. A link over a stream transport works, and is slow under loss.
 
-## Config keys this draft assumes
+## Config keys
 
-These keys do not exist in the [config reference](../../reference/config/). The names are proposals, and this page does not change that reference.
+These keys are in the [config reference](../../reference/config/), which is the authority.
 
-| Proposed key | On | Meaning |
+| Key | On | Meaning |
 |---|---|---|
 | `links[]` | both | A list of links. Each has a `tag`, an `id`, `direction`, `enabled`, `addresses` (`dialler`, and `listener` in a reverse link), `mtu` and `transport_secret`. Secret. |
 | `links[].inbound` | listener | The tag of the `veilway` inbound the link connects to. That inbound carries no users' devices. |
@@ -309,7 +309,7 @@ These keys do not exist in the [config reference](../../reference/config/). The 
 
 Which half a node is follows from `direction` and from whether the link is listed with `inbound` or with `peer`.
 
-**The control API** reports for each link: its tag and id, the half and the role of this node, the state and since when, the time of the last handshake, the transport and candidate in use on the dialler, flows, and bytes and packets in each direction. It reports no key and no secret.
+**The control API** (`GET /v1/links`) reports for each link: its tag and id, the half and the role of this node, the state and since when, the time of the last handshake, the transport and candidate in use on the dialler, flows, and bytes and packets in each direction. It reports no key and no secret.
 
 **`veilway doctor`** checks, without dialing anything: that a link's addresses lie in the inbound's pool on a listener and in none of this node's pools on a dialler, that a link's inbound carries no users, that no link key is a device's key, that the clock is set, that the link's `mtu` is not below the `mtu` of an inbound whose users are routed to it nor below the MTU of an `l3` exit it may use, that a link is not entitled to a `chain` exit, and, from a running node, each link's state.
 
@@ -328,15 +328,15 @@ Which half a node is follows from `direction` and from whether the link is liste
 - **A link multiplies what a leak costs.** The link's keys on a compromised node let its holder act as that side of the link until the other operator ends it.
 - **Parsers.** The offer and the answer are hostile input to a panel, pasted by a person. Each has a fuzz target in the same change as its parser, and a code that fails any check changes nothing.
 
-**Other documents this page disagrees with, and which must change with it.** Threat model invariant 8 says every decrypted packet is checked for a source its device owns, and a reverse link's peer is checked by another rule. Invariant 10 says a returning packet goes to the device that holds its destination address, and with translation that address is the link's. The threat model also needs entries for the `chain` backend and rows for the two parsers. The plan describes a link as an inbound with one peer and one pairing code, where this page has a peer on an inbound that carries only links, and two codes with a fingerprint.
+**Where this page differs from the threat model's invariants.** Invariant 8 says every decrypted packet is checked for a source its device owns, and a reverse link's peer is checked by another rule. Invariant 10 says a returning packet goes to the device that holds its destination address, and with translation that address is the link's.
 
 ## Open questions
 
-Each is listed with the default this draft takes.
+Each is listed with the default this page takes.
 
 | Question | Default |
 |---|---|
-| Is the pairing's key agreement sound: fresh X25519 keys in two codes, HKDF over the result with the pairing hash, and a fingerprint compared by two people? | As written. It is new and has not been reviewed. |
+| Is the pairing's key agreement sound: fresh X25519 keys in two codes, HKDF over the result with the pairing hash, and a fingerprint compared by two people? | As written. It is new and has not been reviewed from outside. |
 | A link as a peer on an inbound, or an inbound type of its own? | A peer. With the rule that a link's inbound carries no users, the difference from an inbound type is small, and it goes away when one device can no longer crowd an inbound's queue. |
 | One address for the whole link. Is the limit on protocols without ports acceptable? | Yes for version 1. An entry whose users need such protocols at the same remote address at the same time has no answer here. |
 | Should the entry also rewrite TCP timestamps and sequence numbers, so that the exit can tell devices apart less easily? | No. That is a TCP proxy in all but name, and timing would remain. The page says what the exit can still do. |

@@ -12,9 +12,11 @@ The Android app is part of the [alpha](../../alpha/). It is an arm64 build, so i
 
 ## Add a subscription
 
-Your operator gives you a subscription link, or a subscription file. Open the app and go to the import screen. Paste the link, or choose the file, and follow the app's steps to add it.
+Your operator gives you a subscription link, a subscription file, or a QR picture. Open the app and go to the import screen. Paste the link, or choose the file or the picture, and follow the app's steps to add it. A file locked with a password (a sealed file, ending in `.vwsealed`) asks for the password first. The [client manual](../client/#add-a-subscription) describes the steps.
 
-Camera scanning of a QR code is not in the Android app yet. Neither is opening a link from another app. Paste the link instead.
+Scanning a QR code with the camera is not in the Android app yet. Choose a picture or a screenshot of the code instead. Neither does the app open a link from another app, so paste the link.
+
+To give a subscription to another device, press **Share** on its row. The app can show the link, show it as a QR code, or save a sealed file. It shares the link only, never this phone's keys. The **Send** button hands the link to another app.
 
 ## Connect
 
@@ -38,9 +40,15 @@ The Veilway settings screen has a button that opens this page for you. Android k
 
 With Always-on VPN on, Android starts Veilway at boot and after a crash, and blocks the internet while Veilway is not connected. Some phone makers stop apps from starting at boot. If the connection does not come back after a restart, exclude Veilway from battery optimization in the phone's settings.
 
+## Updates
+
+The app checks for a new version when it opens. Turn that off with **Check for updates when the app opens** in **Settings**, or press **Check for updates** at any time. When there is one, a banner says **Version {version} is ready**. Pressing **Install and restart** downloads the APK from the project's releases and checks its signature and release tag. Only then does it hand the file to Android's installer, which asks you to confirm.
+
+The first time, Android may ask you to allow Veilway to install apps. The app opens that screen for you. Allow it, come back, and press the button again. The connection stops right before the install and comes back afterward if it was on. Android also refuses an update that is signed with a different key than the installed app.
+
 ## What is not checked yet
 
-- The Android app has not been run on a real phone yet. Blocking while it reconnects, and the Always-on setup above, are not tested on a phone.
+- The app has been used on a real phone (Android 14) with a demo node. Blocking while it reconnects, and the Always-on setup above, have not been tried on a phone.
 - With **Let apps reach devices on this network** on, and Always-on VPN with **Block connections without VPN** on, Android may also block local devices. Your printer and router may be unreachable while connected. This is not tried yet.
 
 For the home network, see [Home network](../home-network/).

@@ -26,11 +26,11 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 ## Status
 
-The site describes the alpha, `v0.1.0-alpha`, which is not tagged yet. Parts of the site are still stubs.
+The site describes the alpha, `v0.1.0-alpha`, which is tagged and released in the core repository. Parts of the site are still stubs.
 
 - Written, in English: the alpha release page, getting started, the entry-node guide, the operator terms and provider templates, the panel, client, Android, home network and Xray manuals, the config reference, the control API reference, the obfuscation status page, and the draft protocol specification (overview, transports, control channel, subscription format with static mirrors, and node links).
-- Written, in Persian: the alpha release page, getting started, the entry-node guide, the legal pages, the manuals (Xray included), the config and control API references, and the obfuscation status page.
-- Still stubs: the Persian protocol pages, the Persian threat model summary and the SDK guides.
+- Written, in Persian: the alpha release page, getting started, the entry-node guide, the legal pages, the manuals (Xray included), and the config and control API references.
+- Still stubs: the threat model summary, the Persian protocol pages (there is no Persian node links page yet) and the Persian obfuscation status page.
 
 The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The alpha release page lists what each part has been tested on and what has not.
 
@@ -58,7 +58,7 @@ npm run build
 
 ## Repositories
 
-- [veilway](https://github.com/veilway-project/veilway): the core, the control API and its SDK, and the desktop app.
+- [veilway](https://github.com/veilway-project/veilway): the core, the control API and its SDK, and the desktop and Android apps.
 - [veilway-panel](https://github.com/veilway-project/veilway-panel): the panel, the admin side of a node.
 - [veilway-ui](https://github.com/veilway-project/veilway-ui): the design system and the translations for the panel and the apps.
 - veilway-docs: this repository, published at [veilway-project.github.io/veilway-docs](https://veilway-project.github.io/veilway-docs/).

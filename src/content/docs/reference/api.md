@@ -60,6 +60,7 @@ No answer, event or log line of the API contains the value of a secret (`private
 | 409 | `stale_revision` | `If-Match` does not name the revision that runs. |
 | 409 | `replay_absent` | A reset of the replay memory on a node that keeps none, because it has run no obfuscated transport. Nothing was changed. |
 | 409 | `replay_busy` | A reset of the replay memory while an earlier one is not known to be on disk, or while the node stops. Nothing was changed. |
+| 500 | `internal` | The node could not write out its answer or finish the check of a document. |
 | 500 | `replay_unwritten` | A reset of the replay memory whose file could not be written. See the route. |
 | 500 | `replay_writing` | A reset of the replay memory whose write has not ended after 10 seconds and may still land. Do not ask again. See the route. |
 | 413 | `body_too_large` | The body is larger than 4 MiB. |
@@ -87,6 +88,8 @@ No answer, event or log line of the API contains the value of a secret (`private
 | GET | `/v1/stats` | All counters with live rates |
 | GET | `/v1/sessions` | Devices with a live session |
 | GET | `/v1/exits` | Every exit with its upstream health |
+| GET | `/v1/inbounds` | Every inbound with its public keys and the rating of each transport |
+| GET | `/v1/links` | Every enabled node link with its state and counters |
 | GET | `/v1/events` | Server-Sent Events |
 | GET | `/v1/openapi.json` | The OpenAPI 3.1 document |
 
@@ -102,6 +105,9 @@ Every route can also answer `408`, `503`, `404` and `405` as in the table above.
 | `uptime_secs` | integer | Seconds since the engine started. |
 | `inbounds`, `exits`, `users` | integer | How many the running config has. |
 | `flows` | integer | Flows in the flow table right now. |
+| `public_addresses` | list of strings | The node's public addresses as the config names them: host names or IP addresses, with no port. Empty for a node that names none. |
+| `certificates` | list | The self-signed certificates the node made for its `tls` transports with `"self_signed": true`, one for each listen address, as `{"listen", "pin", "not_before", "not_after"}`. `pin` is the SHA-256 of the key's SubjectPublicKeyInfo in standard base64, and stays the same when the certificate is made anew. `not_before` and `not_after` are Unix seconds. Empty for a node with none. |
+| `addons` | object | `{"xray": {"installed", "release"}}`: whether the Xray add-on's executable is in the add-on folder, and the Xray-core release this node runs. |
 
 ### `GET /v1/config`
 
@@ -125,7 +131,7 @@ Body: a config document. Nothing changes. The answer holds `valid`, `report` as 
 | `diff` field | Meaning |
 |---|---|
 | `inbounds`, `outbounds`, `exits`, `rules`, `users` | `{"added", "changed", "removed"}`, each a list of tags (names for users). |
-| `dns`, `log`, `routing_default`, `rules_reordered`, `notices`, `replay` | `true` when that part changed. For `replay`, the rate per source is in force at once and the cache size from the next start of the node. |
+| `dns`, `log`, `routing_default`, `rules_reordered`, `notices`, `public_addresses`, `replay` | `true` when that part changed. For `replay`, the rate per source is in force at once and the cache size from the next start of the node. |
 | `inbound_changes` | Per changed inbound: `tag`, `restart` (the tunnel restarts and its sessions drop), `transports_stopped` and `transports_started` (indexes). An inbound whose `type`, `padding`, `transport_keys`, `upgrade_cookie` or `upgrade_headers` alone changed is listed with `restart` false and both lists empty. Adding a `udp-obfs` transport to an inbound with no `mtu` written is a `restart`: its `mtu` goes from 1420 to 1390. |
 | `user_changes` | Per changed user: `name`, `devices_added`, `devices_removed`, `devices_readdressed`, `devices_rekeyed`, `devices_secrets_changed` (devices by public key) and `lost_access`. `devices_secrets_changed` lists the kept devices whose `transport_secrets` are not the ones they were; a control connection that proved a secret that is gone is closed, and a `udp-obfs` session that was opened with it ends. |
 
@@ -266,7 +272,7 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 |---|---|
 | `window_secs` | Seconds the rates were taken over: 5 once the node has run that long, 0 before its second sample. |
 | `users`, `inbounds`, `exits` | Lists of `{"name", "traffic", "up_bytes_per_sec", "down_bytes_per_sec"}`. `name` is the user name or the tag. A name that is new in the window has rate 0. |
-| `outbounds` | One entry per outbound of the running config, in its order: the same four fields as an exit, with `name` the tag of the outbound, and `udp`, `udp_down_secs` and `udp_flips`. `traffic` and the two rates are the sums over the exits whose backend names the outbound. An outbound no exit uses is listed with zeros, and an exit with an `l3` or `block` backend has no outbound and is counted under none. The node keeps no counter per outbound, so the sum holds everything those exits count, including traffic that an exit's `unsupported` policy sent around the proxy with `"direct"`. The node learns whether a proxy relays UDP once for each exit, from the flows of that exit, so the three UDP fields say what the exits of the outbound know together: `udp` is `false` while any of them was last refused and `null` for an outbound that is no SOCKS5 proxy, `udp_down_secs` counts from the latest refusal, and `udp_flips` adds up the flips of the exits, so one change of the proxy that two exits notice counts twice. `/v1/exits` has the state of each exit. |
+| `outbounds` | One entry per outbound of the running config, in its order: the same four fields as an exit, with `name` the tag of the outbound, and `udp`, `udp_down_secs`, `udp_flips`, `latency_ms` and `measured_at`. `traffic` and the two rates are the sums over the exits whose backend names the outbound. An outbound no exit uses is listed with zeros, and an exit with an `l3`, `block` or `chain` backend has no outbound and is counted under none. The node keeps no counter per outbound, so the sum holds everything those exits count, including traffic that an exit's `unsupported` policy sent around the proxy with `"direct"`. The node learns whether a proxy relays UDP once for each exit, from the flows of that exit, so the three UDP fields say what the exits of the outbound know together: `udp` is `false` while any of them was last refused and `null` for an outbound that is no SOCKS5 proxy, `udp_down_secs` counts from the latest refusal, and `udp_flips` adds up the flips of the exits, so one change of the proxy that two exits notice counts twice. `/v1/exits` has the state of each exit. `latency_ms` is how long the proxy took to answer the greeting of the last flow that dialed it, in milliseconds, and `measured_at` is when, in Unix seconds. Both are `null` for a direct outbound and until a flow has used the proxy. A reload starts them over. |
 | `drops` | Packets that were not carried since start, by reason name. |
 | `dns` | `answered`, `refused`, `failed`, `malformed`, `throttled`. |
 | `flows` | Flows in the flow table right now. |
@@ -345,7 +351,7 @@ The address a device connects from is not part of a session. It is never put in 
 | Field | Meaning |
 |---|---|
 | `tag`, `name` | `name` is the tag when the config gives none. |
-| `backend` | `netstack`, `l3` or `block`. |
+| `backend` | `netstack`, `l3`, `block` or `chain`. |
 | `outbound` | The outbound tag of a `netstack` backend, else `null`. |
 | `udp` | Whether the SOCKS5 proxy of the exit relays UDP as far as the node knows. `null` for an exit without a SOCKS5 proxy. |
 | `udp_down_secs` | Seconds since the proxy last refused to relay UDP. The node tries again once a minute. `null` unless `udp` is `false`. |
@@ -353,7 +359,42 @@ The address a device connects from is not part of a session. It is never put in 
 | `interface_up` | Whether the interface of an `l3` backend is up. While it is `false`, traffic routed to the exit is answered as unreachable and the node tries to bring the interface up again: 2 seconds after it went down, then after twice the wait each time, once a minute at most. `null` for any other backend. |
 | `interface_down_secs` | Seconds since the interface went down. `null` unless `interface_up` is `false`. |
 | `interface_flips` | How often the interface switched between up and down. |
+| `links` | The tags of the node links of a `chain` backend, which `/v1/links` reports on. Empty for every other backend. |
+| `link_up` | Whether one of those links is up. While none is, traffic routed to the exit is answered as unreachable and has no other way out. `null` for every other backend. |
+| `latency_ms`, `measured_at` | As for an outbound in `/v1/stats`, for the outbound of a `netstack` backend. `null` otherwise. |
 | `traffic` | Counters, as for a user. |
+
+### `GET /v1/inbounds`
+
+`{"inbounds": [...], "public_addresses": [...]}`. `public_addresses` is the same list as in `GET /v1/status`. There is one entry for each inbound of the running config. No private key is part of it.
+
+| Field | Meaning |
+|---|---|
+| `tag` | The inbound's tag. |
+| `kind` | `wireguard` or `veilway`, the inbound's `type`. |
+| `public_key` | The inbound's WireGuard public key. |
+| `transport_public_key` | The public half of the node transport key that a profile carries. `null` for an inbound with no `transport_keys`. |
+| `transports` | One `{"transport", "rating"}` for each transport, in the config's order. `transport` is `udp`, `ws`, `udp-obfs`, `tls` or `fronted`. `rating` is what a censor can see of a profile's connection: `protected`, `detectable` or `unsafe`. Every transport is rated `detectable` in this version. |
+
+### `GET /v1/links`
+
+`{"links": [...]}`, one entry for each enabled [node link](../../protocol/node-links/). No key and no secret is part of it.
+
+| Field | Meaning |
+|---|---|
+| `tag`, `id` | The link's tag and its id (22 characters of base64url). |
+| `half` | `entry` when this node has the users and sends their packets into the link, through an exit with a `chain` backend. `exit` when what arrives from the link leaves from this node. |
+| `role` | `listener` when the link connects to an inbound of this node, `dialler` when this node dials the other one. |
+| `state` | `up` (a WireGuard handshake completed within the last 180 seconds), `connecting`, `unreachable` (no candidate of the other node answers), `refused` (the other node answers and does not take the proof) or `ended` (no handshake for 24 hours, or this node cut the link off for quota or expiry). A node that dials tries again once a day from `ended`. |
+| `state_secs`, `state_flips` | Seconds in `state`, and how often `state` changed. |
+| `handshake_secs` | Seconds since the link's tunnel last completed a handshake. `null` without a session. |
+| `transport`, `transport_index`, `candidate_index` | On the node that dials: the transport it is at, and the places of that transport and of its candidate in the other node's list, from 0. All `null` on the node that is dialed. |
+| `size_warning` | `true` when the system refused an outer packet of the link for its size within the last 600 seconds, which suggests the link's `mtu` is too high for the path. Anyone on the path can forge such a report, so it only warns. |
+| `denied` | On the exit half: why this node cut the link off (`disabled`, `expired` or `quota`). `null` for a link that may run. |
+| `exit` | On the entry half: the exit with a `chain` backend the link is behind. |
+| `flows` | The flows the link carries. |
+| `dropped` | Packets that came out of the link and were not carried. |
+| `traffic` | Inner packets. Up is what this node sent into the link, down what it took out of it. |
 
 ## Events
 
@@ -397,7 +438,7 @@ The body of a refused request is read and thrown away up to four times the limit
 
 ## TypeScript client
 
-`@veilway/sdk` is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
+`@veilway/sdk` (version `0.1.0-alpha`, [its page](../../sdk/typescript/)) is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
 
 ```ts
 import {Agent, fetch as undiciFetch} from "undici";
@@ -417,10 +458,11 @@ for await (const event of client.events()) {
 }
 ```
 
-Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `resetUsage`, `resetReplay`, `stats`, `listSessions`, `listExits` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `resetUsage(name, {totals: true})` resets a user's usage and returns the user. `resetReplay()` resets the replay memory and returns it; read what it costs under `POST /v1/replay/reset` first. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
+Methods: `status`, `getConfig`, `validateConfig`, `diffConfig`, `applyConfig`, `listUsers`, `getUser`, `resetUsage`, `resetReplay`, `stats`, `listSessions`, `listExits`, `listInbounds`, `listLinks` and `events`. Every failure is thrown as `VeilwayError` with `status`, `code`, `message` and `details`. `resetUsage(name, {totals: true})` resets a user's usage and returns the user. `resetReplay()` resets the replay memory and returns it; read what it costs under `POST /v1/replay/reset` first. `events` ends when the node closes the stream or the signal aborts, and yields `lagged` events too.
 
 ## Not built yet
 
 - Remote access: a TCP listener, tokens and mutual TLS. For now the socket is the only way in.
 - A logs endpoint.
 - Disconnecting a session by hand.
+- Changing one user, inbound or link on its own. The writes are a whole config (`PUT /v1/config`), a usage reset and a replay reset.

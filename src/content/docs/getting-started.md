@@ -207,3 +207,4 @@ The installed versions are kept in `/var/lib/veilway/node.version` and `/var/lib
 - [Client manual](../manuals/client/): the desktop app for Linux, macOS and Windows.
 - [Android app](../manuals/android/): installing and using the Android app.
 - [Home network](../manuals/home-network/): reaching devices on your home network through your node.
+- [Set up an entry node](../guides/entry-node/): keeping users connected when international links are cut, with a second server abroad.

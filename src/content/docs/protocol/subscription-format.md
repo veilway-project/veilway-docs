@@ -4,7 +4,7 @@ description: The signed document in which a provider delivers profiles to a clie
 ---
 
 :::caution[Draft]
-This page is a draft specification. It has had two rounds of internal adversarial review, and its client-side reading (the link, the envelope, the payload, the request, the client's state machine and the legacy reader) has a first implementation that was reviewed once against this page. It has not been reviewed by anyone outside the project. No client and no endpoint exists. The section "Static mirrors" is newer than the rest: it has had one adversarial review inside the project, and has no implementation and no test vectors yet. Do not rely on any property described here.
+This page is a draft specification. It has had two rounds of internal adversarial review, and its client-side reading (the link, the envelope, the payload, the request, the client's state machine and the legacy reader) has a first implementation that was reviewed once against this page. It has not been reviewed by anyone outside the project. No client and no endpoint exists. The section "Static mirrors" is newer than the rest: it has had one adversarial review inside the project, and now has an implementation (the protocol code, the client and the panel's publisher) and test vectors, reviewed once. The section "The encrypted exchange", and the gateway key it adds to the link and the document, is newer still: it replaces the plain JSON request of earlier drafts, has had no review, and has no implementation and no computed test vectors. Do not rely on any property described here.
 :::
 
 A subscription is how a provider gives a user what the app needs to connect: one or more profiles, the list of exits, and a little content of the provider's own. Read [Protocol overview](../overview/) first for the terms. This page defines every profile field that [Transports](../transports/) and [Control channel](../control-channel/) rely on.
@@ -26,16 +26,24 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 |---|---|
 | Link token | 16 bytes, 22 base64url characters |
 | Device secret | 16 bytes, 22 base64url characters |
-| Link pin | 32 bytes, 43 base64url characters. A link with a pin has a fragment of 113 characters, one without has 69. |
+| Gateway key in a link | 33 bytes: a 1-byte key id and a 32-byte X25519 public key, 44 base64url characters |
+| Link pin | 32 bytes, 43 base64url characters. A link with a pin has a fragment of 158 characters, one without has 114. |
 | Pins held for one endpoint | 1 or 2 |
 | Stored token lookup value | 32 bytes: HMAC-SHA-256 under the panel's lookup key over the label `"veilway v1 sub token"` and the 16 token bytes |
 | Stored encrypted token copy | ChaCha20-Poly1305 under the panel's copy key: a random 12-byte nonce, the 16-byte token sealed, a 16-byte tag, 44 bytes in all. A nonce is drawn at each creation or reset of a token, which is few enough writes for random nonces. |
 | Panel keys for stored secrets | three keys of 32 random bytes: the lookup key, the copy key and the secret key. No key serves two purposes. |
 | Notice of a new endpoint pin | The panel names a pin in its documents at least 120 days before the endpoint presents it. That is the longest document lifetime plus the grace after expiry. A standby pin is named from the first document, so the notice has long run when it is needed. |
 | Key ids in a request | 1 or 2 |
-| Subscription URL without its fragment | at most 256 characters, counted on the `https` form for both forms. The same limit holds for a refresh URL. |
-| Request body | at most 1,024 bytes |
-| Response body, and a document in a file | at most 1,048,576 bytes |
+| Subscription URL without its fragment | at most 256 characters, counted on the `https` form for both TLS forms and on the `http` form for both plain forms. The same limit holds for a refresh URL and the URL of a move. |
+| Encapsulated request | exactly 1,073 bytes: a 1-byte key id, a 32-byte `enc`, and 1,040 bytes of ciphertext with its tag |
+| Request plaintext | exactly 1,024 bytes: a 2-byte length, the request JSON of at most 1,022 bytes, and zero bytes |
+| Encapsulated answer | 9,413, 36,979, 140,867, 538,201 or 1,089,437 bytes, the sizes of a static file, with the same time limits |
+| A document in an answer, a static file or a file | at most 1,048,576 bytes |
+| Gateway keys in a document | 1 or 2. A panel lists 2: the active key and the next one. |
+| Request time window | `t` within 300 s of the gateway's clock, either way |
+| Replay memory of the gateway | in memory: the `enc` of every request that opened inside the window, until the gateway's clock passes that request's `t` plus 300 s. After a start, any `t` earlier than the start is refused. |
+| Endpoint moves a client holds pending | at most 1 |
+| A retired gateway key kept | 120 days after a routine switch by default, settable from 30 to 365 days. Destroyed at once after a theft. |
 | Document in a link or a QR code | at most 2,048 bytes |
 | JSON nesting depth | at most 8 |
 | JSON values in a document | at most 20,000 |
@@ -68,7 +76,7 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 | Grace after expiry | 30 days |
 | An enrollment the user has not confirmed | released by the provider after 600 s |
 | Width of the keepalive range in `padding` | at least 10 s |
-| Fetch timeouts | 10 s to connect, 30 s in all |
+| Fetch timeouts | 10 s to connect. 30 s in all for a legacy fetch. A native answer and a static file take the time limit of their size. |
 | Redirects | none |
 | Legacy list | at most 256 links, each at most 4,096 bytes. Every line that is not empty counts toward the 256, also one that is skipped. |
 | Static mirrors | at most 4 |
@@ -90,52 +98,59 @@ The limits cannot all be reached at once. A large provider meets the limit on JS
 
 ### Form
 
-A native subscription link has one of two forms with the same content, and its fragment has one of two kinds. With two fields the endpoint has a certificate from an authority. With three it has a self-signed certificate, and the third field is its pin:
+A native subscription link has one of four forms, two over TLS and two over plain HTTP, and its fragment has one of two kinds. With three fields the endpoint has a certificate from an authority, or has no TLS at all. With four it has a self-signed certificate, and the fourth field is its pin:
 
 ```
-veilway://sub/sub.example.com/s#v1.<key>.<token>
-https://sub.example.com/s#v1.<key>.<token>
-veilway://sub/sub.example.com/s#v1.<key>.<token>.<pin>
-https://203.0.113.7:8443/s#v1.<key>.<token>.<pin>
+veilway://sub/sub.example.com/s#v1.<key>.<gateway>.<token>
+https://sub.example.com/s#v1.<key>.<gateway>.<token>
+veilway://sub/sub.example.com/s#v1.<key>.<gateway>.<token>.<pin>
+https://203.0.113.7:8443/s#v1.<key>.<gateway>.<token>.<pin>
+veilway://sub-plain/sub.example.com/s#v1.<key>.<gateway>.<token>
+http://203.0.113.7:8080/s#v1.<key>.<gateway>.<token>
 ```
 
 | Part | Meaning |
 |---|---|
-| `sub.example.com/s` | The provider's subscription endpoint: a host, an optional port, and a path. It is the same for all of a provider's users and holds no secret. The client always reaches it over `https`, and never over `http`. |
+| `sub.example.com/s` | The provider's subscription endpoint: a host, an optional port, and a path. It is the same for all of a provider's users and holds no secret. `veilway://sub/` and `https://` reach it over `https`. `veilway://sub-plain/` and `http://` reach it over plain HTTP. Plain HTTP is chosen only by a link, an entry of `refresh_urls` or a confirmed move, never by an answer. |
 | `v1` | The form of the fragment. Anything else is not a native link. |
 | `<key>` | The provider's Ed25519 public key, 32 bytes, base64url without padding, 43 characters |
+| `<gateway>` | The provider's gateway key: a 1-byte key id followed by the 32-byte X25519 public key, 33 bytes, base64url without padding, 44 characters. Every request is sealed to it. See "The encrypted exchange". |
 | `<token>` | The user's token, 16 bytes, base64url without padding, 22 characters |
-| `<pin>` | Optional. The SHA-256 of the SubjectPublicKeyInfo of the endpoint's certificate, 32 bytes, base64url without padding, 43 characters, with the unused trailing bits zero. It is the same hash as a `pins` entry of a transport candidate, in the encoding of a link. Present only when the endpoint serves a self-signed certificate. See "A pinned endpoint". |
+| `<pin>` | Optional. The SHA-256 of the SubjectPublicKeyInfo of the endpoint's certificate, 32 bytes, base64url without padding, 43 characters, with the unused trailing bits zero. It is the same hash as a `pins` entry of a transport candidate, in the encoding of a link. Present only when the endpoint serves a self-signed certificate, and never in a plain HTTP form. See "A pinned endpoint". |
 
 The exact grammar, which the client checks before it does anything else:
 
-- The `veilway` form is `veilway://sub/`, then a host with an optional `:` and port, then `/` and a path, then `#v1.`, 43 base64url characters, `.`, and 22 base64url characters, and then either nothing or `.` and 43 base64url characters, which are the pin. Nothing else, and no query: no fourth field, no empty field, and no pin of any other length. The fragment is therefore exactly 69 or exactly 113 characters. The host is a lowercase host name. An IP literal is written in one spelling only. An IPv4 address is four decimal numbers with no leading zeros. An IPv6 address is in brackets in its compressed form of RFC 5952: lowercase, the longest run of zero groups written ::, and no :: for a single group. A link whose address is written any other way is refused, so that two spellings of one address are never two hosts. It is an IP literal (a dotted IPv4 address, or an IPv6 address in brackets, lowercase, with no zone) only in a link that has a pin, since a provider with no domain has nothing else to put there. Such a literal is held to the refusals of a profile's dial address when the link is parsed, and to the address check of "How a fetch is made" at each fetch. The path is `/` followed by characters that RFC 3986 allows in a path.
+- The `veilway` form is `veilway://sub/`, then a host with an optional `:` and port, then `/` and a path, then `#v1.`, 43 base64url characters, `.`, 44 base64url characters, `.`, and 22 base64url characters, and then either nothing or `.` and 43 base64url characters, which are the pin. Nothing else, and no query: no fifth field, no empty field, and no pin of any other length. The fragment is therefore exactly 114 or exactly 158 characters. The gateway key's first byte is its key id, any value from 0 to 255, and its other 32 bytes are an X25519 public key. A key that is all zero, or one of the encodings of a point of small order that the gateway swaps for the base point (see "What the gateway does"), refuses the link. The host is a lowercase host name. An IP literal is written in one spelling only. An IPv4 address is four decimal numbers with no leading zeros. An IPv6 address is in brackets in its compressed form of RFC 5952: lowercase, the longest run of zero groups written ::, and no :: for a single group. A link whose address is written any other way is refused, so that two spellings of one address are never two hosts. It is an IP literal (a dotted IPv4 address, or an IPv6 address in brackets, lowercase, with no zone) only in a link that has a pin or a plain HTTP link, since a provider with no domain has nothing else to put there. Such a literal is held to the refusals of a profile's dial address when the link is parsed, and to the address check of "How a fetch is made" at each fetch. The path is `/` followed by characters that RFC 3986 allows in a path.
 - The `https` form is the same with `https://` in place of `veilway://sub/`.
+- The plain forms are the same with `veilway://sub-plain/` or `http://` in place of `veilway://sub/`, and never have a pin. A plain link with four fields is refused.
 - A whole document is `veilway://doc#v1.`, 43 base64url characters, `.`, and the document, or in a file the same without `veilway://doc#`. The content is split at the first two dots, because the document has two dots of its own.
 - Anything that begins with `veilway://` and matches none of these is refused at once.
-- An `https` text that holds `v1.`, 43 base64url characters, a dot and 22 base64url characters anywhere in it, and is not exactly the `https` form, is refused. That covers a pinned link as well, and so a pin that was cut short, or something put behind it, never turns a link into one without a pin. So is an `https` URL whose fragment is `v`, digits, and then a dot or the end, and does not fit the native grammar. Neither is ever read as a legacy link: a damaged native link must not turn into a `GET` that carries the key and the token.
-- A URL the token is sent to (the endpoint, a refresh URL) and a legacy link hold no percent-encoded control character (`%00` to `%1f`, `%7f`), no `%2f` or `%5c`, and no `.` or `..` path segment in any spelling, the `%2e` forms and a segment with a parameter included.
+- An `https` or `http` text that holds `v1.`, 43 base64url characters, a dot and 44 base64url characters anywhere in it, and is not exactly one of the native forms, is refused. That covers a pinned link as well, and so a pin that was cut short, or something put behind it, never turns a link into one without a pin. So is an `https` or `http` URL whose fragment is `v`, digits, and then a dot or the end, and does not fit the native grammar. Neither is ever read as a legacy link: a damaged native link must not turn into a `GET` that carries the key and the token. A legacy link stays `https` only.
+- A URL the token is sent to (the endpoint, a refresh URL, the URL of a move) and a legacy link hold no percent-encoded control character (`%00` to `%1f`, `%7f`), no `%2f` or `%5c`, and no `.` or `..` path segment in any spelling, the `%2e` forms and a segment with a parameter included.
 
-The fragment is 70 characters with its `#`, or 114 with a pin. A link to a short host name is about 100 characters, and about 145 with a pin. The first fits a QR code of version 6 (41 by 41 modules) at the lowest error correction level, or version 8 at the medium level. The second needs version 7 (45 by 45 modules) at the lowest level, or version 8 (49 by 49) at the medium level, and the code is denser for it.
+The fragment is 115 characters with its `#`, or 159 with a pin. A link to a short host name is about 146 characters, and about 190 with a pin. The first fits a QR code of version 7 (45 by 45 modules) at the lowest error correction level, or version 8 (49 by 49) at the medium level. The second needs version 9 (53 by 53) at the lowest level, or version 10 (57 by 57) at the medium level, and the code is denser for it. The gateway key costs 45 characters of every link. It is what lets the request be sealed before the first answer, so it cannot come from a server.
 
-A web server and a proxy never receive the fragment of a URL. That is why the key and the token are there. The token is not in the path, so it does not land in access logs.
+A web server and a proxy never receive the fragment of a URL. That is why the key, the gateway key and the token are there. The token is not in the path, so it does not land in access logs, and it never leaves the device outside a sealed request.
 
 **Providers hand out the `veilway` form.** It is what a panel shows for copying and puts in a QR code. The app also reads the `https` form when a user pastes or scans it, because links get rewritten on the way. The difference matters when a link is tapped:
 
 - A tapped `https` link opens in a browser, not in the app. The browser looks up the host and requests the endpoint from the user's own network, before the app has shown anything. The link, fragment included, lands in the browser's history and in its history sync. A messenger may fetch a preview of the link, sometimes from its own servers. None of these send the fragment to the endpoint, and all of them show the host to someone.
+- A tapped `http` link does the same over plain HTTP, so the network also sees the host, the path and the browser's request in the clear. A provider with a plain endpoint hands out the `veilway://sub-plain/` form only.
 - The endpoint answers a `GET` exactly as an unknown path and never serves a page, so no script of the provider's or anyone else's ever runs with the fragment in reach.
 - The app is never tied to the `https` host by an app link or universal link. The file such a tie needs would sit on the host and name it as a subscription host.
 - A tapped `veilway` link opens whichever app has claimed the scheme. On a platform where another app can claim it, that app receives the key and the token. The app cannot prevent this. It says so in its help, and pasting the link or scanning the code inside the app are the ways in that no other app sees. An app that took a token this way could enroll a device, which the user would see in the device list.
 
 **The form of the link decides what it is.** A link with a `v1` fragment is native. Any other `https` URL is a legacy link (see "Native and legacy"). The answer of a server never changes which of the two a link is. A link is never upgraded or downgraded without the user importing another link.
 
-**The link alone decides whether the endpoint is pinned.** A link with two fields is validated by chain, whatever the server presents, and a link with three trusts exactly the certificates its pin names, whatever else the server presents. No answer, no document and no setting moves a link from one to the other. A pinned link that loses its pin on the way (a messenger that cuts the end of a text) reads as a link without one and fails closed at its first fetch, because a self-signed certificate has no chain, and the app says what may have happened (see "A pinned endpoint"). `http` is refused in every form, for native and legacy links, whatever a pin says. A legacy link has no pin field and cannot name a self-signed server.
+**The link decides how the endpoint is reached.** A TLS link with three fields is validated by chain, whatever the server presents, a link with four trusts exactly the certificates its pin names, whatever else the server presents, and a plain link uses no TLS. No answer and no setting moves a link from one to another. The one thing that can is a signed move to another endpoint, which the user confirms (see "Moving the main endpoint"). A pinned link that loses its pin on the way (a messenger that cuts the end of a text) reads as a link without one and fails closed at its first fetch, because a self-signed certificate has no chain, and the app says what may have happened (see "A pinned endpoint"). A plain link is safe for the content of the exchange, which is sealed end to end, and gives up hiding: see "What each party sees". `http` is refused for every legacy link, which has nothing sealed. A legacy link has no pin field and cannot name a self-signed server.
 
 **An `https` pinned link opens badly in a browser.** A browser that is sent to a self-signed endpoint shows its own certificate warning, and a user must not be taught to click through it. A provider with a self-signed endpoint hands out the `veilway` form only.
 
 ### What the key in the link means
 
-The client verifies every document of a subscription, the first one included, against keys it holds, and the first of those came with the link. So whoever answers the fetch, be it the provider's host, a mirror, a content delivery network in front of it, or someone who holds a certificate the device trusts, can refuse to answer or serve an older valid document. It cannot make the client accept a document of its own.
+The client verifies every document of a subscription, the first one included, against keys it holds, and the first of those came with the link. So whoever answers the fetch, be it the provider's host, a relay mirror, a content delivery network in front of it, or someone who holds a certificate the device trusts, can refuse to answer. It cannot make the client accept a document of its own. Since every answer is sealed to the one request it answers, it cannot serve an older document either, unless it holds the gateway's private key. A static mirror can, see "Static mirrors".
+
+The gateway key in the link is trusted the same way: whoever gave the link chose it. A link whose gateway key is not the provider's makes every request readable to whoever holds that key's private half and sees the request, and the endpoint cannot open it at all. The app cannot tell, and this is the same trust as for the signing key.
 
 The limit, stated plainly: **whoever gave the user the link is trusted for the key.** A link from the provider's own channel is the provider's. A link from a stranger is a stranger's provider, with the stranger's key in it, and everything about it will verify. The app cannot tell these apart. It shows the host and the key's fingerprint before it does anything, and the user's check is where the link came from.
 
@@ -146,12 +161,12 @@ The fingerprint of a key is the first 16 bytes of its SHA-256, shown as 8 groups
 Whoever has the link is that user to the provider, until the provider resets it. There is no second factor in the format. What follows:
 
 - The client stores the link, the documents and its device keys in the operating system's secret storage where the platform has one, and otherwise in a file encrypted under a key kept there. It never shows the token after import, writes it to a log or includes it in a diagnostic report. What is stored is trusted as the link is: whoever can write the client's storage chooses the keys. A stored document that still verifies but that the app can no longer read, for example after an update that tightened a rule, is not thrown away with its subscription: the link, the device key and secret and the keys held stay, and the user refreshes.
-- The token is sent only in the body of a request to the endpoint of the link, or to an endpoint in `refresh_urls` of an accepted document, which the provider signed. It is never put in a URL or a header, and never sent to a URL from provider content or to anything the project runs. The project runs no service that sees subscription links.
-- Whoever ends TLS for the endpoint sees the token: the provider's host, and any content delivery network or reverse proxy the provider puts in front of it. Each of them is a holder of the link. A pinned endpoint ends TLS at the panel itself: a content delivery network in front of it would present its own certificate, which the pin does not name, so none can be there.
+- The token is sent only inside a request sealed to a gateway key the client holds for the subscription (see "The encrypted exchange"), to the main endpoint, to a confirmed endpoint of a pending move, or to an endpoint in `refresh_urls` of an accepted document, which the provider signed. It is never put in a URL or a header, never sent in the clear, and never sent to a URL from provider content or to anything the project runs. The project runs no service that sees subscription links.
+- Only the gateway sees the token: the part of the panel that holds the gateway's private key. Whoever ends TLS for the endpoint (the provider's web server, a content delivery network or a reverse proxy in front of it), a relay mirror, and anyone on a plain HTTP path see a sealed request of one fixed size and a sealed answer of one of five sizes, and none of them is a holder of the link. Whoever holds the gateway's private key and a recording of requests reads them, see "Gateway keys".
 - The panel does not keep the token as it stands to find an account by. See "Storing the token".
 - A request carries no cookie, no referrer and no identifier of the device other than what "Fetching" lists.
 
-**Reset.** A provider resets a user's link in the panel. From then on the old token is unknown: its lookup value and its encrypted copy are deleted at once. The provider gives the user a new link. Importing it replaces the stored token when the key and the subscription id are the same.
+**Reset.** A provider resets a user's link in the panel. From then on the old token is unknown: its lookup value and its encrypted copy are deleted at once. The provider gives the user a new link. Importing it replaces the stored token when the key and the subscription id are the same. A link shown again by the panel always carries the gateway key that is active then and the account's current main endpoint.
 
 ## The signed document
 
@@ -239,11 +254,12 @@ A subscription host that is blocked must not take the user's connection away. So
 
 ### The request
 
-A native fetch is a `POST` to the endpoint, with `Content-Type: application/json` and this body:
+A native fetch is one sealed exchange with the provider's gateway (see "The encrypted exchange"). Everything the request says is inside the seal, in this JSON object, and the outer request carries nothing but the sealed bytes:
 
 | Member | Type | Rule |
 |---|---|---|
 | `v` | integer | 1 |
+| `t` | integer, Unix seconds | The device's clock when the request was sealed. See "Replays and clocks". |
 | `token` | string | The token from the link |
 | `kids` | list of 1 or 2 strings | The key ids of the signing keys the client holds for this subscription. On a first import, the id of the key in the link. |
 | `device_public_key` | key | The public half of the WireGuard key the client made for this subscription |
@@ -253,18 +269,18 @@ A native fetch is a `POST` to the endpoint, with `Content-Type: application/json
 
 A legacy fetch is a plain `GET` and carries none of this.
 
-The body of a native request is at most 1,024 bytes. A body with a member this table does not list, or with a `device_name` that is empty after the filter, is malformed: the endpoint answers `"bad_request"` when the token in it is valid, and as an unknown path otherwise.
+The JSON is at most 1,022 bytes, which leaves room in a plaintext of 1,024. A request with a member this table does not list, or with a `device_name` that is empty after the filter, is malformed: the gateway answers `"bad_request"`, sealed, when the token in it is valid and `t` is in the window, and as an unknown path otherwise.
 
 **The device secret.** A WireGuard public key is not a secret: it is in the provider's panel, and users paste it into support chats. Without something more, anyone with the link and that public key could fetch that device's document, transport secrets included. So the client makes a random secret with the device key and sends both at its first fetch. The provider stores the secret with the device and requires it on every later request for that device key. It is a stored random value compared in constant time, not a cryptographic construction. The client keeps it where it keeps the link. A client that loses it cannot fetch that device's document again: it gets `"device_mismatch"`, makes a new key and a new secret, and enrolls as a new device, which takes a new place.
 
-**What `kids` reveals.** The endpoint, and whoever ends TLS for it, sees which of the provider's own keys this client holds, which says roughly how recently it refreshed. It is at most two ids of 8 bytes, and they name the provider's keys, not the device.
+**What `kids` reveals.** The gateway sees which of the provider's own keys this client holds, which says roughly how recently it refreshed. It is at most two ids of 8 bytes, and they name the provider's keys, not the device. Nobody on the way sees them. The key id of the gateway key, which is outside the seal, says the same about the gateway key to anyone on the way, see "What each party sees".
 
 ### The answer
 
 | Request | Answer |
 |---|---|
-| An unknown or reset token, a body that is not this JSON object, a `GET`, or a source over its limit | Exactly what the host answers on any path it does not serve: the same status, headers and body, in the same time. A prober who guesses tokens learns nothing, and a host cannot be recognized as a subscription host by asking it. |
-| A valid token | Always a signed document: the subscription, or a signed refusal that says why there is none. |
+| A body of another size, an unknown key id, a request that does not open, a plaintext that is not this JSON object, an unknown or reset token, a `t` outside the window, a replay, a `GET`, or a source over its limit | Exactly what the host answers on any path it does not serve: the same status, header fields and body, byte for byte, after the same work. What difference in time remains is measured and stated, see "Open questions". A prober who guesses tokens learns nothing, and a host cannot be recognized as a subscription host by asking it. |
+| A valid token, in the window, not seen before | Always a signed document, sealed to this request: the subscription, or a signed refusal that says why there is none. |
 
 What each `op` does, for a valid token:
 
@@ -294,7 +310,112 @@ A **signed refusal** is a document in the same envelope whose payload has `v`, `
 
 A refusal is verified like any document. On a refresh it must carry the stored `subscription_id`, or it is a failed refresh. On a first import it may carry any id, and its age is still checked. It is never stored as the last good document and changes no profile. One that is older than the limit in the table of numbers is treated as a failed refresh, so that an old refusal cannot be replayed for long. The requester has already shown a valid token, so naming the state protects nobody's secret, and the real user needs to know.
 
-**When the answer is not a subscription at all.** A native fetch that gets anything but a signed document (the host's not-found answer, a page, an error) is a failed fetch. The client shows "the endpoint did not answer as a subscription: the link may have been reset, or something else answered in its place", keeps the last good document, and backs off as after any failure.
+**When the answer is not a subscription at all.** A native fetch that gets anything but a sealed answer that opens and holds a signed document (the host's not-found answer, a page, an error, bytes that do not open) is a failed fetch. The client shows "the endpoint did not answer as a subscription: the link may have been reset, or something else answered in its place", keeps the last good document, and backs off as after any failure.
+
+### The encrypted exchange
+
+Every native request and its answer are sealed end to end between the device and the provider's gateway: the part of the panel that holds the gateway's private key. A web server that ends TLS for the endpoint, a content delivery network or reverse proxy in front of it, a relay mirror, and anyone on a plain HTTP path carry bytes they cannot read, and cannot change without the fetch failing. TLS is still recommended: it hides the path, the sizes inside it and the role of the host from the network, and makes the endpoint harder to block.
+
+**What it is built from.** Oblivious HTTP (RFC 9458) over HPKE (RFC 9180) in base mode, with the suite of the stream proof: DHKEM(X25519, HKDF-SHA256) (KEM `0x0020`), HKDF-SHA256 (KDF `0x0001`) and ChaCha20Poly1305 (AEAD `0x0003`), from the same `hpke` crate. The suite is fixed by `v1` and is never negotiated. There are three departures from RFC 9458:
+
+| Part | RFC 9458 | This page | Why |
+|---|---|---|---|
+| What is sealed | A Binary HTTP message (RFC 9292) | The request JSON, or the signed envelope, with a length in front and zero bytes after | Section 4.6 of RFC 9458 lets another specification reuse the encapsulation for other content, with strings of its own. Binary HTTP would carry a method, a target and header fields that nothing here needs, and would be a second HTTP parser of hostile input on the panel and on the client. The request's JSON reader exists and is fuzzed already. The padding is ours either way. |
+| The header on the wire | `key_id`, `kem_id`, `kdf_id`, `aead_id`, 7 bytes | `key_id` alone, 1 byte. The whole 7-byte header still enters `info`. | With the suite fixed by `v1`, the other 6 bytes have nothing to carry. Left out, they also make no fixed pattern at a fixed offset of every request. |
+| Strings | `"message/bhttp request"` and `"message/bhttp response"` | `veilway v1 sub request` and `veilway v1 sub response` | Required by section 4.6 for other content. |
+
+Everything else is RFC 9458 step by step: the key schedule, the exporter, and the key and nonce of the answer. No part of HPKE is written by hand.
+
+**A gateway key** is `key_id` (1 byte) followed by `pkR` (32 bytes, the X25519 public key as HPKE serializes it). The link carries these 33 bytes in base64url. A document carries them in `gateway_keys`.
+
+**Sealing a request.** `||` joins byte strings.
+
+1. `hdr` = `key_id || 00 20 || 00 01 || 00 03`, 7 bytes.
+2. `info` = the ASCII bytes of `veilway v1 sub request`, one zero byte, and `hdr`. In this page's notation, `"veilway v1 sub request" || hdr`.
+3. The plaintext is exactly 1,024 bytes: `n`, the length of the JSON, 2 bytes big-endian, from 1 to 1,022; the JSON; zero bytes to the end.
+4. `enc, sctxt = SetupBaseS(pkR, info)`, with an ephemeral key from the system's secure random source. `ct = sctxt.Seal("", plaintext)`, 1,040 bytes.
+5. The top bit of the last byte of `enc`, which X25519 never sets, is set to a random bit for the wire, so that no bit of a request is fixed. The gateway clears it again before anything else reads `enc`.
+6. The encapsulated request is `key_id || enc || ct`, 1 + 32 + 1,040 = 1,073 bytes.
+
+Every request has a new ephemeral key, retries included, and a client never sends the same bytes twice. A recording of a request therefore opens only with the gateway's private key: a token that leaks later opens nothing that was recorded.
+
+**Sealing an answer.** The gateway holds the receiver context `rctxt` of the request it answers.
+
+1. The plaintext: `m`, the length of the envelope, 4 bytes big-endian, from 1 to 1,048,576; the envelope, the signed document or refusal exactly as signed; zero bytes up to the answer's size minus 48. The size is the smallest of the five in the table of "The file" under "Static mirrors" whose plaintext holds the envelope.
+2. `secret = rctxt.Export("veilway v1 sub response", 32)`, the exporter context being the ASCII bytes of that string with no zero byte, as RFC 9458 does. 32 is `max(Nn, Nk)` for ChaCha20Poly1305.
+3. `response_nonce` is 32 bytes from the secure random source.
+4. `prk = Extract(enc || response_nonce, secret)`, `key = Expand(prk, "key", 32)`, `nonce = Expand(prk, "nonce", 12)`, with HKDF-SHA-256 and RFC 9458's labels, ASCII with no zero byte.
+5. `ct = Seal(key, nonce, "", plaintext)` with ChaCha20-Poly1305. The encapsulated answer is `response_nonce || ct`.
+
+An answer is 52 bytes larger than the space for its envelope, exactly as a static file is, so the two share the five sizes, the largest envelope of each, and the time limit of each. The smallest size, 9,413, holds every refusal and most documents with a few profiles: a refusal and a small document look the same.
+
+**How the client opens an answer**, in order. Any step that fails is a failed fetch:
+
+1. The status is 200, and the body is exactly one of the five sizes. The client reads at most 1,089,437 bytes, within the time limit of the size, as for a static file.
+2. It derives `key` and `nonce` from its own context and the first 32 bytes, and opens the rest. A tag that does not verify is a failure.
+3. `m` is at least 1 and at most the smaller of 1,048,576 and the size minus 52, and every byte after the envelope is zero.
+4. The envelope goes through "What is checked, in order", by the same path as every other answer.
+
+**The outer request.**
+
+| Part | Value |
+|---|---|
+| Method and target | `POST` to the endpoint's path. No query. |
+| `Host` | The endpoint's host, with its port when the URL has one |
+| `Content-Type` | `application/octet-stream` |
+| `Content-Length` | `1073` |
+| `Accept-Encoding` | `identity` |
+| Other header fields | Only those the fingerprint pack fixes for a browser's request, such as `User-Agent` and `Accept`, with the pack's fixed values. No cookie, `Referer`, `Origin`, `Authorization` or `Accept-Language`, and no field that names Veilway, the provider or the device. |
+| Body | The 1,073 bytes |
+
+The gateway's answer is status 200 with `Content-Type: application/octet-stream`, `Cache-Control: no-store` and the length, plus whatever fields the web server adds to every answer. `message/ohttp-req` and `message/ohttp-res` are not used: they name Binary HTTP content, which this is not, and a media type of the project's own would tell everyone on the way that this is a Veilway fetch.
+
+**What the gateway does.** For every `POST` to the path, the body is read up to 1,073 bytes and no further, and the work up to the answer costs the same whatever the request holds, in the way a node opens a stream proof:
+
+1. A body of any other length is replaced by a fixed request that never opens.
+2. The key id picks the private key. An unknown key id picks a fixed dummy key.
+3. The top bit of the last byte of `enc` is cleared, which restores the `enc` the client's HPKE made. An `enc` that is then one of the encodings of a point of small order, for which HPKE would stop before its key schedule, is replaced by the base point, and the request is refused at the end.
+4. One HPKE receiver setup and one open. A request that did not open gives a plaintext of zero bytes.
+5. The JSON is read. A `t` or a token that cannot be read is replaced by a dummy one.
+6. `t` is checked against the window and the restored `enc` against the replay memory, for every request, with dummy values when the request did not open, so that the check costs the same either way. A request that opened and is inside the window is recorded now, before the token is looked at (see "Replays and clocks").
+7. One HMAC for the lookup value, one lookup in a table the gateway holds in memory, and one comparison in constant time, against a dummy value when nothing was found (see "The endpoint").
+8. The results of the steps are combined at the end, without leaving early.
+
+A body that does not open, a `t` outside the window, a replay and a token that is unknown therefore get the same answer after the same work: the unknown-path answer, having changed nothing. Only a request that opened, inside the window, not seen before and with a known token goes on. The gateway keeps a counter for each kind of failure, which the panel shows, and logs no byte of a request.
+
+### Replays and clocks
+
+- **The window.** The gateway acts on a request only when its `t` is within 300 s of the gateway's clock, either way. The clock it judges by is the highest value its clock has shown since it started, so a clock that steps back does not reopen the window, and a step back is logged at warning level. The gateway needs a synchronized clock, as the publisher of static files does (see "Periods and clocks"): the panel's setup says it requires NTP, and the panel says so on every page while the system reports its clock as not synchronized.
+- **The memory.** For each request that opened inside the window, the gateway records the 32 bytes of the restored `enc` (its top bit cleared) until its clock passes that request's `t` plus 300 s, and acts on no second request with the same `enc`. It records before the token is looked at, and before it acts, so two copies that arrive together act once, and a replay costs the same as a first request. The restored `enc` names one request: it enters the key schedule, so a request whose `enc` differs in any other bit opens under another key or not at all, and the random top bit cannot make one request into two. Anyone can seal a request to the public gateway key, so each entry is counted against the limit of its source, and one source cannot fill the memory. The memory is kept in memory only. In its place across a restart, the gateway refuses after a start any `t` earlier than the time it started, so a request captured before a restart is never accepted after it. A device whose clock is behind gets the unknown-path answer for at most 300 s after a restart, and its next refresh works.
+- **Why it matters, although the answer is sealed.** Someone on the way who replays a captured request gets an answer it cannot open. Without the memory the request would still act (a `"confirm"`, a `"release"`, a use of the device's allowance that leaves the real device with `"rate_limited"`), and the size and timing of the answer would tell whether the token was still valid. Both are refused.
+- **The client's clock.** The client puts its own clock in `t`, and never a time taken from an answer. A `Date` field is not authenticated, and a client that took `t` from one could be led to seal a request for a later time, which whoever kept it could use once that time came. When a fetch gets an answer that is not sealed and the answer's `Date` field differs from the device's clock by more than 300 s, the app says: "the server's clock and this device's clock differ by about N minutes. Check this device's time against a source you trust, then refresh." in place of the message that the link may have been reset. Over TLS it shows this as it is. Over plain HTTP, where anyone on the way can write the field, it marks the message "unverified". It changes nothing else. A clock that far off already refuses fresh documents by their `issued_at`.
+- **Retries.** A request that timed out is never sent again. A retry is a new request, with a new `t` and a new context.
+
+### Gateway keys
+
+- **What the key is.** An X25519 key pair of the panel, made by the panel, kept on its host with mode 600, outside its database, and apart from the signing key, the panel keys of "Storing the token" and the key of a pinned endpoint's certificate. It opens requests and seals answers, and nothing else. It is not the signing key because it must be online at the public endpoint while the signing key may be kept offline (threat model Q9), and a stolen gateway key must not sign documents.
+- **In a document.** `gateway_keys` lists 1 or 2 gateway keys. The first is the active key, and the second the next one. After accepting a document the client holds exactly that list, and on a first import the key of the link. The list is signed, so it needs no tie to the keys the client held before: the signing key is the root of trust.
+- **How a client uses them.** It seals to the first key. When an HTTP answer arrived and it was not a sealed answer that opens, it tries the second key once, in the same refresh, with a new request. A timeout, a failed TLS handshake or pin, or a failed lookup is no reason to try the second key: it says nothing about the key. Never more than one retry.
+- **The next key is kept off the host.** The panel makes it at setup, shows its private half once for the operator to put away, keeps no copy, and lists it second in every document, so that every client holds it from its first refresh. It says, as for a standby pin, that a next key left on the server is taken with the active one. The next key helps when the active key is lost, or stolen with no recordings. It does not help after a theft with recordings, below.
+- **A routine switch.** The operator loads the next key. The panel makes it active, makes a new next key, and signs documents that list the two. It keeps the old key as retired, and opens requests sealed to it for the time in the table of numbers, 120 days by default, then destroys it. Clients that refresh move to the new key. One that has not refreshed is served under the old key while the panel keeps it, and falls back to its second key once the old one is gone. A link made before the switch carries the old key and works while the panel keeps it. After that, its first import gets the unknown-path answer, and the user needs the link shown again, which carries the active key. Before it destroys a retired key, the panel shows how many accounts sent a request under it in the last 30 days, and how many accounts have no device yet.
+- **Key ids.** Each new key takes the id after that of the last key the panel made, counting modulo 256. The panel never holds or lists two keys with one id.
+- **How often.** The panel reminds the operator to switch every 180 days. A recording made under a key that has been destroyed can no longer be opened by anyone.
+- **A stolen key.** The operator switches, and the old key is destroyed at once, not kept. Clients move to the next key by their fallback. If the thief has, or can get, recordings of requests, from a content delivery network, a proxy that ends TLS, a relay mirror or a plain HTTP path, it opens every recorded request sealed to the stolen key since that key was listed, with the answers to them: tokens, device keys and secrets, and documents. The switch cannot take that back. Every account that sent a request under that key then needs its token reset and a new link, as after the theft of a pinned endpoint's key, and the panel offers that reset for all of them in one action. Only a theft known to come with no recordings is answered by the switch alone.
+- **A lost key.** A panel that has accounts and finds no readable active gateway key does not serve subscriptions: the endpoint answers every request as an unknown path, and the panel says so loudly, as when its key file is missing. It never makes a gateway key by itself. With the next key in hand, the operator loads it, which is a switch, and clients follow by their fallback without a question. Without it, the operator makes new keys by an explicit action, and clients learn the new key only from a newer document on a static mirror, or from the link shown again. Tokens and devices stay valid, so a client that imports the new link keeps its subscription and its device. That is a smaller loss than the signing key's, after which every user needs a new subscription.
+
+### What each party sees
+
+| Who | Sees | Does not see | Can do |
+|---|---|---|---|
+| The network, with a TLS endpoint | The host name in the TLS handshake, the handshake's fingerprint, the endpoint's address, the times, and inside TLS one request of a fixed size and an answer of one of five sizes | The path, the key id, the request, the answer, which `op` it was | Block the host. Learn over time, from the fixed sizes and the timing, that this host serves a pattern of fixed requests. |
+| The network, with a plain HTTP endpoint | The host and port, the path, every outer header field, the key id, the times, and the exact sizes: 1,073 bytes out, one of five sizes back, or the host's unknown-path answer | The token, the device key and secret, `kids`, `op`, a device name, the document | Block the host, the path, or any `POST` of 1,073 bytes, which a filter can match on every request and every user. Change or drop bytes, which makes the fetch fail. Replay a request, which the gateway refuses. Tell which addresses fetch from this endpoint, and when, now and later from its records, and so that they use this app. |
+| Whoever ends TLS: the operator's web server, a content delivery network or a reverse proxy in front of the panel | The client's address, or the relay mirror's, the times, the path, the key id, the sizes, and whether the answer was sealed or the unknown-path answer, which says whether a request was valid | The token, the device key and secret, `kids`, `op`, the document | Refuse, delay or drop. Replay a request, which the gateway refuses. |
+| A relay mirror | The same, and it forwards the sealed bytes unchanged | The same | The same |
+| The gateway | Everything in the request, and the document | Nothing of it is hidden | It is the provider |
+
+- **The key id** is the one byte outside the seal. It says which gateway key a client sealed to, so roughly how recently it refreshed, and it is the same for every request to one provider while a key is active.
+- **Sealed bytes are not random bytes.** `enc` is an X25519 public key, even with its top bit drawn at random, and the sizes are fixed, so a request can be recognized as this kind of request by its shape. Hiding that is TLS's work and a shared host's, not the seal's.
+- **Plain HTTP gives up hiding, not secrecy.** The exchange is as secret over `http` as over `https`. What is lost is everything in the first row that TLS hides, and the fixed size makes a plain endpoint easy to match on every request. A provider uses `http` where it has no domain and wants no certificate, or where a TLS handshake is itself what gets blocked. Wherever a plain link, a plain entry of `refresh_urls` or a move to a plain endpoint is confirmed, the app says, as it does for `ws-plain`: "the network can tell that you use this app, now and later in its records."
 
 ### The endpoint
 
@@ -302,10 +423,12 @@ What the endpoint owes, as the threat model requires of it:
 
 - Tokens of at least 128 bits from a secure random source. The request is matched by the token's lookup value (see "Storing the token"), never by the token itself, and the values are compared in constant time. The check costs the same whether the token is known or not: one HMAC, one lookup, and one comparison, against a dummy value when nothing was found. A token that is not in the one encoding of the link grammar is an unknown token.
 - No session cookie read or set, and nothing else served at that path.
-- **One answer for everything that is not a valid request.** The endpoint is one path behind the operator's own web server. For an unknown token it does not compose a not-found answer of its own, which would differ from the web server's. Either the web server is set up so that the endpoint hands the request back and the web server answers as it does for any unknown path, or the endpoint learns that answer by one request to the web server for a path that does not exist, at start and on reload, and repeats its status, header fields and body, in the way the transports page has a listener learn its decoy's header fields. The first way is exact and is preferred.
+- **One answer for everything that is not a valid request.** The endpoint is one path behind the operator's own web server. For an unknown token it does not compose a not-found answer of its own, which would differ from the web server's. Either the web server is set up so that the endpoint hands the request back and the web server answers as it does for any unknown path, or the endpoint learns that answer by one request to the web server for a path that does not exist, at start and on reload, and repeats its status, header fields and body, in the way the transports page has a listener learn its decoy's header fields. The first way is exact and is preferred. The bytes must be identical. What difference in time remains between an unknown path and each kind of refused request is measured, and the method and the result are stated on this page before it leaves Draft.
 - **Limits per source** are applied by the web server to every path alike, so that reaching one says nothing about this path.
 - **Limits that a link holder cannot turn on the user.** An enrolled device is recognized by its key and secret and has its own allowance, per token and device. Requests with device keys the endpoint has not seen share a separate, tighter allowance per token, and an account has at most 2 pending places. A holder of the link can use up those two things. It cannot use up the allowance of the user's enrolled device, so the user's refreshes go on.
-- The request body is hostile input to the panel. `device_name` is stored and shown as text only, after the same filter the client applies to display text.
+- The request body is hostile input to the panel, before the seal is opened and after. `device_name` is stored and shown as text only, after the same filter the client applies to display text.
+- A signed refusal is signed once per account and reason and reused while it is within its age limit, so that a holder of a valid token cannot make the panel sign at will. The lookup values are held in memory, so a random body is never a read of the database.
+- The work of "What the gateway does" is done for every `POST` to the path, so that a request that does not open, an unknown key id and an unknown token cost the same.
 
 ### Storing the token
 
@@ -339,25 +462,26 @@ The cost: recovery from a filled account needs the provider.
 
 ### How a fetch is made
 
-- `https` only, never `http`, for a native and for a legacy link. The link chose how the certificate is checked:
-  - **Two fields, no pin:** normal certificate validation, TLS 1.2 or later, and the client's browser-like TLS where the build has it. The certificate protects the token on the way. The document is protected by its signature.
-  - **Three fields, or a pinned entry of `refresh_urls`:** the rules of "A pinned endpoint", and no chain validation.
+- A native fetch is the sealed exchange of "The encrypted exchange", over `https` or, where the link, an entry of `refresh_urls` or a confirmed move says so, plain `http`. A legacy link is `https` only. How the endpoint is reached:
+  - **A TLS link with three fields, no pin:** normal certificate validation, TLS 1.2 or later, and the client's browser-like TLS where the build has it. The certificate hides the exchange's shape and the path from the network. The token is protected by the seal, and the document by its signature.
+  - **Four fields, or a pinned entry:** the rules of "A pinned endpoint", and no chain validation.
+  - **A plain link, or a plain entry:** HTTP/1.1 over TCP, nothing else. The seal and the signature protect everything, and nothing hides the host, the path or the sizes.
 - No `Accept-Language` field.
 - `Accept-Encoding: identity`. An answer with a `Content-Encoding` field is refused, which removes the decompression bomb as a case.
 - No redirect is followed. A request that is redirected is a failed fetch.
-- The timeouts and the size limit in the table of numbers. The body is read up to the limit and no further.
-- The endpoint's host name is looked up once per fetch, by the resolver in force: the tunnel's when the fetch goes through a tunnel, the system's when it does not. The address that was checked is the address that is dialed. An address that is loopback, link-local (169.254.0.0/16, which holds the cloud metadata addresses, and fe80::/10), unspecified (all of `0.0.0.0/8`), multicast or broadcast, or an IPv6 address that carries an IPv4 address (the forms the profile rules refuse, "Transports of a profile"), is refused, for the endpoint and for every entry of `refresh_urls`, and no question is asked about it.
+- The timeout to connect in the table of numbers, and the size rule and time limits of "How the client opens an answer". The body is read up to its limit and no further.
+- The endpoint's host name is looked up once per fetch, by the resolver in force: the tunnel's when the fetch goes through a tunnel, the system's when it does not. The address that was checked is the address that is dialed. An address that is loopback, link-local (169.254.0.0/16, which holds the cloud metadata addresses, and fe80::/10), unspecified (all of `0.0.0.0/8`), multicast or broadcast, or an IPv6 address that carries an IPv4 address (the forms the profile rules refuse, "Transports of a profile"), is refused, for the endpoint, for the endpoint of a move and for every entry of `refresh_urls`, and no question is asked about it.
 - **A private address is asked about.** "Private" is the list of the profile rules ("Asked about once per profile"). When the endpoint's host, an IP literal or a name, gives no address that may be dialed except private ones, and at least one of those, the fetch stops before anything is sent, and the app says: "This subscription is on a private address (192.168.1.20). Only continue if you run this server yourself, for example at home." It shows every private address the host gave, and a yes goes on with exactly those. A host that gives a public address beside a private one is dialed at the public one and asked nothing; the private one is never dialed without a yes.
-- **The yes is to the addresses, and is kept with the subscription.** It names the IP addresses that were shown and never the host name, so a name that later comes to another private address (DNS rebinding) is asked about again. It is kept with the held subscription, so that the refreshes after it need no question, and it is dropped with the subscription. Only an address that is private and may be dialed can be in it. A subscription stored before this rule has none. What is stored is read as untrusted: an address in it that the rules refuse is ignored, and at most 16 are kept. A refresh host that a later document adds and the user confirms is held to the same rule.
+- **The yes is to the addresses, and is kept with the subscription.** It names the IP addresses that were shown and never the host name, so a name that later comes to another private address (DNS rebinding) is asked about again. It is kept with the held subscription, so that the refreshes after it need no question, and it is dropped with the subscription. Only an address that is private and may be dialed can be in it. A subscription stored before this rule has none. What is stored is read as untrusted: an address in it that the rules refuse is ignored, and at most 16 are kept. A refresh host or the endpoint of a move that a later document adds and the user confirms is held to the same rule.
 
 ### A pinned endpoint
 
-An endpoint is pinned when its link has a third field, or when it is an entry of `refresh_urls` given as an object with `pins`. A provider with no domain and no certificate from an authority serves its endpoint with a self-signed certificate, and the link carries the pin of that certificate, so the app trusts exactly that server and no other. What the client does on a pinned endpoint is what the `tls` transport does on a candidate with `self_signed` (see "`tls`" on the [transports](../transports/) page), with these particulars:
+An endpoint is pinned when its link has a fourth field, or when it is an entry of `refresh_urls` given as an object with `pins`. A provider with no domain and no certificate from an authority serves its endpoint with a self-signed certificate, and the link carries the pin of that certificate, so the app trusts exactly that server and no other. What the client does on a pinned endpoint is what the `tls` transport does on a candidate with `self_signed` (see "`tls`" on the [transports](../transports/) page), with these particulars:
 
 1. **TLS 1.3 only.** An endpoint that does not negotiate it fails the fetch. The client uses no early data and no resumed session, so that every fetch shows its certificate.
 2. **The check.** The SHA-256 of the SubjectPublicKeyInfo of the end-entity certificate must equal one of the endpoint's pins (1 or 2 are held). The TLS 1.3 handshake's signature is still verified against that key, by the TLS library's own verification, so that a server which shows the pinned certificate without its key fails. The chain, the name and the dates are not checked, and any other certificate the server sends is ignored. There is no fallback to chain validation, no "trust this certificate" button, and no way for the server to name a pin.
 3. **The name sent.** A host name is sent as the server name. An IP literal is not sent, so a pinned link with an address in it makes no lookup and shows the network only a connection to that address.
-4. **Nothing is sent before the check passes.** The request, with the token in its body, is written only after the handshake has finished and the pin matched.
+4. **Nothing is sent before the check passes.** The sealed request is written only after the handshake has finished and the pin matched.
 5. **A mismatch** (no pin matches, the signature fails, or TLS 1.3 is not negotiated) is a failed fetch. It is never a signed refusal and never a refusal by the endpoint, since nothing was authenticated, and nothing was sent. Whatever the server then writes is not read. The client shows: "the subscription server's certificate does not match this link. If your provider has changed it, ask for a new link. If not, something between you and your provider answered in its place." It keeps the last good document and backs off as after any failure, and it goes on to the next entry of the list of endpoints.
 6. **A link without a pin that meets a self-signed certificate** fails chain validation like any other, and the app adds: "this link has no certificate part. If your provider uses its own certificate, part of the link was lost on the way."
 7. **The pins held** change in two ways only: the user imports a link, which replaces them with the link's pin, and an accepted document changes them, as "Pins, and a standby" says.
@@ -366,13 +490,50 @@ An endpoint is pinned when its link has a third field, or when it is an entry of
 
 - **The standby key is kept off the server.** The panel shows its private half once, at setup, for the operator to put away, and keeps no copy on the host. It says that if the standby stays on the server, whoever takes the active key from that server takes the standby with it, and then a stolen key means a new link for every user. It says so again whenever it finds that key on its host.
 - **A switch.** To change the key, planned or after a theft, the operator loads the standby key. The panel presents its certificate, makes a new standby, and signs documents that list the new active pin and the new standby. The list includes a pin the client holds, which is the former standby, so clients accept it. The user is asked nothing. The client notes "the provider renewed the certificate of its subscription server" with the date in the subscription's details. A new certificate for the same key needs no step, since the dates are not checked.
-- **A list must include a pin the client holds for that endpoint,** or the document is refused, so a pin set cannot jump to keys the client has no tie to. The first pins of a refresh entry that a document adds have nothing to include, and are taken on the signed document's word and the user's confirmation of the host. The signing key is the root of trust, so this is no new trust. The same holds, at import and when stored state is read back, for an entry of `refresh_urls` on the link's host and port. Pins stored for the endpoint are exactly the `endpoint_pins` of the last accepted document when it had that list, and stored pins that differ from it are treated as damaged storage.
+- **A list must include a pin the client holds for that endpoint,** or the document is refused, so a pin set cannot jump to keys the client has no tie to. The first pins of a refresh entry that a document adds have nothing to include, and are taken on the signed document's word and the user's confirmation of the host. The signing key is the root of trust, so this is no new trust. The same holds, at import and when stored state is read back, for an entry of `refresh_urls` on the main endpoint's host and port. A document fetched from the endpoint of a pending move is held to the move's `pins` in place of the main endpoint's, see "Moving the main endpoint". Pins stored for the endpoint are exactly the `endpoint_pins` of the last accepted document when it had that list, and stored pins that differ from it are treated as damaged storage.
 - **What the client cannot enforce, the panel must.** The client cannot tell a standby that was listed long ago from one listed yesterday. The panel names a pin for the time in the table of numbers before it presents it, and it compares every list it is about to sign with the certificate it serves, and refuses to sign a list that leaves that pin out. A panel that signed a list without it would lock every refreshing client out of its endpoint, with new links as the only way back.
 - **A second pinned entry of `refresh_urls` on another host** does the same for a stolen key, and a pinned entry follows the same rule with the list in its `pins`.
 
 The other choice would be a new link at every key change. It was not taken because a link on a wall or in a chat cannot be recalled. What the rule costs is a client that was offline through the whole notice time: its pins are those of an endpoint that no longer exists, and it shows the mismatch message above and needs a new link. This is the same state as a client that missed a rotation of the signing key. When the endpoint's key was stolen and the standby is not lost with it, the switch above answers it. Without a standby, the panel cannot recall the pin from clients that hold it, and every user needs a new link. In both cases the panel resets the tokens, since whoever holds the key and the network can have received them. A client that imports an old link sets its pins back to that link's pin, which is covered by the same reset, since the old link's token is then unknown.
 
 **What the panel's endpoint certificate is.** The certificate of a pinned endpoint is made for that endpoint, with a key of its own, kept on the panel's host with mode 600, outside its database and apart from the signing key and from the panel keys of "Storing the token". It is never the certificate of a node's `tls` listener, and the two never share a key. What it says about itself follows "What the node writes into its own certificate" and the validity row for a self-signed certificate on the transports page: no fixed placeholder name, a random serial, a normal validity renewed with the same key before it ends, an ECDSA key on P-256, and the common extensions of a server certificate, with the host (a name, or the IP address) as its subject alternative name.
+
+### Moving the main endpoint
+
+A provider may need to move users to another endpoint: a host that was blocked, a new domain, a panel that moves to another server. Without a move, a document can only add `refresh_urls`, and a new endpoint means a new link for every user. `main_endpoint` is the signed way to move them.
+
+The **main endpoint** of a subscription is the link's endpoint until a move completes, and the endpoint of the last completed move after that. It has a URL and a kind: checked by chain, pinned, or plain.
+
+**The member.** `main_endpoint` is an object:
+
+| Member | Type | Rule |
+|---|---|---|
+| `url` | string | The endpoint, `https` or `http`, at most 256 characters, with no fragment, under the rules for a URL the token is sent to. An IP literal only with `pins` or with `http`, in the one spelling of the link. |
+| `pins` | list of 1 or 2 pins, standard base64 | For an `https` endpoint with a self-signed certificate, as the `pins` of a pinned entry of `refresh_urls`. Not allowed with `http`. Absent: the certificate is validated by its chain. |
+| `gateway_keys` | list of 1 or 2 gateway keys | The keys of the gateway behind that endpoint, in the form of the top-level `gateway_keys` |
+
+A `main_endpoint` that breaks a rule refuses the document. It is ignored in a whole document and in a refusal. A document whose `main_endpoint` names the URL and the kind of the client's main endpoint asks for nothing. One that names another asks for a move.
+
+**A move, step by step.**
+
+1. A document that asks for a move is accepted and takes effect as any document does. The move is held as pending, and nothing is sent to its endpoint yet. The app notes "the provider is moving this subscription to <host>" in the subscription's details, and asks at the next refresh the user starts, as it asks about a refresh host a document added. An automatic refresh asks nothing and goes to the main endpoint.
+2. The question shows the new host with its registrable domain marked, the old host, and how the new one is checked: a certificate from an authority, the provider's own certificate named in the document, or plain HTTP, with the words "the network can tell that you use this app, now and later in its records." The yes is the move's one confirmation. A no keeps the main endpoint, and the move stays in the details, where the user can still say yes for as long as documents name it.
+3. After the yes, a refresh goes first to the new endpoint, sealed to the move's `gateway_keys`, then to the main endpoint as a fallback, then to the confirmed `refresh_urls` and static mirrors as before.
+4. A document fetched from the new endpoint is checked against the move, not against the main endpoint: its `main_endpoint` must name that endpoint, URL and kind; its `endpoint_pins`, when the endpoint is pinned, must include a pin of the move's `pins`; and its top-level `gateway_keys` must include a key of the move's `gateway_keys`. One that fails any of this is a failure of that endpoint. One that passes completes the move when it is accepted, before any later document is checked: the client then holds that endpoint, its kind and its pins as its main endpoint, holds that document's `gateway_keys`, and drops the old endpoint. From then on `endpoint_pins` describes the new endpoint, under the rules of "Pins, and a standby".
+5. Until it completes, each accepted document decides the pending move again: one that names the same move keeps it, one that names another move replaces it and is asked about anew, and one that names the main endpoint or leaves the member out cancels it.
+
+**The rules.**
+
+1. **Only a signed move.** A move comes only from an accepted document: verified under a key held, with the subscription's `subscription_id` and a serial above the one held. No answer, header field or redirect moves anything.
+2. **The same subscription.** A document from the new endpoint is held to every rule of a refresh: a key held, the same `subscription_id`, a higher serial. One that fails is a failure of that endpoint, and the old endpoint is tried after it.
+3. **Any change of kind.** A move may change how the endpoint is checked: chain to pins, pins to chain, TLS to plain HTTP and back. It is the one way the kind changes without a new link, and it is allowed only because the signing key signed it and the user confirmed it. The question says what changes.
+4. **No new trust.** Whoever holds the signing key can already sign any profile, so a move gives it nothing it lacked. The pins and gateway keys of a move are taken on the document's word, as the first pins of a refresh entry are.
+5. **Chains of moves.** A document from the new endpoint may name a further move, which is confirmed and completes on its own. The fallback is always the main endpoint, the last one the client completed a move to or took from a link. A client holds one main endpoint and at most one pending move, never a list.
+6. **Rollback.** Moves are under the serial like everything signed: an older document is refused, so it can neither undo a completed move nor bring back a cancelled one. Importing a link sets the main endpoint back to the link's, as it sets the pins back, and the next document asks for the move again.
+7. **One host, one role.** The endpoint of a move is not the host of a static mirror. It may be the host and port of an entry of `refresh_urls` of the same kind, which is how a relay mirror becomes the main endpoint. The address rules of "How a fetch is made" hold for it.
+8. **Which gateway.** A request to the main endpoint is sealed to the top-level `gateway_keys`, and a request to the endpoint of a pending move to the move's. An entry of `refresh_urls` follows the panel that signed it: while a move is pending, the client keeps the entries and the `gateway_keys` of the last document from the main endpoint for them, and a request to such an entry is sealed to those keys. Once the move completes, the entries and keys of the new endpoint's document apply.
+
+**What the panel does.** An operator names the endpoints a panel answers on, each with its URL, its kind and its gateway keys, which endpoints may share. It moves a user, a group or a selection of users to another named endpoint: their documents then name it in `main_endpoint`, and a link shown again carries it. The panel keeps answering on the old endpoint, so an old link, which names it, keeps working there, and its first document asks for the move: on an import that question is part of the confirmation, and its yes covers the move. The panel shows how many moved accounts still refresh on the old endpoint, and the operator retires it when that is none, or accepts that the rest need their link shown again.
 
 ### When a fetch happens
 
@@ -381,7 +542,7 @@ A fetch outside a tunnel tells the local network that this device talks to this 
 | Situation | What the client does |
 |---|---|
 | A tunnel of one of this subscription's own profiles is up | Refreshes automatically, on the interval, through that tunnel. |
-| No tunnel is up | Does not refresh by itself. The user can ask for a refresh. Before it goes out, the app names every host it may contact (the endpoint and the accepted `refresh_urls`) and says what the network will see: a lookup of each name and a TLS connection to it. |
+| No tunnel is up | Does not refresh by itself. The user can ask for a refresh. Before it goes out, the app names every host it may contact (the endpoint and the accepted `refresh_urls`) and says what the network will see: a lookup of each name and a connection to it, over TLS or, for a plain host, over HTTP with the host and path in the clear. |
 | A tunnel of another subscription is up | Does not refresh this subscription by itself. When the user asks, the app offers the two ways below. |
 | First import | The request leaves only after the user's first yes, by the same choice of ways. When the endpoint is on a private address, that is a second question after this yes and before any request, see "How a fetch is made". |
 
@@ -402,7 +563,7 @@ A user whose profiles have all stopped working can refresh only by asking. With 
 
 If the subscription host is blocked as well, the format has three partial answers and no complete one:
 
-- `refresh_urls`: the provider can list other endpoints for the same subscription. The client tries them in order after the first fails. Because every document is verified against a key held, a mirror needs no trust beyond seeing the token.
+- `refresh_urls`: the provider can list other endpoints for the same subscription. The client tries them in order after the first fails. Because every request is sealed to the gateway and every document is verified against a key held, a relay mirror needs no trust: it carries sealed bytes.
 - A whole document can be carried in a link, a QR code or a file (see "Import"), so a provider can send a new one over any channel the user still has.
 - `static_mirrors`: the provider can publish each device's recent document, sealed, on plain file hosting, ideally on a host name that is costly to block, and the client fetches it there with a plain `GET` when the endpoint and the relay mirrors fail. See "Static mirrors".
 
@@ -412,18 +573,19 @@ Fetching a subscription through the fronting options of the transports is not sp
 
 A static mirror is plain file hosting that holds, for each device, a recent signed document of that device, sealed so that only that device can open it. A cloud storage bucket, a content delivery network, a code host's raw file service or anyone's web server will do, and "Choosing a host" says which of them a censor can block cheaply. The host runs no Veilway code, receives no request body and never sees a token. The client fetches its file with a plain `GET` when the endpoint and the relay mirrors have failed, opens it, and checks what is inside exactly as it checks an answer from the endpoint.
 
-On this page a **relay mirror** is an entry of `refresh_urls`. It receives the request, token and device secret included, and answers with what the panel signs. A static mirror is the other kind: it receives nothing secret, and it can only hand back a file the panel wrote earlier.
+On this page a **relay mirror** is an entry of `refresh_urls`. It receives the sealed request, forwards it unchanged to the panel's gateway with its own signed header (which names the address the request came from and covers a hash of the sealed bytes), and hands back the sealed answer unchanged. It sees no token, no device secret and no document. The hop from the mirror to the panel is `https`, always, so that the mirror's header and the visitor's address are not on the network in the clear. To a request that carries a valid mirror header, the gateway answers anything it would answer as an unknown path with status 599, and the mirror passes on only a 200 with a body of one of the five sizes of an answer. Everything else it hands back to its own web server, which answers as on any path it does not serve. The signed header and its hash of the body stay as they are. A static mirror is the other kind: it receives no request at all, and it can only hand back a file the panel wrote earlier.
 
 | | Relay mirror | Static mirror |
 |---|---|---|
-| What the host runs | A server that takes the `POST` and answers it for the panel | Anything that serves files over `https` |
-| Sees the token and the device secret | Yes, in every request | Never |
-| Sees documents | Yes | No. It holds sealed files that all have one size. |
-| Can enroll devices, fill places, fetch any device's document | Yes, it holds the token | No |
-| How fresh its answer is | As fresh as the panel | Up to one publishing round, plus the host's cache, behind the panel, and without usage numbers |
+| What the host runs | A server that forwards the `POST` to the panel's gateway and its sealed answer back | Anything that serves files over `https` |
+| Sees the token and the device secret | No. It carries them sealed. | Never |
+| Sees documents | No. Answers are sealed to the request and come in five sizes. | No. It holds sealed files that all have one size. |
+| Can enroll devices, fill places, fetch any device's document | No. It can replay a request it carried, which the gateway refuses. | No |
+| How fresh its answer is | As fresh as the panel. It cannot serve an older answer, since an answer opens only for the request it answers. | Up to one publishing round, plus the host's cache, behind the panel, and without usage numbers |
 | Serves a first import | No. A first import goes to the link's endpoint only, since `refresh_urls` comes with a document. | No |
 | Serves `"confirm"`, `"release"`, a new device name | Yes | No |
-| Trust the client gives its answer | None beyond the signature | None beyond the signature |
+| Trust the client gives its answer | None beyond the seal and the signature | None beyond the signature |
+| What it learns | The address of each device that fetches through it, the times, the key id, the sizes, and whether an answer was sealed | The file names of a period, and the address and time of each fetch |
 
 ### Keys of a static mirror
 
@@ -443,7 +605,7 @@ The notation is the transports page's: a label in double quotes is its ASCII byt
 - **`e`** is the period number, `floor(unix_time / P)` with `P` = 604,800 s, and `be64(e)` is it as 8 bytes, big-endian. Period `e` starts at `start(e)` = `e × P`. See "Periods and clocks".
 - **`base_url`** is the base URL exactly as the document's string holds it, after JSON decoding, which the URL rules limit to ASCII. Nothing is normalized: two base URLs that differ in any byte give different names. So every static mirror has names of its own, and files on two hosts cannot be matched by their names.
 - **The file name** is `mirror_id` in lowercase hexadecimal, 32 characters, followed by `.bin`. One case only, because some storage folds the case of names. `.bin` because every host serves it as plain bytes, compresses nothing of that type, and it names no app.
-- **Domain separation.** The six labels of this section (the five above and `"veilway v1 sub mirror file"` below) are used nowhere else. The token and the device secret enter no other HKDF: their other uses are the HMACs under the panel's `lookup_key`, the sealed copy of the token, and the body of a request. Nothing derived here can be taken for a lookup value, a stored copy, a transport key or a control key, and none of those can be taken for these.
+- **Domain separation.** The six labels of this section (the five above and `"veilway v1 sub mirror file"` below) are used nowhere else. The token and the device secret enter no other HKDF: their other uses are the HMACs under the panel's `lookup_key`, the sealed copy of the token, and the sealed plaintext of a request. Nothing derived here can be taken for a lookup value, a stored copy, a transport key or a control key, and none of those can be taken for these.
 - **The client holds everything it needs:** the link, its device key, its device secret and its clock. It stores nothing new.
 - **What changes them.** A reset of the token, a new device key or a new device secret gives a new `k_name` and a new `k_mirror`. The name changes in every period and differs per static mirror. `k_mirror` is fixed for the life of one token and one device, which is what "What the host keeps" is about.
 
@@ -506,7 +668,7 @@ Decisions behind the layout:
 3. `n` is at least 1 and at most the smaller of 1,048,576 and the size minus 52, and every byte after the envelope is zero.
 4. The `n` bytes of the envelope go into the same refresh as an answer from the endpoint, with every check of "What is checked, in order", "Identity", "Keys held for a subscription" and "Rollback and expiry". The client keeps one path for both: the static path hands over bytes, and nothing about where they came from is passed on or trusted. What it does with the result is in "Order and rate".
 
-Opening proves only that the file was made by someone who knows `k_mirror`: the panel, the device itself, or anyone who has seen one of the device's requests in the clear, which includes whoever ends TLS for the endpoint or a relay mirror. It proves nothing about the provider. Only the signature does.
+Opening proves only that the file was made by someone who knows `k_mirror`: the panel, the device itself, or anyone who has seen one of the device's requests in the clear. Requests are sealed to the gateway, so that is whoever holds the gateway's private key and a recording of a request, or a copy of the device's storage. It proves nothing about the provider. Only the signature does.
 
 ### Listing static mirrors
 
@@ -521,7 +683,7 @@ A base URL:
 - is `https`, with a host name, no user or password part, no query and no fragment, at most 216 characters, and its path ends in `/`. The file URL is the base followed by the file name, with nothing between.
 - follows the rules for a URL the token is sent to, although the token is never sent there: no percent-encoded control character, no `%2f` or `%5c`, no `.` or `..` segment in any spelling. One rule set keeps one parser.
 - has no IP literal and no pins in version 1. Its certificate is validated by its chain, always. Static hosting with a certificate of its own has little use, and pins would bring the standby and notice rules of "A pinned endpoint" to hosts the panel does not run.
-- does not have the host and port of the link's endpoint or of an entry of `refresh_urls`, and is not listed twice. One host has one role, so a yes to a static host never has to be told apart from a yes to send it the token.
+- does not have the host and port of the main endpoint, of the endpoint of a move, or of an entry of `refresh_urls`, and is not listed twice. One host has one role, so a yes to a static host never has to be told apart from a yes to send it the token.
 
 A `static_mirrors` that breaks a rule refuses the document, as a bad `refresh_urls` does. A whole document has no static mirrors, whatever it lists, since it has no link to derive keys from.
 
@@ -556,11 +718,12 @@ The rules of "How a fetch is made" hold, with these differences:
 
 One refresh tries the places it may go in this order:
 
-1. The endpoint of the link.
-2. The confirmed entries of `refresh_urls`, in the document's order.
-3. The confirmed entries of `static_mirrors`, in the document's order.
+1. The endpoint of a confirmed pending move, when there is one.
+2. The main endpoint: the link's, or that of the last completed move.
+3. The confirmed entries of `refresh_urls`, in the document's order.
+4. The confirmed entries of `static_mirrors`, in the document's order.
 
-From the endpoint or a relay mirror, the refresh ends at the first accepted document, a newer one or the same bytes again, or at a signed refusal that verifies. A static mirror is tried only after every place before it failed in the same refresh, and from it the refresh ends only at a newer document that is accepted, or at a signed refusal that verifies:
+From an endpoint or a relay mirror, the refresh ends at the first accepted document, a newer one or the same bytes again, or at a signed refusal that verifies. A static mirror is tried only after every place before it failed in the same refresh, and from it the refresh ends only at a newer document that is accepted, or at a signed refusal that verifies:
 
 - **The document the client already holds** means only that this mirror has nothing newer. The client tries the remaining static mirrors. If none has a newer document, the refresh is not a successful one: the time of the last successful refresh stays as it was, the reason shown is the endpoint's, and the backoff goes on as after a failure.
 - **An older document**, which a stale cache gives, is refused by its serial, a failure of that mirror, and the next is tried.
@@ -599,7 +762,7 @@ Decoys hide something only from those who have no record of fetches: a reader of
 
 **Caching.** The operator sets the host to send `Cache-Control: max-age=600` or less where the host allows it. A cache that holds a file longer costs only freshness: a client gets an older document, which its serial check refuses or which is the one it holds, and goes on to the next mirror. A cache that holds a 404 for a new file costs that device the mirror until the cache lets it go.
 
-**What the host keeps.** Every host is taken to keep every version of every file, as a code host keeps every commit, and to list the files. A device's files open with `k_mirror`, which is fixed for the life of its token, so whoever later gets the link and the device secret, by a copy of the device's storage or as one who ends TLS for the endpoint, can open every version that a host still keeps, of every period: the transport secrets, the profiles and the device list of their time. That is why published documents carry no `usage`. A key that moves forward with each period, so that a later key opens no earlier file, is an open question and not part of version 1.
+**What the host keeps.** Every host is taken to keep every version of every file, as a code host keeps every commit, and to list the files. A device's files open with `k_mirror`, which is fixed for the life of its token, so whoever later gets the link and the device secret, by a copy of the device's storage, or from a recorded request and the gateway's private key, can open every version that a host still keeps, of every period: the transport secrets, the profiles and the device list of their time. That is why published documents carry no `usage`. A key that moves forward with each period, so that a later key opens no earlier file, is an open question and not part of version 1.
 
 **When the panel cannot publish.** A panel whose key file is missing or does not open its records publishes nothing and deletes nothing: it leaves the folders as they are and says so, as it does for the endpoint.
 
@@ -611,7 +774,7 @@ Decoys hide something only from those who have no record of fetches: a reader of
 | A network observer between the device and the host | The host's name in the TLS handshake, the handshake's fingerprint, the time of the fetch, and an answer close to one of five sizes | The file, the document, and whether the file is real | Block the host. That costs it nothing when the host name is the provider's alone, see "Choosing a host". |
 | Anyone who reads the host's file list or history (on public hosting, everyone) | Every file name and every version, when files come and go, and when they are rewritten, which is every round | Their contents, their owners, which are decoys, which files of two periods belong to one device | Fetch them, watch them, keep them, and report them to the host to have them taken down |
 | A holder of the leaked link, without the device secret | Nothing about static files | Any file name or key | Nothing here. It can still use the endpoint, see "What a provider can and cannot do". |
-| Someone with the link and the device secret: a copy of the device's storage, or whoever ends TLS for the endpoint or a relay mirror and saw a request | The device's file names and its key | Other devices' files | Open every version of that device's files that a host still keeps |
+| Someone with the link and the device secret: a copy of the device's storage, or whoever holds the gateway's private key and recorded a request of the device | The device's file names and its key | Other devices' files | Open every version of that device's files that a host still keeps |
 
 **A file name is a pseudonym for one period.** Within a period, the host's logs tie every fetch of one device to one name: the addresses it fetched from, and when. A fetch from the device's own address gives the host that address, so a host that can tie an address to a person can tie the name to the person. At the change of period, every name of a folder changes in the same round, so the change marks nobody. Across periods, the host can still follow a device by what it saw in both: the same address, or the same habits of time. Names differ on every static mirror, so two hosts cannot match their files by name. A reset of the link gives the device new keys and so new names.
 
@@ -625,7 +788,7 @@ Decoys hide something only from those who have no record of fetches: a reader of
 
 **Deletion as a signal.** A file that goes away can be a reset, a removed device, a deleted account or a decoy that died, to those who see only the file list. The host's logs tell more: a real file was fetched and a decoy never was. Decoys do not hide a mass event either: a provider that resets every link deletes every real file in one round.
 
-**Against a relay mirror.** A relay mirror sees the token and the device secret of every device that fetches through it, and every document. Whoever controls one holds every link that passed: it can read documents, enroll devices of its own and fill places. A static host holds no secret, sees no document, and can do nothing with what it holds but serve it or not. What a static mirror costs instead: its answers are older and carry no usage, it cannot serve a first import or enroll, its logs give each device a pseudonym for a period, and a host that keeps history keeps sealed documents that a later leak of the device's secrets opens.
+**Against a relay mirror.** A relay mirror sees no token, no device secret and no document: it carries sealed bytes, and learns the address of each device that fetches through it, when, and the sizes. It is fresher than a static mirror and serves every request, and it cannot serve an older answer. A static host holds no secret and sees no request, and can do nothing with what it holds but serve it or not. What a static mirror costs instead: its answers are older and carry no usage, it cannot serve a first import or enroll, its logs give each device a pseudonym for a period, and a host that keeps history keeps sealed documents that a later leak of the device's secrets opens.
 
 **What stays visible.** A folder of files with random names and one size, all rewritten at once on a schedule, is itself a pattern that a host scanning for it could find, even though no file names the app. A host that bans such folders takes the mirror down. That is a failure of the mirror, and the endpoint, the relay mirrors and a whole document remain.
 
@@ -644,6 +807,37 @@ Decoys hide something only from those who have no record of fetches: a reader of
 11. **Names are per period and per mirror.** The files of a period exist from `W` before it to `W` after it, no file lives longer than `P + 2W`, and each base URL has its own folder and its own names.
 12. **Decoys belong to one period of one folder,** stay in their range, and are born and die independently, never in pairs, as "Publishing" says.
 13. **One serial, one body.** The endpoint and the publisher sign each device's documents from one counter, each serial the larger of the current time and the last one plus 1.
+
+### Test vectors
+
+Computed by `crates/veilway-proto/tests/vectors.py` in the `veilway` repository, which uses only Python's `hmac` and `hashlib` and a ChaCha20-Poly1305 written out from RFC 8439 (checked against the RFC's vector first), and nothing of the implementation. The Rust tests of `veilway-proto` check the same bytes, and a panel is to check them too. Bytes are written in hexadecimal. `a..b` is the run of bytes from `a` to `b`, each one more than the last.
+
+Inputs:
+
+| Name | Value |
+|---|---|
+| `token_bytes` | `01..10` (16 bytes) |
+| `secret_bytes` | `21..30` (16 bytes) |
+| `device_pub` | `41..60` (32 bytes) |
+| `base_url` | `https://files.example.net/vw/` |
+| `e` | 2000 |
+| `salt` | `80..9f` (32 bytes) |
+| envelope | the 33 ASCII bytes `veilway static mirror test vector` |
+| size of the file | 9,413 |
+
+Derived values:
+
+| Name | Value |
+|---|---|
+| `k_name` | `e51da8f1ac5e86f8e82d38263a9be4d9e5475244df049ccc8d883f76fdb485c4` |
+| `k_mirror` | `b8ff922d98c7e74b613574b516f1b36aa7ed924c2ad698ddfb9661e52ab62278` |
+| `mirror_id` for `e` = 2000 | `41061aa1ae12d729f9dd2f2d5f715408` |
+| file name | `41061aa1ae12d729f9dd2f2d5f715408.bin` |
+| `mirror_id` for `e` = 2001, same base URL | `4e83a838a81e0da8089cde74f331fac2` |
+| `mirror_id` for `e` = 2000, base URL `https://files.example.net/vx/` | `95641ef2aeed852ee6b08ce9e5799da6` |
+| `k_file` | `2c16da7ccf3ee68002c007c50179e1b9b5a0c15f668c795b0bef7694c1afce71` |
+
+The file for these inputs is 9,413 bytes. The plaintext, 9,365 bytes, is `00000021`, the 33 envelope bytes, and 9,328 zero bytes. The associated data is `"veilway v1 sub mirror file"` (with its zero byte) followed by the 16 bytes of `mirror_id`. Its first 48 bytes are the salt `808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f` and the first 16 bytes of the ciphertext, `6698f3e5d7ee42a2fc67ad5a1154bbfb`. Its last 16 bytes, the tag, are `f297f77add1830549d7d8d6715fe435e`. The SHA-256 of the whole file is `863389c734cb351fa2456037c58716e7d40cc6cfd6be326f242a56f6fdb829a1`.
 
 ## Contents
 
@@ -728,9 +922,11 @@ If none of them is there, it shows `default`. The client never guesses what lang
 | `refusal` | string | no | Makes the document a signed refusal. See "The answer". |
 | `provider` | object | yes | `name`: display text, 1 to 64 characters. Nothing else. It is shown as the provider's own claim, next to the fingerprint. |
 | `update_interval` | integer | no | Seconds between automatic refreshes. |
-| `endpoint_pins` | list of 1 or 2 pins | no | The pins of the link's endpoint, each standard base64, 44 characters, as the `pins` of a candidate. The two are different: a list that names one pin twice refuses the document. See "Pins, and a standby". A pinned endpoint always lists two, the active pin and a standby, and the client cannot enforce that. The list must include a pin the client holds for that endpoint. A document that has it when the link's endpoint is not pinned is refused. It is ignored in a whole document, which has no endpoint. Absent, it changes nothing. |
-| `refresh_urls` | list of at most 4 entries | no | Other endpoints of the same subscription. An entry is a URL string, for an endpoint whose certificate is validated by its chain, or an object with exactly `url` and `pins` (a list of 1 or 2 pins, standard base64), for a pinned one. A pin is not listed twice. An IP literal in a `url` follows the same one spelling as in the link, and is allowed only in an entry given as an object with `pins`. An entry of the link's own host and port that has pins must hold at least one pin the client holds for the link's endpoint, or the document is refused. That is the same rule as for the link, said per entry, and a document cannot move an entry from one kind to the other: an entry with the host and port of the link's endpoint, or of another entry, must be of the same kind as it, and an entry of any other shape or kind refuses the document. A `url` follows the URL rules below and has no fragment. Their hosts are shown on the import confirmation. A host that a later document adds is not contacted until the user has confirmed it: the app notes "the provider added a refresh host" in the subscription's details, as it notes a renewed key, and asks at the next refresh the user starts. Until then the client uses the hosts it already had. What the user confirms is a host and port together, with whether it is pinned. A host listed pinned that was confirmed unpinned, or the reverse, is asked about again, and a change of its pins is not. It stays confirmed only while documents list it: one that a document dropped and a later document lists again is asked about again. A whole document has no endpoints, whatever its `refresh_urls` say. |
+| `endpoint_pins` | list of 1 or 2 pins | no | The pins of the main endpoint (see "Moving the main endpoint"), each standard base64, 44 characters, as the `pins` of a candidate. The two are different: a list that names one pin twice refuses the document. See "Pins, and a standby". A pinned endpoint always lists two, the active pin and a standby, and the client cannot enforce that. The list must include a pin the client holds for that endpoint: the main endpoint, or for a document fetched from the endpoint of a pending move, a pin of the move's `pins`. A document that has it when that endpoint is not pinned is refused. It is ignored in a whole document, which has no endpoint. Absent, it changes nothing. |
+| `refresh_urls` | list of at most 4 entries | no | Other endpoints of the same subscription. An entry is a URL string, for an endpoint whose certificate is validated by its chain, or an object with exactly `url` and `pins` (a list of 1 or 2 pins, standard base64), for a pinned one. A URL string may be `http`, for a plain endpoint, which has no pins. A pin is not listed twice. An IP literal in a `url` follows the same one spelling as in the link, and is allowed only in an entry given as an object with `pins` or in an `http` string. An entry of the main endpoint's host and port that has pins must hold at least one pin the client holds for the main endpoint, or the document is refused. That is the same rule as for the link, said per entry, and a document cannot move an entry from one kind to the other: an entry with the host and port of the main endpoint, or of another entry, must be of the same kind as it, and an entry of any other shape or kind refuses the document. A `url` follows the URL rules below and has no fragment. Their hosts are shown on the import confirmation, and a plain one with the words "the network can tell that you use this app, now and later in its records." A request to any of them is sealed to the top-level `gateway_keys`. A host that a later document adds is not contacted until the user has confirmed it: the app notes "the provider added a refresh host" in the subscription's details, as it notes a renewed key, and asks at the next refresh the user starts. Until then the client uses the hosts it already had. What the user confirms is a host and port together, with its kind: checked by chain, pinned, or plain. A host listed with another kind than it was confirmed with is asked about again, and a change of its pins is not. It stays confirmed only while documents list it: one that a document dropped and a later document lists again is asked about again. A whole document has no endpoints, whatever its `refresh_urls` say. |
 | `static_mirrors` | list of at most 4 strings | no | Base URLs of static mirrors, validated by chain, no pins. See "Listing static mirrors". |
+| `gateway_keys` | list of 1 or 2 objects | yes, in every document that has an endpoint: one a client fetches from an endpoint, a relay mirror or a static mirror. Not in a whole document or a refusal. | The gateway keys of the main endpoint, the active one first and the next one second. Each is an object with exactly `id`, an integer from 0 to 255, and `key`, an X25519 public key in the form of "Keys" above. Two entries with one `id` or one `key` refuse the document, and so does a key that is all zero or of small order. See "Gateway keys". It is ignored in a whole document, which has no endpoint. |
+| `main_endpoint` | object | no | The endpoint the provider wants this subscription to use. Naming the main endpoint the client holds, or leaving it out, asks for nothing. Naming another asks for a move. See "Moving the main endpoint". |
 | `profiles` | list of 1 to 64 | yes | See "A profile". |
 | `devices` | list of at most 64 | no | Each: `name` (display text, at most 32 characters, may be empty), `enrolled_at` (Unix seconds), `this` (boolean, true for the asking device), `pending` (boolean, default `false`). See "Devices and their places". When more than one entry has `this` set, each of them is left out and the document is kept. |
 | `usage` | object | no | See "Usage". |
@@ -765,7 +961,7 @@ A profile is what one device needs to reach one inbound.
 
 What a profile does not have, on purpose: routes, a resolver other than the gateway, a setting of the kill switch, a rating, a fingerprint pack, a certificate authority, an "allow insecure" switch, and the cookie name of the upgrade answer on `tls` and `ws`, which the client ignores anyway. A `ws-plain` transport is the exception: its `cookie` member is how the client sends the token. In version 1 a native profile always carries all of the device's traffic. A provider cannot ask for less or for more.
 
-**The cap the client computes itself.** Apart from `rating_cap`, the client compares the dial addresses of all transports of all profiles of the subscription. A pinned endpoint whose host is an IP literal, the link's or a refresh entry's, counts as a `udp` endpoint at that address: a cover transport at the same address is capped at Detectable, since a subscription host with a self-signed certificate on the address is something a prober can see. A pinned endpoint with a host name is not compared, because the client makes no lookup for it, and the panel warns its operator when the address of its pinned endpoint is the address of one of the nodes in its documents. A cover transport whose address is also the address of a `udp` or `udp-obfs` endpoint is capped at Detectable, as the transports page requires, and so is one that shares an address or a host name with a `ws-plain` transport. What the provider runs on an address and does not list, the client cannot see. A `ws-plain` transport is never above Detectable. Wherever a `ws-plain` transport is offered for consent or is in use, the app says: "the network can see this server's name and can tell that you use this app, now and later in its records. It cannot see what you send."
+**The cap the client computes itself.** Apart from `rating_cap`, the client compares the dial addresses of all transports of all profiles of the subscription. A pinned or plain endpoint whose host is an IP literal, the main endpoint, a move's or a refresh entry's, counts as a `udp` endpoint at that address: a cover transport at the same address is capped at Detectable, since a subscription host with a self-signed certificate on the address is something a prober can see, and `POST`s of one fixed size to a plain endpoint are something a filter can match. Wherever such an endpoint is offered for consent, the app says: "the network can tell that you use this app, now and later in its records." A pinned endpoint with a host name is not compared, because the client makes no lookup for it, and the panel warns its operator when the address of its pinned endpoint is the address of one of the nodes in its documents. A cover transport whose address is also the address of a `udp` or `udp-obfs` endpoint is capped at Detectable, as the transports page requires, and so is one that shares an address or a host name with a `ws-plain` transport. What the provider runs on an address and does not list, the client cannot see. A `ws-plain` transport is never above Detectable. Wherever a `ws-plain` transport is offered for consent or is in use, the app says: "the network can see this server's name and can tell that you use this app, now and later in its records. It cannot see what you send."
 
 An entry of `exits`:
 
@@ -867,7 +1063,7 @@ A card has a `type` and, by type:
 
 Every `url` in `support`, in a `link` card and in `refresh_urls`:
 
-- is an `https` URL with a host name, no user or password part, at most 512 characters, or at most 256 for a refresh URL, which is also held to the rules for a URL the token is sent to. A pinned refresh URL may have an IP literal as its host, as a pinned link may;
+- is an `https` URL with a host name, no user or password part, at most 512 characters, or at most 256 for a refresh URL or the URL of a move, which are also held to the rules for a URL the token is sent to. Those two may also be `http`, as a plain link may, since what they carry is sealed. A pinned or plain one may have an IP literal as its host, as a pinned or plain link may;
 - is shown with its host in ASCII form, with the registrable domain marked so that a long name cannot hide whose it is;
 - in `support` and in a card, is opened only after the user confirms a screen that shows that host, in the system's browser, never inside the app, and is never fetched by the app;
 - in `refresh_urls`, is fetched by the app under the rules of "Fetching" and only those.
@@ -884,7 +1080,7 @@ A subscription enters the app in one of these ways. Every one of them goes throu
 | The clipboard | The same, read only when the user presses "paste". The app never reads the clipboard by itself. |
 | A QR code | A native link in either form, or a whole document |
 | A deep link | A native link in the `veilway` form, or `veilway://doc#v1.<key>.<document>` |
-| A file | `v1.<key>.<document>` and nothing else, except one line end (LF or CRLF) at the very end, which editors add when a file is saved and which is ignored |
+| A file | `v1.<key>.<document>` and nothing else, except one line end (LF or CRLF) at the very end, which editors add when a file is saved and which is ignored. Or a sealed file, which holds a link (see "Sealed subscription file"). |
 
 **A whole document in a link, a code or a file.** A single profile, or a few, can be given without a server. The content is the provider's key and the signed document, joined by dots after `v1`. It is the same JWS, checked by the same rules against that key. It has no endpoint, so it cannot refresh, and the app says so. It carries a provider-issued device key, since there is nothing to enroll with. Such a link holds a private key and transport secrets: wherever the link goes (a chat history, a browser history, a screenshot), they go too. The app says this on the confirmation, and a provider should prefer an ordinary link wherever it has an endpoint. A whole document never replaces a stored subscription that has a link.
 
@@ -893,7 +1089,7 @@ A subscription enters the app in one of these ways. Every one of them goes throu
 - the host of the endpoint, with its registrable domain marked, or "a document in a link" or "a file";
 - the fingerprint of the key in the link;
 - when the link has a pin: "this server uses its own certificate, which this link names. Only that certificate will be trusted." For a host that is an address: "this server has an address and no name.";
-- what will be sent if the user continues: the link's token and a new key for this device, to that host, from the device's own address, outside any tunnel;
+- what will be sent if the user continues: one request sealed to the provider's gateway key, which holds the link's token and a new key for this device, to that host, from the device's own address, outside any tunnel. For a plain link the screen adds: "this link does not use TLS. Your request stays sealed, but the network can tell that you use this app, now and later in its records. It sees the server's name and address, the path, and when you ask.";
 - that the link is native, or that it is a legacy link that cannot be verified. For a legacy link the screen adds: "this link has no key part. If your provider gave you a Veilway link, part of it was lost on the way."
 - when another subscription's tunnel is up, the two ways the request can go, as "When a fetch happens" lists them.
 
@@ -907,6 +1103,7 @@ Nothing is sent, generated or stored by the app before the user continues. A dee
 - the fingerprint again, and the hosts in `refresh_urls`;
 - how many profiles it holds, and whether any of them is Unsafe, with the plain warning for that. Ratings and classes are not shown to users.
 - whether the device's key was made on this device or issued by the provider;
+- when the document asks for a move, the new host and how it is checked, as "Moving the main endpoint" shows it. Accepting the import accepts the move;
 - whether this adds a new subscription or replaces a stored one (same key and same id), and which, and when the link replaces a stored link whose endpoint was checked another way (pinned or not, or by another pin), that it changes;
 - the account's devices, as the document lists them.
 
@@ -918,6 +1115,67 @@ The user may type a name for the device, and the screen says that the name will 
 - A web page that opens a `veilway` link learns nothing from the app, and the app makes no request because of it. The host in the link learns nothing from the app unless the user continues at step 1. What a browser or a messenger does with an `https` link before the app sees it is outside the app's control, see "Form".
 - The consent to use a lower class of transport (see the transports page) is stored per subscription and profile `id`. It is not carried over to a profile with a new `id` or to another subscription.
 - A link over a size limit, or one that is not exactly one of the forms above, is refused at once.
+
+### Sealed subscription file
+
+A link in a chat, a mail or a shared folder is read by whoever reads the chat, the mail or the folder. A sealed file is a way to pass a subscription link on with a password that goes another way. It is a convenience for people who share a subscription, and for a provider that sends a link to a user over a channel it does not control. It adds secrecy while the file is in transit. It never adds trust.
+
+**What it holds.** The text of a link, and nothing else: a native link in the `veilway` form (`veilway://sub/...` or `veilway://sub-plain/...`), or a whole document in a link (`veilway://doc#v1....`). The link text is enough. It is the smallest content that carries the whole subscription, since a native link has the endpoint, the provider's key, the gateway key, the token and the pin, and the document comes from the endpoint after the user's yes. It is also the one thing the import already knows how to read, so a sealed file needs no second reader of subscriptions and has no second way to go wrong. A document in a file (`v1.<key>.<document>`) is not sealed: it can be larger than a link, and it holds a private device key when it is a whole document, which a provider should not be sending by file at all. A client never writes a sealed file of a legacy link.
+
+**The bytes.** All numbers are big-endian.
+
+| Offset | Size | Field |
+|---|---|---|
+| 0 | 8 | The magic, `VWSUBSEA` in ASCII |
+| 8 | 1 | The format version, `1` |
+| 9 | 4 | Argon2id memory in KiB |
+| 13 | 4 | Argon2id passes |
+| 17 | 4 | Argon2id lanes |
+| 21 | 16 | The salt, random for every file |
+| 37 | 12 | The nonce, random for every file |
+| 49 | n + 16 | ChaCha20-Poly1305 of the link text (UTF-8, no line end) and its 16 byte tag |
+
+The first 49 bytes are the header. They are the associated data of the encryption, so a changed byte of the header, the cost included, makes the tag fail. The key is the 32 bytes Argon2id (version 0x13) gives for the password's UTF-8 bytes, the salt and the three costs. The password is used as it is typed, with no normalization and no trimming. Two keyboards that write the same Persian word with different code points make two passwords; a person who sends a password in text should send it in the form that was typed.
+
+**Numbers.**
+
+| Quantity | Value |
+|---|---|
+| Argon2id cost of a new file | 65,536 KiB (64 MiB), 3 passes, 1 lane. A file made with less is refused by a client, so that no client takes part in a file whose password is cheap to guess. |
+| What a client opens at most | 131,072 KiB (128 MiB), 6 passes, 4 lanes. A header that asks for more, or for less than a new file, is refused before any memory is allocated. |
+| Password | At least 10 characters (code points) when a file is made, at most 1,024 bytes. A client that opens a file asks for no minimum: the one who made the file chose the password. |
+| Link text | At most 2,109 bytes, which is the longest link there is: a whole document in a link. A native link with its gateway key and a pin is at most 421 bytes. |
+| The file | At most 2,174 bytes (`49 + 2,109 + 16`). A file over that is refused before it is read further. |
+
+**Making a file.** The maker picks a password (in an app, typed twice) and draws the salt and the nonce from the system's random source. The file is the header followed by the sealed link text. The maker shows the user, before the password is asked for, that the password has to go another way than the file, and that anyone who has the file and guesses the password has the link.
+
+**Opening a file.** In this order, and the first failure ends it:
+
+1. A content that begins with the magic is a sealed file, and is not read as a plain subscription file. The app asks for the password. Nothing is hashed before the user types one.
+2. A file over its size, or shorter than the header and a tag, is refused. A version other than `1` is refused, and a version above it says that the app needs an update.
+3. A cost outside the numbers above is refused with no hashing.
+4. The key is made and the tag is checked. A wrong password and a changed byte are one error, "the password is wrong, or the file is damaged", so that an answer never tells a guesser which part was right.
+5. The plaintext has to be UTF-8 and within the link limit. It then goes through exactly the ordinary import of its form: the grammar of "The link", step 1 and its first yes, the fetch and its signature checks, step 3. Nothing is skipped because the file was sealed.
+
+The hashing takes a moment and a large block of memory. An app does it away from the thread that draws its window, and shows that it is working.
+
+**What the password does and does not do.** It keeps a stranger who sees the file from reading the link. It does not make the link trustworthy, and it does not make the provider's key one the user knows: the user's first yes still shows the host and the key's fingerprint, and a document that does not verify under the key in the link is refused as ever. A file from a stranger with a password from the same stranger is as untrusted as a link from that stranger.
+
+**The file's name and type.** The extension is `.vwsealed`, and the media type is `application/vnd.veilway.sealed-subscription`. The magic, not the name, decides what a file is.
+
+**A test vector.** The password is `correct horse battery`, the salt is sixteen bytes of `07`, the nonce is twelve bytes of `09`, and the link is
+
+```
+veilway://sub/sub.example.com/s#v1.0EqyMnQrtKs6E2i9RhXk5tAiSrcaAWuvhSCjMsl3hzc.AXmmMe7eG_nJjxIDLN6t0OegeTmPx4a4jMhG7ImvhaUa.VVVVVVVVVVVVVVVVVVVVVQ
+```
+
+The file, in hexadecimal, is:
+
+```
+5657535542534541010001000000000003000000010707070707070707070707070707070709090909090909090909090966802ab495a740c98ea383a9ccf97fc7ba1d350bf66efd7fe9855a54bba3f8b67fb1cf40753399b129afd10474cf22f319edd5132b8643d19ea37624d118f17c22517776e674d0d826e99bd7005a5c75f485edb88dc07f55076ceacc17812967d65131bb702ba09fb5655627fc1ed62eb71685b26814b0c51d64071710d1928c7858aab3d00aeefe581d3ac97ff9f55754e36b30216ffa881a21dd75e2e532e5f9ba
+```
+
+The link is in the grammar of this page, with a gateway key whose key id is `01` and whose public key belongs to the X25519 private key `40..5f` (32 bytes). The file is 211 bytes, and the header is the first 98 hexadecimal characters. The vector was computed with an independent Argon2 and ChaCha20-Poly1305 (`argon2-cffi` and `cryptography`), with the same code reproducing the vector of the earlier link grammar byte for byte. The crate's own test is to be changed to this link and must give the same bytes; that is for the build to do.
 
 ## Native and legacy
 
@@ -964,7 +1222,8 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 - See and alter everything the user sends through its nodes that is not encrypted end to end, and see destinations, names, volume, timing and the client's address. It runs the node.
 - Point its own profiles at any public address, which the client will then dial when the user connects. With many users, that can be a third party's address, which then receives their connection attempts.
 - Choose the server name a client sends in clear when it connects. A name that is dangerous to be seen asking for is the user's risk, and the user does not see it unless they look at the profile's details.
-- List up to four more endpoints that the app will send the token to when it refreshes, once the user has seen and confirmed their hosts.
+- List up to four more endpoints that the app will send the token to, sealed to its gateway, when it refreshes, once the user has seen and confirmed their hosts.
+- Move the subscription to another main endpoint, with another kind of check or none, once the user has confirmed the new host. See "Moving the main endpoint".
 - List up to four static mirrors that the app will send a plain `GET` to when everything else fails, once the user has confirmed their hosts. Each such host sees the device's address, or the address of the provider's exit, and a name for the device that holds for one period, see "What each party learns".
 - Show false names, numbers, notices and cards in its own area, and false names on its own profiles and exits. With translations it can show different text to readers of different languages.
 - See the time of every refresh, and tell users and devices apart. It may also learn a reader's language from the browser that opens one of its links and from the script of a device's name.
@@ -985,7 +1244,7 @@ A provider that is malicious, or whose panel or signing key is in someone else's
 - Replace its own earlier document with an older one, or move a device to a provider-issued key without a new import.
 - Import, enroll or connect without the user.
 
-**Someone who is neither the provider nor the user,** and can answer the fetch in the provider's place, can refuse to answer, can serve a document it has seen that is still valid and no older than the stored one, and can replay a signed refusal it has seen for up to a day, which shows the user a wrong message and changes nothing. On a first import of a link with provider-issued keys there is no stored document, so it can serve any older valid document of that account until that document expires. Nothing else. A static host is one of these, and can do less: it is never asked for a first import, and it cannot send a refusal it was not given.
+**Someone who is neither the provider nor the user,** and can answer the fetch in the provider's place without the gateway's private key (a content delivery network, a proxy that ends TLS, a relay mirror, a plain HTTP path), can refuse to answer and nothing else: every answer is sealed to its request, so it cannot serve an older document or replay a refusal, and it cannot read the request. Whoever also holds the gateway's private key can read the requests it sees, and can serve a document it has seen that is still valid and no older than the stored one, or a signed refusal it has seen for up to a day, which shows the user a wrong message and changes nothing. On a first import of a link with provider-issued keys there is no stored document, so such a party can serve any older valid document of that account until that document expires. A static host is one of these, and can do less: it is never asked for a first import, and it cannot send a refusal it was not given.
 
 **A holder of a leaked link can:**
 
@@ -1003,15 +1262,18 @@ It cannot read what the user sent, change what the user's app holds, or sign any
 - **The signature protects against the path, not against the provider.** It says nothing about whether the provider deserves trust.
 - **The panel can show a link again, at a price.** Copies of tokens, sealed under a key that is not in the database, are what let an operator copy a link again. A stolen database alone gives no secret, but a stolen database with the key file gives every token and every sealed secret. An operator who does not want to carry the tokens sets "show links once", and then cannot copy a link again, only reset it. The key file is a single point of loss: a restored database without it serves nothing, and the panel says so and never makes new keys by itself. See "Storing the token".
 - **A signing key that sits on the panel is as safe as the panel.** If the panel signs online, whoever takes the panel signs documents for every user, and a stolen key cannot be revoked. Enrollment needs a document per device, which pushes providers towards signing online. Where the signing key lives is the provider's largest decision (threat model Q9).
-- **What a self-signed endpoint costs.** It is the way for a provider with no domain, and it has three costs. The link is longer: 114 characters of fragment against 70, so a QR code is denser and harder to scan from a screen or a print. The key behind the pin is a long-lived secret on the panel's host: whoever has it and a place on the network can answer the fetch, receive the token, and serve stale documents. The standby pin, kept off the server, is what turns that theft into a switch and a reset of the tokens instead of a new link for every user. An operator who leaves the standby on the server loses that protection. And a self-signed endpoint is something a censor can look for: a prober that completes the handshake sees a certificate that no authority signed on a host that serves subscriptions, which ordinary sites rarely do, and the pin cannot hide it. On a server that also runs a node it marks the address, and the client caps the profiles at that address when it can see the match. The panel warns the operator of this, as the transports page has the node do. A pin adds no trust that the link did not already have, since whoever gave the link already chose the key and the host. A link altered on the way to lose its pin is no new case of that: it also fails closed unless the altering party can show a certificate the chain accepts, and one who can alter a link can alter its key as well.
+- **What a self-signed endpoint costs.** It is the way for a provider with no domain, and it has three costs. The link is longer: 159 characters of fragment against 115, so a QR code is denser and harder to scan from a screen or a print. The key behind the pin is a long-lived secret on the panel's host: whoever has it and a place on the network can answer the fetch in the endpoint's place. Since the exchange is sealed to the gateway, that gives it the sizes and times of requests and the power to refuse them, not the token. The standby pin, kept off the server, is what turns that theft into a switch and a reset of the tokens instead of a new link for every user. An operator who leaves the standby on the server loses that protection. And a self-signed endpoint is something a censor can look for: a prober that completes the handshake sees a certificate that no authority signed on a host that serves subscriptions, which ordinary sites rarely do, and the pin cannot hide it. On a server that also runs a node it marks the address, and the client caps the profiles at that address when it can see the match. The panel warns the operator of this, as the transports page has the node do. A pin adds no trust that the link did not already have, since whoever gave the link already chose the key and the host. A link altered on the way to lose its pin is no new case of that: it also fails closed unless the altering party can show a certificate the chain accepts, and one who can alter a link can alter its key as well.
 - **A static mirror trades freshness and a pseudonym for holding no secret.** Its host sees no token and no document, but its logs tie the fetches of a device in one period to one file name, with the address each came from. Every host is taken to keep every sealed version, and whoever later holds the link and the device secret opens them all, which is why they carry no usage. A host name that only the provider uses is blocked at no cost. See "Static mirrors".
-- **Stale documents.** A client that cannot refresh keeps working on old addresses and keys. Whoever can answer the fetch can keep it there for up to a document's lifetime before any warning shows. The warnings and the 30 day rule limit how quietly that continues.
+- **The gateway key opens what was recorded.** Each request has a fresh ephemeral key, so a token that leaks later opens no recorded exchange. The gateway's private key does: whoever holds it and a recording of requests, made by a content delivery network, a proxy that ends TLS, a relay mirror or anyone on a plain HTTP path, reads every request sealed to it since it was listed and its answer, tokens and device secrets included. Destroying the key stops new exposure and opens nothing back up. A switch every 180 days and retired keys kept no longer than old links need bound how much one key covers. After a theft with recordings, every account that used the key needs a reset token and a new link. Like the signing key, it is as safe as the panel that holds it.
+- **Plain HTTP gives up hiding, not secrecy.** Over `http` the exchange is as secret and as authenticated as over `https`, but the network sees the host, the path and the exact fixed sizes, which a filter can match on every request. TLS stays recommended. A move to plain HTTP is a signed decision of the provider that the user confirms.
+- **A move follows the signing key.** A document can move every client to another endpoint, after one confirmation per client. Whoever holds the signing key could already sign any profile, so a move adds no power, but it does let a stolen signing key move clients to an endpoint the thief runs, where it would see their requests. The user's confirmation, which shows the new host, is the only check.
+- **Stale documents.** A client that cannot refresh keeps working on old addresses and keys. Whoever can block the fetch can keep it there for up to a document's lifetime before any warning shows. Only a holder of the gateway's private key, or a static host, can serve it an older document. The warnings and the 30 day rule limit how quietly that continues.
 - **Presence.** An automatic refresh happens only inside the provider's own tunnel, where the provider already sees the device. A refresh the user asks for outside a tunnel is visible to the local network, and the app says so first.
-- **Every parser here needs a fuzz target** in the same change as the parser. The first implementation has targets for the link grammar, the envelope, the payload behind a valid signature, the legacy reader and the request. The logo decoder and the Encrypted Client Hello configuration have none yet, because their readers are not written. Each target asserts that no input changes stored state unless every check passed. The panel's parser of the request body needs one too (`fuzz_sub_request`), and so does the opening of a static file (`fuzz_sub_mirror`), which has none yet because it is not written.
+- **Every parser here needs a fuzz target** in the same change as the parser. The first implementation has targets for the link grammar, the envelope, the payload behind a valid signature, the legacy reader and the request. The logo decoder and the Encrypted Client Hello configuration have none yet, because their readers are not written. Each target asserts that no input changes stored state unless every check passed. The panel's parser of the request body needs one too (`fuzz_sub_request`), and so does the opening of a static file (`fuzz_sub_mirror`), which has none yet because it is not written. The exchange adds two, neither written: `fuzz_sub_gateway`, the gateway's handling of any body up to its limit (size, key id, `enc`, the open, the length and zero padding, then the request reader, the window and the replay memory), which asserts that every failure gives the one unknown-path answer and records nothing; and `fuzz_sub_answer`, the client's opening of any answer (status, size, open, length, padding, then the envelope), which asserts that no input changes stored state unless every check passed. The link target grows the gateway key, the plain forms and the new lengths, and the payload target `gateway_keys` and `main_endpoint`.
 - **What the first implementation does with secrets.** Its types print no document, secret, dial address or path in debug output. Secrets are not wiped from memory when they are dropped, which is the same stated limit the threat model records as G36.
-- **Nothing here is invented cryptography.** The envelope is JWS with EdDSA as published, verified by the strict rule of RFC 8032. The rules around it (the key in the link, rotation, identity, enrollment) are policy, and they have been reviewed once, inside the project.
+- **Nothing here is invented cryptography.** The envelope is JWS with EdDSA as published, verified by the strict rule of RFC 8032. The exchange is Oblivious HTTP over HPKE as published, with its own content and strings as RFC 9458 allows, and a 1-byte header on the wire in place of 7, all 7 still bound into `info`. The rules around them (the keys in the link, rotation, identity, enrollment, replay, moves) are policy. The envelope's rules have been reviewed once, inside the project, and the exchange's not at all.
 
-Tests this page needs before it leaves Draft: a document with another header, a badly encoded part, a signature that only a lax verifier accepts, a lower serial, an equal serial and other bytes, another `subscription_id`, already expired, or under a key that is not held, is refused and changes nothing; a native link answered with a legacy list imports nothing; opening a deep link or scanning a code sends no packet until the user continues; declining an import frees the device place; a refresh that changes the device key or adds a private key fails; an unknown token and an unknown path get identical bytes and timing from the panel, while a valid token always gets a signed answer; no refresh leaves the device outside the subscription's own tunnel unless the user asked; a pinned link whose server shows another certificate, or the pinned certificate without its key, or does not negotiate TLS 1.3, fails with no byte of the request sent and the message of "A pinned endpoint", and is a failed fetch and not a refusal; a link with a pin cut short, or with a fourth field, is refused, and a link without a pin never trusts a self-signed certificate; no document moves a link from pinned to unpinned or back, and a document that lists no pin the client holds is refused; a dump of the panel's database holds no token, no transport secret and no private key in the clear, and a panel with accounts and no key file serves nothing and makes no key; a document list of `endpoint_pins` that leaves out the pin of the certificate the panel serves is never signed; a request is matched by the lookup value and an unknown token costs the same as a known one; a profile that dials loopback is refused and one that dials the device's own network is not dialed; one subscription's document cannot change another; no field of any document changes the kill switch, the resolver setting, the routes or a rating upward; the token appears in no log line, no URL and no request to a host the provider did not sign; a hostile corpus of text, URLs and logos is shown as plain text, refused or left out; a static fetch carries no token, device secret, device key, cookie or conditional field; a static file of a wrong size, with a bad tag, with padding that is not zero, under another file's name or another period's, or holding an older serial, changes nothing and the next mirror is tried; a static file with the document held is no successful refresh; a 404 from a static mirror is never taken as a revocation; a static mirror is never tried before the endpoint and the relay mirrors have failed in the same refresh, and never for an import; a refresh asks each static mirror for one name only, the one of the client's period; an older client ignores `static_mirrors` and keeps the document; a `static_mirrors` with pins, an IP literal or the host of the endpoint is refused; the derivation and one sealed file match vectors computed apart from the implementation; the publisher writes each period's files from `W` before it to `W` after it and no longer; every file of a published folder, decoys included, has one size and changes in every round, the decoy count stays in its range, and no decoy birth is paired with a death; a published document has no `usage`; a panel publishes no file for a pending device, and none after a reset or a removal; the endpoint and the publisher never sign one serial twice for a device.
+Tests this page needs before it leaves Draft: a document with another header, a badly encoded part, a signature that only a lax verifier accepts, a lower serial, an equal serial and other bytes, another `subscription_id`, already expired, or under a key that is not held, is refused and changes nothing; a native link answered with a legacy list imports nothing; opening a deep link or scanning a code sends no packet until the user continues; declining an import frees the device place; a refresh that changes the device key or adds a private key fails; an unknown token and an unknown path get identical bytes from the panel, with the remaining difference in time measured and stated, while a valid token always gets a signed answer; no refresh leaves the device outside the subscription's own tunnel unless the user asked; a pinned link whose server shows another certificate, or the pinned certificate without its key, or does not negotiate TLS 1.3, fails with no byte of the request sent and the message of "A pinned endpoint", and is a failed fetch and not a refusal; a link with a pin cut short, or with a fourth field, is refused, and a link without a pin never trusts a self-signed certificate; no document moves a link from pinned to unpinned or back, except a confirmed move, and a document that lists no pin the client holds is refused; a dump of the panel's database holds no token, no transport secret and no private key in the clear, and a panel with accounts and no key file serves nothing and makes no key; a document list of `endpoint_pins` that leaves out the pin of the certificate the panel serves is never signed; a request is matched by the lookup value and an unknown token costs the same as a known one; a profile that dials loopback is refused and one that dials the device's own network is not dialed; one subscription's document cannot change another; no field of any document changes the kill switch, the resolver setting, the routes or a rating upward; the token appears in no log line, no URL and no request to a host the provider did not sign; a hostile corpus of text, URLs and logos is shown as plain text, refused or left out; a static fetch carries no token, device secret, device key, cookie or conditional field; a static file of a wrong size, with a bad tag, with padding that is not zero, under another file's name or another period's, or holding an older serial, changes nothing and the next mirror is tried; a static file with the document held is no successful refresh; a 404 from a static mirror is never taken as a revocation; a static mirror is never tried before the endpoint and the relay mirrors have failed in the same refresh, and never for an import; a refresh asks each static mirror for one name only, the one of the client's period; an older client ignores `static_mirrors` and keeps the document; a `static_mirrors` with pins, an IP literal or the host of the endpoint is refused; the derivation and one sealed file match vectors computed apart from the implementation; the publisher writes each period's files from `W` before it to `W` after it and no longer; every file of a published folder, decoys included, has one size and changes in every round, the decoy count stays in its range, and no decoy birth is paired with a death; a published document has no `usage`; a panel publishes no file for a pending device, and none after a reset or a removal; the endpoint and the publisher never sign one serial twice for a device. For the exchange: a body of another size, an unknown key id, a bit flipped anywhere but the top bit of `enc`, an `enc` of small order, a token that is unknown, a `t` out of the window, a replayed request and a replay with only the top bit of `enc` changed each get bytes identical to an unknown path, after the same work, and change nothing; a `t` earlier than the gateway's start is refused, so a request captured before a restart is refused after it; a clock that steps back reopens no window; the top bit of `enc` on the wire is random; a request that times out is never sent again with the same bytes; an answer that opens for one request does not open for another; an answer of a wrong size, with a bad tag, a length out of range or padding that is not zero is a failed fetch; no byte of a token, a device key or secret, `kids` or a device name is on the wire outside the seal, over `https` or `http`; a document whose `gateway_keys` leaves out the active key is never signed; a client whose first gateway key was destroyed reaches the gateway with its second without a question; a move is never followed before the user's yes, completes only at a document from the new endpoint, is undone by no older document, and falls back to the old endpoint until it completes; a legacy `http` link is refused. The exchange needs test vectors computed apart from the implementation, with an HPKE written out in plain Python as for the stream proof: fixed inputs for the gateway key, the ephemeral key, the request JSON, `response_nonce` and an envelope, giving `enc`, the 1,073 request bytes and the answer of 9,413 bytes. They are not computed yet.
 
 ## Open questions
 
@@ -1023,8 +1285,8 @@ Each is listed with the default this draft takes. The first five are the ones a 
 | Device places can be filled by a holder of the link, and only the provider can clear them. Should a device be able to remove another, and how would it prove it is the older one? | Not in version 1. WireGuard keys cannot sign, so it would need a second key per device. The device list and the signed refusal make the state visible. |
 | The first fetch enrolls a pending device before the user has seen the document. Is a separate request that only previews the document worth a second kind of answer? | No. The place is pending, is released on a decline, and expires by itself. |
 | Keeping a retired signing key for a year, to tell late clients that they need a new link | Kept. A key that was retired because it was stolen signs nothing the thief could not sign already. The alternative is that late clients see the message for an interception. |
-| Can the endpoint really give the web server's own answer for an unknown path, in bytes and in time? | Required. Handing the request back to the web server is exact. Repeating a learned answer is an imitation that must be measured. |
-| Can "an unknown token answers like an unknown path" hold in timing, when a valid token leads to a signature and an unknown one does not? | Required of the panel. Not shown. The check of the token must cost the same either way, and the difference in what follows is visible only to someone who already holds a valid token. |
+| Can the endpoint really give the web server's own answer for an unknown path, in bytes and in time? | Bytes: required to be identical, and handing the request back to the web server makes them so. Time: not the same, since the gateway does work an unknown path does not. The difference is to be measured from the network, against the operator's web server in front, with the method and the number stated here. Not measured. |
+| Can "an unknown token answers like an unknown path" hold in timing, when a valid token leads to a signature and an unknown one does not? | Up to the token check, required: every kind of refused request does the same work, and the difference between them is to be measured and stated. After it, no: a valid token leads to a signature or a cached refusal, and that difference is visible only to someone who already holds a valid token. Not measured. |
 | Is no automatic refresh outside the subscription's own tunnel too strict? A user whose profiles all die gets no new ones until they ask. | Kept. The app tells the user to refresh when every profile of a subscription has failed. |
 | May a fetch use the fronting options of the transports? (threat model Q15) | Not specified. `refresh_urls`, `static_mirrors` and a whole document in a link are the answers here. Candidates for the fetch would have to be in the link. |
 | A static mirror's file name could be fixed for the life of a token and a device, so that the host's logs follow one device for as long. Should names change per period? | Yes, in version 1. Names change every 604,800 s, derived with the period's number and the base URL, and every name of a folder changes in the same round, so the change marks nobody. It costs a client clock within a day of the panel's, which the format needs anyway, and two sets of files for two days around each change. See "Periods and clocks". |
@@ -1041,6 +1303,11 @@ Each is listed with the default this draft takes. The first five are the ones a 
 | Dial addresses are IP addresses only | Yes. It avoids a lookup before the tunnel. It costs providers whose fronts change address often, who must reissue documents. |
 | Certificate pins behind a content delivery network (threat model Q22) | None. Such candidates rely on ordinary validation, and the tunnel inside does not depend on it. |
 | Where the signing key lives, and whether the panel may sign online (threat model Q9) | The provider's decision. Device-made keys need a document per device, signed when the device enrolls, so an offline key means provider-issued keys or devices registered ahead of time. |
+| Should the exchange be plain RFC 9458, Binary HTTP and the 7-byte header included, so that a third party's Oblivious HTTP relay could carry it? | No. Binary HTTP would add a second HTTP parser of hostile input on both sides and a method, target and fields nothing reads, the 6 fixed bytes have nothing to carry, and `message/ohttp-req` would mark the traffic for every party on the way. The cost is that a public Oblivious HTTP relay, which expects `message/ohttp-req`, cannot serve as a relay mirror. |
+| The gateway's key is static, so a recording and a later theft of the key open every request sealed to it until it is destroyed. Should the key change more often, or each answer carry a key for the next request? | Not in version 1. A switch every 180 days bounds how much one key covers, and after a theft with recordings every account that used the key needs a new link. A key that moves forward per period would bound it further, and every client would have to follow it. |
+| Can a gateway do the same work for every request, in time? | Required, in the way a node opens a stream proof: one setup, one open, one window and memory check, one HMAC and one lookup in memory for every `POST`. Whether a body of another size, an unknown key id, a failed open, a stale `t`, a replay and an unknown token are told apart in time from the network is to be measured, and the result stated here. Not measured. |
+| Is one fixed request size worth the pattern it makes on a plain HTTP path? | Kept. A size per `op` would tell the path which step of an enrollment a device is at. On `http` the provider gives up hiding anyway. |
+| A move is confirmed by the user once, and a stolen signing key can then move clients to the thief's endpoint. Should a move need more, such as a delay? | No. A stolen signing key can already sign any profile. The confirmation shows the new host. |
 | Should a profile be able to carry routes (split tunneling chosen by the provider)? | No, not in version 1. Routes from a provider are a way to move traffic outside the tunnel. |
 | Should a legacy link be refreshed outside a tunnel at all, since it cannot be verified? | Only when the user asks, as for a native one. |
 | Translations repeat in every profile's exit catalog. Should a catalog be shared at the top level? | Not in this version. The limit on JSON values is what a large provider meets first. |

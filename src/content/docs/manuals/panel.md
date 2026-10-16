@@ -46,11 +46,11 @@ Add this line to `panel.json`, then restart the panel with `sudo bash veilway.sh
 "two_step": "off"
 ```
 
-Sign-in, first setup, adding an admin and re-authentication then ask for the password only. Everything else stays: passwords of 12 characters or more, sessions, CSRF checks, API tokens and the audit log. Sign-in is stricter in this mode: a source gets 5 tries in 15 minutes, and an account that is waiting after wrong tries refuses even the right password until the wait ends. Because of that, someone who keeps guessing can keep the admin waiting for up to 15 minutes at a time.
+Sign-in, first setup, adding an admin and re-authentication then ask for the password only. Every admin still gets an authenticator key, shown once, so the key is ready when the code comes back. Everything else stays: passwords of 12 characters or more, sessions, CSRF checks, API tokens and the audit log. Sign-in is stricter in this mode: a source gets 5 tries in 15 minutes, and an account that is waiting after wrong tries refuses even the right password until the wait ends. Because of that, someone who keeps guessing can keep the admin waiting for up to 15 minutes at a time.
 
-The switch is read from `panel.json` only. No page or API route of the panel can change it, so whoever can write that file already owns the panel. While it is off, every page shows a red banner, the login page says so, the panel logs a warning at every start, and the audit log records `panel.two_step` with `off` or `on` whenever the value differs from the last start.
+The switch is read from `panel.json` only. No page or API route of the panel can change it, so whoever can write that file already owns the panel. While it is off, every page shows a red banner, the login page says so, the panel logs a warning at every start, and the audit log records `panel.two_step` with `off`, or with `on` and the counts below, whenever the value differs from the last start.
 
-To turn it on again, remove the line (or set it to `"on"`) and restart. Authenticator keys of existing admins are kept and work again. An admin who has none must set one up at their next sign-in before any other page works.
+To turn it on again, remove the line (or set it to `"on"`) and restart the panel. Every admin has an authenticator key whatever the switch says, so the code is asked again from then on. The start that turns it on ends every session and revokes every API token made while the switch was off, and the audit entry counts both, for example `on, 2 sessions ended, 1 tokens revoked`. An admin made while the switch was off that has no key gets a new one at that start, which nobody has seen. That admin cannot sign in while the code is on, so they change the authenticator under Account while the switch is off (the key is shown there), or another admin resets the account under Admins.
 
 ## First login
 
@@ -63,6 +63,8 @@ To turn it on again, remove the line (or set it to `"on"`) and restart. Authenti
 The same setup can be done by script. Send the token, a username and a password to `{prefix}/api/setup`. The answer holds the TOTP secret, shown once.
 
 Some changes ask for your password and code again. The confirmation holds for five minutes.
+
+Setup asks you to read and accept the [Veilway operator terms](../../legal/operator-terms/) before it makes the admin account. The acceptance, with its time and the version of the terms, goes in the audit log. A script must send `accepted_terms: true`.
 
 ## Users and devices
 
@@ -108,6 +110,8 @@ The **Subscriptions** page sets what every user's link points to, and how the do
 - **Device limit for new users** and **Device address pool** set the defaults for new users. The pool is an IPv4 network from `/16` to `/30`, and each device gets one address from it.
 - **Answer to everything else** shows the 404 your web server gives. The endpoint answers every request without a valid token that way.
 
+**Terms of service URL** and **Privacy policy URL** are your own pages as the provider. Enter an `https` address for each, or leave it empty. Every subscription then shows them as support links. Starting texts are on the [provider templates](../../legal/provider-templates/) page.
+
 ### Signing keys
 
 Every document is signed. To change keys without cutting users off:
@@ -124,7 +128,7 @@ A mirror is another address for the same subscription. Apps try the mirrors when
 
 ### Relay mirrors
 
-A mirror in the list above is only another address for the same panel. A relay mirror is a small program on another server and domain that serves the subscription path and forwards each request to your panel over HTTPS. Apps can then refresh through it while your main endpoint is blocked. Every document is signed, so the mirror cannot change one. It does read every token, so run it only on servers you control.
+A mirror in the list above is only another address for the same panel. A relay mirror is a small program on another server and domain that serves the subscription path and forwards each request to your panel over HTTPS. Apps can then refresh through it while your main endpoint is blocked. Every request is sealed to your panel's gateway key and every answer to its own request, so the mirror reads no token, no device secret and no document, and cannot change or replay anything in a way that is accepted. It still sees each visitor's address and when they refresh, so run it on servers you trust with that.
 
 1. On the other server, run `sudo bash veilway.sh install mirror`. It installs the node's binary, a `veilway-mirror` service that runs as its own user with no capabilities, and a config at `/etc/veilway-mirror/mirror.json` with a new secret. See [the mirror's config](../../reference/config/#veilway-mirror).
 2. In that file, set `upstream` to your panel's endpoint URL and `path` to the path your web server gives the mirror. Check it with `veilway mirror --check --config /etc/veilway-mirror/mirror.json`, then start it with `sudo bash veilway.sh restart mirror`.
@@ -134,11 +138,12 @@ A mirror in the list above is only another address for the same panel. A relay m
 "trusted_mirrors": [{"name": "mirror-1", "secret": "<the secret from mirror.json>"}]
 ```
 
-4. Put your web server in front of the mirror, which listens on `127.0.0.1:8490` and speaks plain HTTP. The mirror takes only a `POST` of at most 1,024 bytes of `application/json` to its path. For anything else it answers with status 599, and the web server must turn that into the answer it gives on any path it does not serve. In nginx:
+4. Put your web server in front of the mirror, which listens on `127.0.0.1:8490` and speaks plain HTTP. The mirror takes only a `POST` of exactly 1,073 bytes of `application/octet-stream` to its path: a request sealed to your panel, which the mirror cannot open. For anything else it answers with status 599, and the web server must turn that into the answer it gives on any path it does not serve. In nginx:
 
 ```
 location = /sub {
     proxy_pass http://127.0.0.1:8490;
+    proxy_http_version 1.1;
     proxy_intercept_errors on;
     error_page 599 = @unknown;
     proxy_set_header X-Forwarded-For $remote_addr;
@@ -148,7 +153,85 @@ location = /sub {
    `@unknown` is a location of yours that answers like the rest of the site, for example `return 404;`.
 5. Add the mirror's public URL under **Mirrors** above, with its pins if its certificate is not from a certificate authority. Apps that import or refresh after this learn it from the signed document.
 
-The mirror tells the panel the real address of each visitor in an `X-Veilway-Mirror` header signed with the shared secret, so the panel's limits per source count the visitor and not the mirror. The panel accepts the header only from a mirror in `trusted_mirrors`, only for 60 seconds, and only once. A request with a header that fails any of that is answered like an unknown path. The mirror writes no token to its log and keeps nothing after a request. If the panel cannot be reached, or does not answer like a panel, the mirror hands the request back like any other it will not take.
+The mirror tells the panel the real address of each visitor in an `X-Veilway-Mirror` header signed with the shared secret, so the panel's limits per source count the visitor and not the mirror. The panel accepts the header only from a mirror in `trusted_mirrors`, only for 60 seconds, and only once. A request with a header that fails any of that is answered like an unknown path. The mirror never sees a token and keeps nothing after a request. It reaches the panel over HTTPS only. To a request with a valid header that it will not serve, the panel answers with status 599. If the panel cannot be reached, or answers with anything but a sealed answer (a `200` with `Content-Type: application/octet-stream` and a body of 9,413, 36,979, 140,867, 538,201 or 1,089,437 bytes), the mirror hands the request back like any other it will not take.
+
+### Static mirrors
+
+A static mirror is a place that only serves files: a storage bucket, the raw file service of a code host, a content delivery network or your own web server. The panel writes one sealed file for each device there. Apps try it last, after the endpoint and every relay mirror have failed, fetch their file with a plain `GET`, and check what is inside as strictly as an answer from the endpoint. The host runs nothing of yours, receives no token and cannot read a file.
+
+1. In **Settings**, under **Static mirrors**, add the base URL where you will serve the folder, then save. It is `https`, has a host name and not an address, ends with `/`, has no pins, and cannot share a host and port with the endpoint or a relay mirror. Examples: `https://raw.githubusercontent.com/<owner>/<repo>/<branch>/<folder>/` for a repository on a code host, `https://s3.<region>.amazonaws.com/<bucket>/<folder>/` for a bucket addressed by path.
+2. Within a few minutes the panel writes the first round, and the section shows one folder for each address, with the number of files, their size and the time of the round. A device is in the folder once it has made one successful request to the endpoint or a relay mirror after you saved, so an app picks the new address up at its next refresh and is helped by the mirror from the round after that.
+3. Copy the folder to the host after every round. The section shows ready commands to paste, with your folder's path in them. The folder `current` is a link that the panel switches in one step when a round is complete, so a copy never takes half of one. Use a tool that also deletes what the folder no longer holds, since old names must go:
+
+```
+# a server of your own
+rsync -rt --delete '/var/lib/veilway-panel/static/<folder>/current/' 'user@host:/var/www/mirror/<folder>/'
+
+# a bucket (rclone sync deletes what the folder no longer holds)
+rclone sync '/var/lib/veilway-panel/static/<folder>/current/' 'remote:<bucket>/<folder>/'
+
+# a repository on a code host
+rsync -rt --delete '/var/lib/veilway-panel/static/<folder>/current/' '<clone>/<folder>/' && git -C '<clone>' add -A && git -C '<clone>' commit -m publish && git -C '<clone>' push
+```
+
+   Run it from a timer a little more often than the panel's **Publish every** setting (1 to 12 hours, 6 by default). **Download as zip** (it asks for your password and code again) gives the current round as a file, for a host you can only upload to by hand.
+4. If you can, set the host to send `Cache-Control: max-age=600` or less. A cache that holds a file longer only makes an app's copy older: its serial check refuses an older document and it goes on to the next place.
+
+**Choosing a host.** What a censor sees of a fetch is the host name in the TLS handshake. A name that only you use, such as your own domain, `name.github.io` or a bucket with its own host name, can be blocked without blocking anyone else. Only a host name that many unrelated sites share, with your folder in the path where TLS hides it, costs the censor something to block. The panel warns about every address whose host is not on its list of shared names (the raw file service of the big code hosts, path-style storage endpoints, `jsdelivr`) with "Only you use this host name. A censor that learns it can block it without blocking anything else." Take the warning seriously, and do not use the same host name as the endpoint.
+
+**What every round does.** It writes a new directory, complete, and then switches `current` to it. It rewrites every file with a fresh salt, whether its document changed or not, so the host sees every file change in every round and learns nothing about which documents changed. A file belongs to one week, and its name changes at the week's end. The files of a week exist from a day before it starts to a day after it ends, so an app whose clock is off by less than a day still finds its file. For the same reason the panel needs a synchronized clock, and a banner on every page says so while the system reports its clock as not synchronized. The folder also holds decoy files of random bytes, 32 to 64 or more for a large folder, which come and go. Every file of a folder, decoys included, has the same size, and the size grows at once when a document needs it and shrinks only after eight rounds in a row in which the smaller size would have held. The panel never shows which files are real.
+
+**What the host learns.** It sees the file names, which change every week and differ on every address, one size for all of them, how many there are, when each round is written, and in its logs the address and time of each fetch. It cannot read a file or tell which account a file belongs to. It may keep every version of every file, as a code host keeps every commit, and anyone can list a public host. A later leak of one device's storage opens that device's old files, which is why the files carry no usage numbers. A file that is missing, old or changed is only a failure of that mirror for the app. It never means the account is off: only a signed refusal says that.
+
+A file exists only for a device that has confirmed. A reset of a link, a removed device or a deleted user takes the files away in the next round, not at once. A user who is switched off or expired gets a signed refusal in the file instead of a document.
+
+### Relays
+
+A relay is a plain forwarder on another address that passes bytes to this node unchanged: nginx `stream`, an iptables DNAT rule, HAProxy, realm or gost, or for `fronted` a content delivery network. TLS, the proofs and WireGuard run from the app to the node, so the relay reads nothing and cannot pass for the node: the app still checks the node's certificate, pins and keys. Use one when users' networks block or slow down the node's own address and a small server on another address gets through. To send users on to a second node instead, with the exit there, see the [entry node guide](../../guides/entry-node/).
+
+Add relays under **Relays** in the settings: a name, the relay's IP address (apps dial addresses, not host names), the transports and inbounds it carries, and a port for each transport where the relay listens on another port than the node. Each enabled relay adds its address to those transports in every profile, after the node's own address, or before it with **Try before this node's address**. Apps start with the first two addresses of a transport and remember the one that works on each network. You can add up to 15 relays, so every transport stays within the 16 addresses a profile may list. The preview under the list shows what each profile will carry. Save, then publish the profiles again on **Profiles**. Apps pick the change up at their next refresh.
+
+What goes through what:
+
+- `udp` and `udp-obfs` need a UDP forward. A content delivery network carries no UDP.
+- `tls` and `ws` go through any TCP forward. A forwarder that ends TLS itself fails, because the app checks the node's certificate.
+- `fronted` goes through a content delivery network: enter the address of its edge. The app keeps the front name it already checks.
+- A relay that carries `udp` or `udp-obfs` and a TLS transport on one address makes apps rate that TLS transport Detectable. Give them two relays to keep the rating.
+
+The node sees every user who comes through a relay at the relay's address, so its limits per source count them together. Raise `replay.per_source` (see [the config reference](../../reference/config/)) for a busy relay.
+
+In the examples, the node is at `192.0.2.10` and the relay listens on the node's own ports. nginx `stream` for `tls` on TCP port 443:
+
+```
+stream {
+    server {
+        listen 443;
+        proxy_pass 192.0.2.10:443;
+    }
+}
+```
+
+nginx `stream` for `udp-obfs` on UDP port 51821. The long timeout keeps a quiet session's mapping:
+
+```
+stream {
+    server {
+        listen 51821 udp;
+        proxy_pass 192.0.2.10:51821;
+        proxy_timeout 10m;
+    }
+}
+```
+
+iptables DNAT, which forwards in the kernel and suits UDP best. Run it as root on the relay, with forwarding on:
+
+```
+sysctl -w net.ipv4.ip_forward=1
+iptables -t nat -A PREROUTING -p udp --dport 51821 -j DNAT --to-destination 192.0.2.10:51821
+iptables -t nat -A POSTROUTING -p udp -d 192.0.2.10 --dport 51821 -j MASQUERADE
+```
+
+Use `-p tcp` in both rules for a TCP transport. Rules made this way are gone after a reboot unless you save them, for example with `iptables-save`.
 
 ### Profiles
 
@@ -224,7 +307,7 @@ The profiles tab has one profile for each Veilway inbound, made from the node's 
 
 ### Node links
 
-A node link joins this node to another node, so users here can leave from there, or users there can leave from here. The two operators pair the nodes in four steps:
+A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/): the **Nodes** page has a guided setup for each side and for a reverse tunnel. The two operators pair the nodes in four steps:
 
 1. One operator chooses **Make an offer**. They pick the inbound the link connects to, the direction, the transports, and the tunnel addresses. They choose how long the offer stays open, then send the offer code to the other operator. The offer holds no secret, but send it over a channel you trust.
 2. The other operator chooses **Paste an offer**, and reads it. The panel shows where their node would connect before anything is answered. They accept, and send back an answer code.

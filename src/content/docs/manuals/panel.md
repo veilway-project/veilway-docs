@@ -247,6 +247,22 @@ iptables -t nat -A POSTROUTING -p udp -d 192.0.2.10 --dport 51821 -j MASQUERADE
 
 Use `-p tcp` in both rules for a TCP transport. Rules made this way are gone after a reboot unless you save them, for example with `iptables-save`.
 
+### Install a relay with the script
+
+On a Debian or Ubuntu server, the installer sets up the forwarding for you. Run it as root on the relay, with the node's IPv4 address and one `--transport` for each transport the relay carries, written as `name:port`:
+
+```
+sudo bash veilway.sh install relay 192.0.2.10 --transport tls:443 --transport udp:51820
+```
+
+The transports are `tls` and `ws` (TCP), and `udp` and `udp-obfs` (UDP). The port is the one the relay listens on, and the node uses the same port. For another node port, add it after a second colon: `--transport tls:443:8443` listens on 443 and forwards to the node's 8443. Without `--transport`, the script asks which transports to use.
+
+The limits apply to each source address: `--rate 50` allows 50 new connections a second, and `--conns 256` allows 256 TCP connections at once. Both are optional.
+
+The script installs nftables, turns on IP forwarding, enables the nftables service, and writes one table of its own, `veilway_relay`, to `/etc/nftables.d/veilway-relay.nft`. It adds one line to `/etc/nftables.conf` so the service loads the table at boot. Other tables are not touched. It refuses a node address that is loopback, multicast or reserved, that is private and has no route on this server, or that is this server's own address. It also refuses a port that something on this server already listens on. At the end it prints a box with what to enter in the panel. Add `--dry-run` to see every step without changing anything.
+
+To remove the relay, run `sudo bash veilway.sh uninstall relay`. It deletes the table and its files, and undoes what the install added: the nftables package if the install installed it, the service if the install enabled it, and IP forwarding back to its old value. Stopping `nftables.service` clears every nftables table, this one included, so stop it only on purpose.
+
 ### Published profiles
 
 **Published profiles** holds what the subscription serves, as a form or as a JSON list of up to 64 objects. **Publish profiles** on the **Profiles** page writes it for you. A profile here cannot name a device, because the panel adds each user's device to it.

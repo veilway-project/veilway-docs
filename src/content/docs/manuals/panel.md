@@ -205,6 +205,8 @@ A relay is a plain forwarder on another address that passes bytes to this node u
 
 Add relays under **Relays** in the settings: a name, the relay's IP address (apps dial addresses, not host names), the transports and inbounds it carries, and a port for each transport where the relay listens on another port than the node. Each enabled relay adds its address to those transports in every profile, after the node's own address, or before it with **Try before this node's address**. Apps start with the first two addresses of a transport and remember the one that works on each network. You can add up to 15 relays, so every transport stays within the 16 addresses a profile may list. The preview under the list shows what each profile will carry. Save, then publish the profiles again on **Profiles**. Apps pick the change up at their next refresh.
 
+**Who gets this relay** on each relay limits it to chosen groups and accounts, so a leaked relay address exposes only the accounts it was for. A relay with neither reaches everyone, as before. An account gets its own relays, those of its groups and those for everyone, and its page lists them. When a transport would list more than 16 addresses, the cap keeps the account's own relays first, then its group's, then everyone's, and the preview names what it leaves out. Deleting an account removes it from every audience.
+
 What goes through what:
 
 - `udp` and `udp-obfs` need a UDP forward. A content delivery network carries no UDP.

@@ -726,9 +726,9 @@ A list of at most 64 tunnels. A tunnel forwards one TCP or UDP port of this node
 | `protocol` | `tcp` or `udp` | required | |
 | `listen` | `ip:port` | required | The address this node listens on. No other tunnel, inbound transport or listener of this node uses the same address, port and protocol. |
 | `exit` | exit tag | required | A `chain` exit. |
-| `target` | `ip:port` | required | The address the far node is asked to reach. Not a link address, not inside an inbound pool of this node, and nothing the destination gate refuses. A private address works only when the far node set `allow_private` for the link. |
-| `sources` | list of 1 to 64 networks | anyone | The networks that may connect. Without it, a tunnel that listens on an address that is not loopback is a warning. |
-| `max_connections` | integer 1 to 4096 | `256` | TCP connections or UDP sessions at once. One client address holds at most 16. |
+| `target` | `ip:port` | required | The address the far node is asked to reach. Not a link address, not a listen address of this node, not inside an inbound pool of this node, and nothing the destination gate refuses. A private address works only when the far node set `allow_private` for the link. |
+| `sources` | list of 1 to 64 networks | anyone | The networks that may connect. Required for a UDP tunnel that listens on an address that is not loopback. Without it, such a TCP tunnel is a warning. |
+| `max_connections` | integer 1 to 4096 | `256` | TCP connections or UDP sessions at once. One source (an IPv4 address or an IPv6 /64) holds at most 16. All tunnels together come to at most 16,384. |
 
 Engine. A tunnel's connections leave from the entry's link address with ports from the entry's translation, as users' flows do, and are decided by the far node's rules for the link. While the `chain` exit is down, connections are refused. `/v1/stats` counts each tunnel under `tunnels`.
 

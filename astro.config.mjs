@@ -39,6 +39,7 @@ export default defineConfig({
 						{ label: "Control channel", translations: { fa: "کانال کنترل" }, slug: "protocol/control-channel" },
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
 						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },
+						{ label: "Offline bundle", translations: { fa: "بسته آفلاین" }, slug: "protocol/offline-bundle" },
 					],
 				},
 				{ label: "Config reference", translations: { fa: "مرجع پیکربندی" }, slug: "reference/config" },

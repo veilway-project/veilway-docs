@@ -30,6 +30,9 @@ export default defineConfig({
 					items: [
 						{ label: "Overview", translations: { fa: "نمای کلی" }, slug: "protocol/overview" },
 						{ label: "Transports", translations: { fa: "ترنسپورت‌ها" }, slug: "protocol/transports" },
+						{ label: "HTTP/2", translations: { fa: "HTTP/2" }, slug: "protocol/http2" },
+						{ label: "Shapes of fronted", translations: { fa: "شکل‌های fronted" }, slug: "protocol/fronted-shapes" },
+						{ label: "Borrowed site (alpha)", translations: { fa: "سایت قرضی (آلفا)" }, slug: "protocol/borrowed-site" },
 						{ label: "Control channel", translations: { fa: "کانال کنترل" }, slug: "protocol/control-channel" },
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
 						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },

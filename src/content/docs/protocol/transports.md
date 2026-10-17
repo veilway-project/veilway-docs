@@ -4,7 +4,7 @@ description: How tunnel datagrams are framed and carried over each transport, an
 ---
 
 :::caution[Experimental, not reviewed from outside]
-This page describes the wire formats as the code implements them. Both sides are built for `udp`, `udp-obfs`, `tls`, `ws` and `fronted`: the node's listeners, the client library that opens a session, and the client engine on top of it. They are tested against a real node and, for `ws` and `fronted`, behind nginx and HAProxy in Docker. None of them has been run behind a real CDN, and nobody outside the project has reviewed the design. Every transport is rated Detectable. Not built: `ws-plain` and its appearance layer, `faketls`, `quic`, Encrypted Client Hello and built-in certificate issuance. Those sections say so. See [The alpha release](../../alpha/) for where each part stands.
+This page describes the wire formats as the code implements them. Both sides are built for `udp`, `udp-obfs`, `tls`, `ws` and `fronted`: the node's listeners, the client library that opens a session, and the client engine on top of it. They are tested against a real node and, for `ws` and `fronted`, behind nginx and HAProxy in Docker. None of them has been run behind a real CDN, and nobody outside the project has reviewed the design. Every transport is rated Detectable. Not built: `ws-plain` and its appearance layer, `faketls`, `quic`, Encrypted Client Hello and built-in certificate issuance. Those sections say so. Designed on pages of their own and not built: HTTP/2 on the stream transports ([HTTP/2](../http2/)), other shapes of `fronted`, called `fronted-shaped` ([Shapes of fronted](../fronted-shapes/)), and `faketls` ([Borrowed-site mode](../borrowed-site/)). When `faketls` is built it ships as alpha: off by default, without outside review. See [The alpha release](../../alpha/) for where each part stands.
 :::
 
 A transport carries WireGuard datagrams between a client and a node. The tunnel inside is WireGuard, unchanged. Read [Protocol overview](../overview/) first for the terms, the keys and the fail-closed rules. Statements about how browsers, web servers and libraries behave are not made on this page. They are listed under "Still to measure" on the overview.
@@ -15,11 +15,12 @@ A transport carries WireGuard datagrams between a client and a node. The tunnel 
 |---|---|---|---|---|---|---|
 | `udp` | Plain | UDP | None of its own. WireGuard's handshake. | No TLS | Silence | Built |
 | `udp-obfs` | No cover | UDP | Masked epoch tag and sealed opening packet, keyed by the device transport secret | No TLS | Silence | Built, node and client |
-| `tls` | Cover | WebSocket inside TLS 1.3, with the operator's own name and certificate | Stream proof in the request target | The node | The decoy origin's answer, behind the node's own TLS | Built, node and client |
-| `ws` | Cover | WebSocket behind the operator's web server or a CDN | Stream proof in the request target | The web server or the CDN, never the node | The decoy origin's answer | Built, node and client. On a plain `wireguard` inbound `ws` is the legacy format, which this page does not describe. |
+| `tls` | Cover | WebSocket inside TLS 1.3, with the operator's own name and certificate | Stream proof in the request target | The node | The decoy origin's answer, behind the node's own TLS | Built, node and client. HTTP/1.1 only. HTTP/2 is [designed, not built](../http2/). |
+| `ws` | Cover | WebSocket behind the operator's web server or a CDN | Stream proof in the request target | The web server or the CDN, never the node | The decoy origin's answer | Built, node and client. On a plain `wireguard` inbound `ws` is the legacy format, which this page does not describe. HTTP/2 to the client is the front's, and a client side for it is [designed, not built](../http2/). |
 | `ws-plain` | Exposed | Plain HTTP WebSocket to the front, no TLS | Stream proof in a cookie | The front terminates nothing; plain HTTP reaches the operator's web server | The decoy origin's answer | Not built. Designed here as the weakest option. |
-| `fronted` | Cover | HTTP request and response polling through a CDN | Stream proof in the request target | The CDN | The decoy origin's answer | Built, node and client. HTTP/1.1 only. |
-| `faketls` | | | | | | Not built. Goals and open questions only. |
+| `fronted` | Cover | HTTP request and response polling through a CDN | Stream proof in the request target | The CDN | The decoy origin's answer | Built, node and client. HTTP/1.1 only. HTTP/2 is [designed, not built](../http2/). |
+| `fronted-shaped` | Cover | `fronted` with a method, a place for the data and a downstream form chosen by the operator, polled or one Server-Sent Events stream | Stream proof in the request target | The CDN | The decoy origin's answer | Designed, not built. See [Shapes of fronted](../fronted-shapes/). |
+| `faketls` | Cover | TLS 1.3 to the node, which holds no certificate of its own and borrows a real site | Proof inside the ClientHello | The node, with a throwaway certificate for a user. A stranger meets the real site. | The real site's own answers, relayed | Designed, not built. Ships as alpha when built. See [Borrowed-site mode](../borrowed-site/). |
 | `quic` | | | | | | Not built. Goals and open questions only. |
 
 **Classes.** A transport of the cover class imitates a protocol that an observer already knows (TLS to a web server). A transport of the no-cover class hides WireGuard's bytes and imitates nothing. A plain transport hides nothing. Legacy `ws` is plain. The class is fixed by this table and is what transport fallback and consent are based on. It is not a rating and not a promise. `ws-plain` is a class of its own, named exposed: it hides WireGuard's bytes but shows the server name and the shape of a tunnel in clear. The full order, from strongest to weakest, is cover, no cover, exposed, plain. Its own consent is separate, and agreeing to the no-cover class (`udp-obfs`) is not agreeing to it.
@@ -28,7 +29,7 @@ A transport carries WireGuard datagrams between a client and a node. The tunnel 
 
 ## Numbers that are judgement calls
 
-Every number on this page that was chosen, not derived, is in these tables. None has a measurement behind it. Sizes that follow from a format (a 16 byte tag, a 148 byte handshake message) are not listed.
+Every number on this page that was chosen, not derived, is in these tables. None has a measurement behind it. Sizes that follow from a format (a 16 byte tag, a 148 byte handshake message) are not listed. The numbers of the designs that are not built are in the tables of their pages: [HTTP/2](../http2/), [Shapes of fronted](../fronted-shapes/) and [Borrowed-site mode](../borrowed-site/). They add to these tables.
 
 Wire and client numbers, the same on every installation unless a row says the profile may set it. Every range written "a to b" is inclusive at both ends, and a time drawn from a range is drawn in whole milliseconds.
 
@@ -68,7 +69,7 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | Client rekey point | uniform 60 to 110 s after the last handshake | client, every obfuscated transport |
 | Stream send queue | 256 datagrams per connection | stream transports |
 | Parallel connections | 1 by default, at most 4 | `tls`, `ws` |
-| Request line | at most 4,096 bytes, at most 10 s | stream listeners |
+| Request line | at most 4,096 bytes, at most 10 s. On a `fronted-shaped` transport whose `up.limit` is above 4,000, at most 8,192 bytes. | stream listeners |
 | Request head of a user | at most 16,384 bytes, at most 10 s | stream listeners |
 | TLS handshake deadline | 10 s from accept | `tls` |
 | Decoy connect timeout | 5 s | stream listeners |
@@ -85,7 +86,7 @@ Wire and client numbers, the same on every installation unless a row says the pr
 | `fronted` body | at most 65,536 bytes in each direction | `fronted` |
 | `fronted` hold | 250 ms | `fronted` node |
 | `fronted` poll wait | 100 ms, multiplied by 1.5 per empty response up to 5 s, each wait multiplied by a number drawn uniformly from 0.75 to 1.25 | `fronted` client |
-| Request path | at least 12 characters | stream listeners |
+| Request path | at least 12 characters. A `fronted-shaped` transport with `up.in` `path` matches it as a prefix. | stream listeners |
 | Candidates per transport | at most 16 | fronting options |
 | Candidate attempts | 2 in flight, 250 ms apart, 10 s each, 6 distinct per hour per network, an unreachable one set aside for 1 hour, the last working one remembered for 7 days | fronting options |
 | Refusal wait | uniform 60 to 120 s, doubled after every refusal up to 3600 s, back to the start after a session opens. A candidate is tried at most 3 times in a row, the first attempt included, before the client moves on. | client |
@@ -109,7 +110,7 @@ Node capacity numbers. These are not wire parameters. Each is a proposed config 
 | Sessions | 16,384 | per listen address |
 | Undecided connections | 512, and 64 per source | per listen address |
 | Relayed connections | 1,024, and at most 65,536 when set in the config (`limits.relayed`) | per listen address |
-| Proxy connections | twice the `fronted` sessions, 2,048 | per listen address |
+| Proxy connections | twice the `fronted` sessions, 2,048. Three times the shaped `sse` sessions on a `fronted-shaped` listener (see [Shapes of fronted](../fronted-shapes/)). | per listen address |
 | `fronted` sessions | 1,024. Each keeps up to 65,536 bytes of its last response, 64 MiB when the pool is full. Validation warns above 4,096. | per listen address |
 | Replay cache | 262,144 entries | per node |
 | Accepted proofs per source | burst 256, then 32 a second | per node |
@@ -221,17 +222,19 @@ This section is the one definition of when a session is alive. Every other secti
 
 **What the node's WireGuard does.** The node's transport sends nothing on a schedule of its own. WireGuard on the node is unchanged, and that includes the keepalive WireGuard itself sends when it has received data and has had nothing to send for some seconds. An upload with nothing coming back therefore still gets that keepalive, and the client's WireGuard does not conclude that the node is gone. That the library behaves this way is on the list to measure.
 
-| | `udp-obfs` | `tls`, `ws` | `fronted` |
-|---|---|---|---|
-| Established by | A WireGuard packet of the device authenticates | Same | Same |
-| First tunnel packet deadline | 10 s | 10 s | 10 s |
-| Activity | A chunk with a WireGuard packet that authenticates | Any chunk that opens at the expected number | An accepted request |
-| The node ends a session with no activity for | 180 s | 300 s | 60 s |
-| Client idle keepalive, after a send silence of | 20 to 40 s, or the profile's range within 10 to 60 s | Same | None |
-| Node's echo | A padding-only chunk after 0 to 3000 ms | Same | None. The response to a request. |
-| The client treats the session as lost when | An idle keepalive got no chunk back within 10 s, or WireGuard reports the node silent | An idle keepalive got no chunk back within 10 s, or the connection closes, or 10 s pass without a chunk after a handshake that WireGuard started because the node stopped answering | A request got no valid response within 10 s |
-| Lone keepalive delay | 0 to 3000 ms | Same | Same |
-| Client rekey point | 60 to 110 s after the last handshake | Same | Same |
+| | `udp-obfs` | `tls`, `ws` | `fronted` | `faketls` (designed, not built) |
+|---|---|---|---|---|
+| Established by | A WireGuard packet of the device authenticates | Same | Same | As `tls` |
+| First tunnel packet deadline | 10 s | 10 s | 10 s | As `tls` |
+| Activity | A chunk with a WireGuard packet that authenticates | Any chunk that opens at the expected number | An accepted request | As `tls` |
+| The node ends a session with no activity for | 180 s | 300 s | 60 s | As `tls` |
+| Client idle keepalive, after a send silence of | 20 to 40 s, or the profile's range within 10 to 60 s | Same | None | As `tls` |
+| Node's echo | A padding-only chunk after 0 to 3000 ms | Same | None. The response to a request. | As `tls` |
+| The client treats the session as lost when | An idle keepalive got no chunk back within 10 s, or WireGuard reports the node silent | An idle keepalive got no chunk back within 10 s, or the connection closes, or 10 s pass without a chunk after a handshake that WireGuard started because the node stopped answering | A request got no valid response within 10 s | As `tls` |
+| Lone keepalive delay | 0 to 3000 ms | Same | Same | As `tls` |
+| Client rekey point | 60 to 110 s after the last handshake | Same | Same | As `tls` |
+
+A shaped `sse` session of `fronted-shaped` (designed, not built) has a live stream, which is not itself activity: its keepalive request is, and the idle time stays at 60 s (see [Shapes of fronted](../fronted-shapes/)).
 
 The longest keepalive range a profile may set, 60 s, is well below the shortest idle time of a transport that uses keepalives, 180 s. The longest poll wait on `fronted`, 6.25 s, is well below its idle time of 60 s and below the client's 10 s limit.
 
@@ -262,7 +265,7 @@ A stream transport does not fragment, so it has no such limit. What matters ther
 | Client to node | 32 WireGuard + 2 length + 16 chunk tag + 8 WebSocket header + 22 TLS record = 80 |
 | Node to client | 32 + 2 + 16 + 4 WebSocket header + 22 = 76 |
 
-A TCP segment with timestamps carries 1448 bytes over IPv4 and 1428 over IPv6. A full-size inner packet therefore fits one segment only when `mtu` is at most 1448 - 80 = 1368 over IPv4 or 1428 - 80 = 1348 over IPv6, before any padding. Above that, each full-size packet spans two segments. That costs throughput and is one reason record lengths on these transports do not look like a browser's.
+A TCP segment with timestamps carries 1448 bytes over IPv4 and 1428 over IPv6. A full-size inner packet therefore fits one segment only when `mtu` is at most 1448 - 80 = 1368 over IPv4 or 1428 - 80 = 1348 over IPv6, before any padding. On `faketls` (designed, not built) the envelope is 32 + 2 + 2 + 22 = 58 bytes in each direction, so the figures are 1390 over IPv4 and 1370 over IPv6. HTTP/2 would add a 9 byte frame header: 89 bytes to the node and 85 to the client, and 1359 and 1339 (see [HTTP/2](../http2/)). Above that, each full-size packet spans two segments. That costs throughput and is one reason record lengths on these transports do not look like a browser's.
 
 Rules:
 
@@ -289,7 +292,7 @@ Several long-lived connections from one client to one host are themselves a patt
 
 ## The stream proof
 
-Used by `tls`, `ws` and `fronted`. It is one HPKE message in base mode (RFC 9180) from the client to the node transport public key. HPKE is used as specified, through a library, with the suite in "Building blocks". Nothing in HPKE is changed.
+Used by `tls`, `ws` and `fronted`, and by `fronted-shaped` when it is built. It is one HPKE message in base mode (RFC 9180) from the client to the node transport public key. HPKE is used as specified, through a library, with the suite in "Building blocks". Nothing in HPKE is changed.
 
 HPKE base mode hides the message from everyone but the node. It does not show who sent it. The sender is shown by the binder inside the message.
 
@@ -298,7 +301,7 @@ HPKE base mode hides the message from everyone but the node. It does not show wh
 | HPKE input | Value |
 |---|---|
 | Recipient public key | The node transport public key from the profile |
-| `info` | `"veilway v1 proof" \|\| name \|\| inbound_pub`, where `name` is the label `"tls"`, `"ws"`, `"fronted"` or `"ws-plain"` |
+| `info` | `"veilway v1 proof" \|\| name \|\| inbound_pub`, where `name` is the label `"tls"`, `"ws"`, `"fronted"`, `"fronted-shaped"` (designed, not built) or `"ws-plain"` |
 | `aad` | Empty. The request path is not bound, because a front may rewrite it. |
 | Plaintext | The hello below |
 
@@ -359,7 +362,7 @@ A request that fails any step takes the unauthenticated path, and the node never
 One replay memory serves every obfuscated transport of a node. It belongs to the process, so a config reload does not empty it. It has three parts: a cache of accepted proofs, a floor, and a limit.
 
 1. **Window.** A proof is accepted only if its timestamp is within `W` of the node's wall clock.
-2. **Cache.** Each accepted proof is kept with its kind, its key and its timestamp. The kind is 1 for a stream proof, whose key is `enc`, and 2 for a `udp-obfs` opening packet, whose key is `salt`. The kind is part of the cache key, so the two kinds never meet. A proof whose key of its kind is in the cache is refused.
+2. **Cache.** Each accepted proof is kept with its kind, its key and its timestamp. The kind is 1 for a stream proof, whose key is `enc`, and 2 for a `udp-obfs` opening packet, whose key is `salt`. A `faketls` hello (designed, not built) is recorded under kind 1 too, with the X25519 key share of the hello as the key: both are 32 random bytes drawn fresh for each proof, so they do not meet. See [Borrowed-site mode](../borrowed-site/). The kind is part of the cache key, so the two kinds never meet. A proof whose key of its kind is in the cache is refused.
 3. **Floor.** A proof whose timestamp is at or below the floor is refused. An entry leaves the cache no earlier than when its timestamp is more than `W` behind the wall clock. It may stay somewhat longer, because an implementation may remove a bounded number of entries at a time. When it leaves, the floor rises to its timestamp if it was lower. So an entry is forgotten only once the floor refuses it for good, whatever the wall clock does afterwards. An entry that could have left and has not yet refuses only its own key, and every timestamp at or below it is outside the window anyway, so staying longer changes no verdict.
 4. **The floor follows accepted proofs, not the clock.** While the node runs, the floor only ever rises to a timestamp the node itself accepted. A wall clock that jumps forward and is corrected back therefore moves the floor only as far as proofs were accepted during the jump. That can be all the way: see "When the floor is ahead of the clock".
 5. **Limit.** A proof whose timestamp is above the limit is not accepted. The node judges proofs by the lowest limit that may be on its disk:
@@ -603,7 +606,7 @@ One case gives a reply to someone without a secret: an interferer on the path th
 
 The decoy origin is a web server that answers everyone who is not a user. There is no default: a stream listener without `decoy.origin` is a validation error, and no decoy address or name ships with the software.
 
-- **It is the operator's own.** A web server on the same host, or one the operator controls, serving real content under the operator's own name. Version 1 has no option for a decoy on someone else's site. Relaying strangers to a site whose owner has not agreed is what `faketls` would do, and `faketls` is not built.
+- **It is the operator's own.** A web server on the same host, or one the operator controls, serving real content under the operator's own name. Version 1 has no option for a decoy on someone else's site. Relaying strangers to a site whose owner has not agreed is what `faketls` does, and `faketls` is designed and not built. See [Borrowed-site mode](../borrowed-site/).
 - Validation warns when `decoy.origin` is not a loopback or private address, with the reminder that it must be the operator's own server.
 - Validation refuses an origin whose address and port equal a listen address of the node, since requests would loop. The origin must also not send the transport path back to the node by a rule of its own. With a web server in front of the node, the origin is a second listener of that web server that serves the same site without the rule that forwards the path. `veilway doctor` checks this by a request. A listener on a wildcard address refuses a loopback or wildcard origin on its own port. It does not refuse an origin on another host with that port.
 - The origin must not serve anything at a transport path, so that a request for the path without a valid proof gets the origin's own not-found answer.
@@ -641,7 +644,7 @@ Rules:
 - **Strangers on the proxy path.** A proxy connection also carries strangers' requests, and each one that waits for the decoy holds a connection. Such waiting requests hold at most half the proxy pool together, and 16 for one source. Over either, the connection with the oldest such request is closed at once, in the middle of an answer if need be, and the front turns that into its own error. A user's request is never the one that is cut. A `fronted` request counts among its source's 16 while its body is read. While the origin is down, the front sees a connection closed with no answer.
 - The default size of the proxy pool is twice the cap on `fronted` sessions, 2,048, because a front may open one connection per request in flight.
 - The undecided pool is shared by nature: until a connection has sent its request line, the node cannot tell a user from a stranger. Under heavy churn a user's connection can be decided as "not a user" before its request arrives. The client then sees a refusal and waits. This is a limit of the design, not a guarantee that was kept.
-- There is no limit per source on relayed connections of direct peers and no limit on their size or lifetime. The origin is the operator's own, and its limits decide, as they do for its direct visitors. Closing an idle connection for room is what web servers do.
+- Relayed connections of direct peers have no limit on size or lifetime. The origin is the operator's own, and its limits decide, as they do for its direct visitors. Closing an idle connection for room is what web servers do. A source is limited in how many it holds: a relayed HTTP/1.1 connection counts once. A relayed HTTP/2 connection (see [HTTP/2 on the stream transports](../http2/), designed and not built) counts in the pool once for each upstream connection it holds open to the origin, and once when it holds none, so that many streams on few connections cannot keep the count low. One direct source may hold at most 4 relayed HTTP/2 connections and 16 upstream connections over them. Over either limit, that source's relayed connection that has been idle longest is closed, both sides, in the middle of an answer if need be. Nothing this limit does displaces a session.
 - The node never closes a connection at accept because of a count. If it cannot take more connections, it stops accepting and leaves new ones in the system's queue, as a busy server does.
 
 ### Accept state machine
@@ -664,7 +667,7 @@ Rules:
 
 1. Whether a connection may carry a user is decided by the socket's peer address alone, checked against `trusted_proxies` at every request, so that a reload which removes an address takes effect on connections that are already open. A peer outside the list on such a listener is a stranger, whatever it sends.
 2. `trusted_proxies` is required on a `ws` or `fronted` listener. It holds 1 to 64 entries and may not cover a whole address family between them. An entry that is not loopback or private is a warning.
-3. The web server in front must speak HTTP/1.1 to the node and must append the address it took the request from at the right end of `client_address_header`. A request line that says HTTP/1.0 is never a user's. The node counts such requests from trusted proxies and `veilway doctor` reports them, because a common web server speaks HTTP/1.0 to what is behind it unless it is told otherwise.
+3. The web server in front must speak HTTP/1.1 to the node, whatever it speaks to the client, and must append the address it took the request from at the right end of `client_address_header`. HTTP/2 is the front's for `ws` and `fronted`: the node offers none on these listeners (see [HTTP/2](../http2/)). A request line that says HTTP/1.0 is never a user's. The node counts such requests from trusted proxies and `veilway doctor` reports them, because a common web server speaks HTTP/1.0 to what is behind it unless it is told otherwise.
 
 *Reading a request.*
 
@@ -675,7 +678,7 @@ Rules:
 
 *Forwarding a stranger's request.*
 
-8. **The node writes no byte of its own and changes none.** The head goes to the origin exactly as it was read, hop-by-hop fields included, then the body as far as its framing says. The answer comes back as the origin sent it, up to the last byte of that answer and no further. No HTTP implementation sits in between. A request head and the part of its body that arrived with it are written to the origin in one write, because a real origin was seen to answer differently when they were split.
+8. **The node writes no byte of its own and changes none.** The head goes to the origin exactly as it was read, hop-by-hop fields included, then the body as far as its framing says. The answer comes back as the origin sent it, up to the last byte of that answer and no further. No HTTP implementation sits in between. This is the rule for HTTP/1.1, and it is the one rule that [HTTP/2](../http2/) would end, on a `tls` listener with `http2` set to `on` only (designed, not built). A request head and the part of its body that arrived with it are written to the origin in one write, because a real origin was seen to answer differently when they were split.
 9. **The node reads framing more strictly than a web server does.** A request it can frame has exactly `METHOD SP target SP HTTP/1.1`, and either one `Content-Length` of digits only, at most 2^63 - 1, or exactly `Transfer-Encoding: chunked`, with CRLF line ends only, no folded lines and no chunk extensions. Anything else (both framings, several lengths, another coding, HTTP/1.0, `CONNECT` and so on) is a request whose end it cannot tell. Such a request is relayed as bytes until the origin's first answer ends, and then both connections are closed. The node never reads a next request after a boundary it could not be sure of.
 10. **The origin connection** is opened at the first request on this proxy connection that is not a user's, and kept for that proxy connection. It is not watched before a request as the direct path's is, because here the front owns the timers that a visitor sees.
 11. **What the origin does when no request is in its hands is not passed on.** If the origin sends anything, or closes, while the node has no request with it, the node drops that origin connection and keeps the proxy's. That includes a close that follows a complete answer to a complete request.
@@ -717,7 +720,7 @@ The whole spread of the first four rows is under 1 microsecond. The judgment for
 
 ### WebSocket session
 
-Used by `tls` and `ws`. The open request is a WebSocket upgrade (RFC 6455) over HTTP/1.1 whose request target is `<path>?<token>`. The node requires `Upgrade: websocket`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key`, and ignores every other header field, including `Origin`.
+Used by `tls` and `ws`. The open request is a WebSocket upgrade (RFC 6455) over HTTP/1.1 whose request target is `<path>?<token>`. Over HTTP/2 the open request would be an extended CONNECT (RFC 8441) and the answer a `200` on the stream, with the fields below in lowercase and no `Sec-WebSocket-Key` or `Sec-WebSocket-Accept`. That is designed, not built: see [HTTP/2](../http2/). The node requires `Upgrade: websocket`, `Sec-WebSocket-Version: 13` and a `Sec-WebSocket-Key`, and ignores every other header field, including `Origin`.
 
 The node's answer must not be the same bytes on every node in the world. It is these lines, in this order:
 
@@ -779,7 +782,7 @@ The node ends TLS itself, with a certificate for a name the operator owns.
 
 The result is on the server TLS comparison test with the rest of the node's handshake. The panel warns the operator that a self-signed certificate on a public address is easier for a censor to notice. Built-in issuance from an authority is not built and not specified, because a challenge answered on the listener's own port is something a prober can ask for, and it must be specified before it is built. See "Open questions".
 
-**What the node offers.** TLS 1.2 and TLS 1.3, and the protocol `http/1.1` only. A proof that arrives under TLS 1.2 is verified with the same work as any other and is not a user's: a session needs TLS 1.3.
+**What the node offers.** TLS 1.2 and TLS 1.3, and the protocol `http/1.1` only. A node with `http2` set to `on` would offer `h2` too. That setting is off by default and not built (see [HTTP/2](../http2/)). A proof that arrives under TLS 1.2 is verified with the same work as any other and is not a user's: a session needs TLS 1.3.
 
 **What the node's TLS answers, and why `tls` is capped.** When the node ends TLS, a prober's handshake meets the node's TLS library, not the decoy origin's. The decoy mechanism makes the HTTP answer the origin's. It does not make the TLS handshake the origin's, and the HTTP header fields then name a server that the handshake does not match. A prober needs no subscription to see that. The rule that no byte reaches a stranger that the decoy would not send does not hold for the TLS handshake of this transport. For that reason `tls` is rated Detectable in version 1, whatever its tests show, and an operator who wants a handshake that matches the site uses `ws` behind the web server that serves the site.
 
@@ -931,7 +934,7 @@ What an observer still sees, whatever the container: the sizes, the timing and t
 - An idle tunnel emits a small record and gets a small one back at an interval inside the idle keepalive range.
 - Without load each chunk holds one inner packet, so record lengths under a steady transfer sit in a narrow band just above the inner MTU. A browser download fills large records.
 - TLS handshakes of applications inside the tunnel, as a sequence of sizes and directions (Xue et al., USENIX Security 2024). Nothing here defends against it.
-- The extra time of the hop from node to decoy origin on every unauthenticated answer. On `tls`, two more differences from a typical web server: a client that offers only `h2` gets a fatal alert, and plain HTTP sent to the port gets the TLS library's alert where many web servers send a 400 page. One difference in the relay was found and left: an origin that answers early to a large upload and then keeps reading the rest before it closes takes the whole upload when it is reached directly. Through the node, the upload ends in a reset once the origin has closed its side. It was left because the alternative is worse: keeping the peer's connection open after the origin's close would make a request sent after that close hang, where the origin itself answers with a reset, and that is the easier thing to probe.
+- The extra time of the hop from node to decoy origin on every unauthenticated answer. On `tls`, two more differences from a typical web server: a client that offers only `h2` gets a fatal alert (with `http2` off, which is the only state that is built), and plain HTTP sent to the port gets the TLS library's alert where many web servers send a 400 page. One difference in the relay was found and left: an origin that answers early to a large upload and then keeps reading the rest before it closes takes the whole upload when it is reached directly. Through the node, the upload ends in a reset once the origin has closed its side. It was left because the alternative is worse: keeping the peer's connection open after the origin's close would make a request sent after that close hang, where the origin itself answers with a reset, and that is the easier thing to probe.
 - A WebSocket connection with no page load from the same host before it, and a connection with no DNS lookup before it when the profile carries addresses.
 - Several parallel connections, when a profile allows them.
 - On the proxy path, three differences from the origin remain. After a request the node cannot frame, it closes the proxy connection once the origin's answer has ended, where the origin would keep it. That shows only through a front that maps a client's connection to one of its own. A head that is silent or unfinished never leaves a front that buffers heads, so it shows nothing of the node. A front that streams heads would show the node's 10 s limit for a head and its 300 s idle limit. And the origin gives up a quiet connection after its own timeout while the node keeps its proxy's.
@@ -940,6 +943,8 @@ What an observer still sees, whatever the container: the sizes, the timing and t
 ## `fronted`
 
 `fronted` is for a CDN that allows neither WebSocket nor long-lived streams. The client polls with HTTP requests: upstream data rides in request bodies and downstream data in response bodies. It is slow, and it is the transport of last resort.
+
+This section is the classic form. Other shapes of it (another method, the data in the query, the path or a header, one Server-Sent Events stream down) are designed in [Shapes of fronted](../fronted-shapes/) as the type `fronted-shaped`, and are not built. HTTP/2 for `fronted` is designed in [HTTP/2](../http2/) and is not built.
 
 It works only where the CDN is reachable and permits the configuration in the profile, on the day it was tested. A decision by the CDN ends it without any change in Veilway.
 
@@ -979,7 +984,7 @@ The client:
 
 1. Keeps one request in flight per session at a time.
 2. Sends at once when it has data and no request is in flight. When idle it polls with the waits in the table of numbers. The poll wait returns to its start after a response, or a request, that carried a datagram.
-3. Drops the session and opens a new one after the reconnect wait when a request gets no response within 10 s, or anything but a 200 with a body it can open. If that happens to the opening request, it is a refusal, handled as "Refusals and clocks" says. Before that, a request whose connection failed is sent again as the identical bytes on a new connection, up to 3 times inside 10 s. The client gives a connection up when its answer says `Connection: close`, or when the front wrote on it between two requests. An answer with `Transfer-Encoding` is refused, so a front must not re-chunk the node's responses.
+3. Drops the session and opens a new one after the reconnect wait when a request gets no response within 10 s, or anything but a 200 with a body it can open. If that happens to the opening request, it is a refusal, handled as "Refusals and clocks" says. Before that, a request whose connection failed is sent again as the identical bytes on a new connection, up to 3 times inside 10 s. The client gives a connection up when its answer says `Connection: close`, or when the front wrote on it between two requests. An answer with `Transfer-Encoding` is refused, so a front must not re-chunk the node's responses. The one exception is the stream answer of a `fronted-shaped` transport with `down.mode` `sse`, read only when the request asked for a stream (see [Shapes of fronted](../fronted-shapes/)). On HTTP/2 a `transfer-encoding` field is malformed and is refused (see [HTTP/2](../http2/)).
 4. Opens a new session before `n` would pass its limit.
 
 A session with no accepted request for its idle time is forgotten. There is no idle keepalive and no echo on `fronted`: an accepted request is the activity and its response is the sign of life (see "Session activity and timers").
@@ -1030,6 +1035,8 @@ The other cases, and what they cost:
 - **Different `sni` and `host`** (classic domain fronting). It works only on a CDN that permits the mismatch. Several large ones have switched it off, and that changes over time. It shows the path a name that belongs to someone else. Most CDN terms forbid it, and if it is noticed, the name's owner may be the one who is blocked. No client or panel creates such a candidate by itself. An operator who enters one is responsible for having the right to.
 - **Encrypted Client Hello.** It hides the name without borrowing anyone's. Some networks block it as a class, so a candidate that uses it can itself be the reason a connection is blocked.
 - **No server name.** Rare enough to be blocked as a class.
+
+`faketls` (designed, not built) takes none of these. It has no CDN and no front: its candidate has the node's address, the site's name as the server name, and the node's transport key, and no `host`, `path`, `ech`, pin or `self_signed`. A candidate that sets one is refused.
 
 This page names no CDN and ships no candidate list. A statement about what a particular CDN permits must carry a date and a capture, and belongs in release notes.
 
@@ -1088,45 +1095,23 @@ The first message of a TLS connection, the ClientHello, differs between programs
 | Which browser a build claims | Chrome 155, in its release for the platform the build runs on. A build never claims another platform's browser. |
 | Where the values come from | They are fixed in the client release, measured from a capture of that Chrome. They are never taken from a subscription, a profile or the control channel. |
 | What is matched | The cipher suites in Chrome's order, GREASE in the places Chrome puts it (the signature algorithms too), extensions in a random order as Chrome does, X25519MLKEM768 first among the groups with its key share, the signature algorithms in Chrome's order, the trust anchors extension, Brotli certificate compression and ECH GREASE |
-| HTTP version | The upgrade and the `fronted` requests are HTTP/1.1. The only protocol offered in ALPN is `http/1.1`. |
+| HTTP version | The upgrade and the `fronted` requests are HTTP/1.1. The only protocol offered in ALPN is `http/1.1`. Chrome's `h2` is designed in [HTTP/2](../http2/) and not built. |
 | Session resumption | None. No TLS session is resumed. |
 | Certificate checks | Not BoringSSL's. Its own chain check is off, and the client checks the chain, the name, the dates and the pins with rustls on what BoringSSL brought back, before a byte of application data is sent or read. See `tls`. |
 
-What this does not achieve: the hello is correct for one browser release and becomes a rare one when that release ages. A new Chrome that changes it is a change in the client. The hello is not an exact copy of Chrome's in two ways. A first visit sends one extension fewer than the capture (the pre-shared key of a resumed session), and a `fronted` session is an HTTP/1.1 client where Chrome's `fetch` would offer `h2` first and one more extension (ALPS). Encrypted Client Hello is not built: a candidate with `ech` is refused before anything is dialed. The fetch of a pinned subscription page sends a TLS hello that no browser sends. Every native profile is rated Detectable.
+What this does not achieve: the hello is correct for one browser release and becomes a rare one when that release ages. A new Chrome that changes it is a change in the client. The hello is not an exact copy of Chrome's in two ways. A first visit sends one extension fewer than the capture (the pre-shared key of a resumed session), and a `fronted` session is an HTTP/1.1 client where Chrome's `fetch` would offer `h2` first and one more extension (ALPS). [HTTP/2](../http2/) designs the change, and it is not built. A `faketls` hello (designed, not built) differs in the other direction: it offers `h2` and `http/1.1` and ALPS, and has no pre-shared key (see [Borrowed-site mode](../borrowed-site/)). Encrypted Client Hello is not built: a candidate with `ech` is refused before anything is dialed. The fetch of a pinned subscription page sends a TLS hello that no browser sends. Every native profile is rated Detectable.
 
-**The header fields.** The header fields of the WebSocket upgrade and of a `fronted` request are Chrome 155's, for the platform the build runs on: User-Agent, the client hints, `Origin`, the `Sec-Fetch-*` fields and `Referer` on `fronted`, and `Accept-Language: en-US,en;q=0.9`, a fixed value and never the user's. They come in Chrome's order. `Accept-Encoding` is Chrome's although the client reads no content coding: the node's answers are `application/octet-stream` of sealed bytes, which fronts do not compress, and an answer with a content coding is refused as a fault. The upgrade offers Chrome's `permessage-deflate` too, which the client cannot read, so an answer that takes up any extension ends the attempt. The node never takes one up.
+**The header fields.** The header fields of the WebSocket upgrade and of a `fronted` request are Chrome 155's, for the platform the build runs on: User-Agent, the client hints, `Origin`, the `Sec-Fetch-*` fields and `Referer` on `fronted`, and `Accept-Language: en-US,en;q=0.9`, a fixed value and never the user's. They come in Chrome's order. `Accept-Encoding` is Chrome's although the client reads no content coding: the node's answers are `application/octet-stream` of sealed bytes, which fronts do not compress, and an answer with a content coding is refused as a fault. The upgrade offers Chrome's `permessage-deflate` too, which the client cannot read, so an answer that takes up any extension ends the attempt. The node never takes one up. On HTTP/2 the same fields go out with lowercase names in the order of the HTTP/2 capture (see [HTTP/2](../http2/)). A request that asks for an event stream on `fronted-shaped` has `Accept: text/event-stream` and `Cache-Control: no-cache`, and a request with no body has no `Content-Type` and no `Content-Length` (see [Shapes of fronted](../fronted-shapes/)).
 
 **A requirement on every client platform.** The transport's own sockets must be kept out of the tunnel, and must be recognizable to the kill switch as the one thing allowed to leave the device. The transport library offers a hook that the client engine uses for both. An engine that does not do this either loops the transport into its own tunnel or leaks.
 
-## `faketls`: goals and open questions only
+## `faketls`
 
-`faketls` is not built. This page does not specify a wire format for it, because the design questions below are open and because it puts load on a third party in a way that needs a project decision first.
+:::danger[Designed, not built, not reviewed]
+`faketls` is specified on its own page, [Borrowed-site mode](../borrowed-site/), and nothing of it is built. It ships as alpha when it is built: off by default, labeled alpha in the panel and the apps with a warning that it is new and unreviewed, and without outside review. Until it passes the tests of that page it is rated Detectable like every other native transport.
+:::
 
-**The idea.** The listener holds no certificate and needs no name. A connection that does not carry a valid proof is relayed to a real third-party site, so a prober completes a real TLS handshake with that site through the node. A client proves itself inside its first TLS message.
-
-**Goals, if it is built.**
-
-- A prober that does not hold a device secret gets the borrowed site's bytes on every path, including after a replay.
-- The proof names one device, is bound to that device's WireGuard key, has the replay rule of this page, and cannot be recognized by a holder of another device's subscription.
-- Pressure from strangers lands on strangers first, and what is relayed to the site is capped per source and in total.
-- The client knows it reached the node and not an interceptor, without trusting a certificate.
-
-**Properties it cannot have.**
-
-- The node's address is not one of the borrowed site's addresses. One lookup shows that.
-- A stranger's TCP handshake ends at the node and its TLS handshake at the borrowed site, so the two round-trip times differ by the relay hop.
-- It depends on the borrowed site keeping its TLS behavior, which the site can change at any time.
-
-**What it does to the third party.** Every stranger's connection, and every probe, is relayed to a site whose owner has not agreed to it. The site sees that traffic coming from the node's address. Its name is used to make the node's traffic look like visits to it, and if that is noticed the site may be blocked or its owner questioned. This may break the site's terms of use or the law. If `faketls` is built: the borrowed site is always chosen by the operator, none is suggested or shipped, the config key requires an explicit acknowledgement, and relayed connections are capped so that the node cannot be used to load the site.
-
-**Open questions that block a specification.**
-
-| Question | Why it blocks |
-|---|---|
-| Where the proof travels in the first TLS message, and how it is bound to that message | The first message is in clear on the path. The existing design this would follow is widely used and has had no formal review. |
-| What the node sends to a user, and how its sizes match the borrowed site's | An authenticated answer that differs in length from the site's is a signal. |
-| Whether a holder of the node transport private key can name the user of every recorded first message | The first message is in clear, so unlike `tls` there is no outer encryption to protect it. |
-| Whether the project should ship a transport that relays to non-consenting third parties at all | It is a question of harm, not of engineering. |
+The listener holds no certificate and needs no name. It borrows a real third-party site that the operator chooses. A client proves itself inside its ClientHello and gets the tunnel. Every other connection is relayed byte for byte to the site, so a prober completes a real handshake with the site and sees its own certificate. The page says what the proof is, what the node answers a user with, what it still gives away, and what it does to the third party. This page does not repeat it.
 
 ## `quic`: goals and open questions only
 
@@ -1146,6 +1131,7 @@ What this does not achieve: the hello is correct for one browser release and bec
 | What leaks | What its holder can do | What it cannot do |
 |---|---|---|
 | One subscription (one device's profile) | Connect as that device and so confirm that every node in it is a Veilway node. Read every address, name, path and public key in it, and block them. Recognize and unwrap that device's recorded `udp-obfs` traffic down to WireGuard. Remove the tag mask from any `udp-obfs` opening packet of the inbound and link two of one device within an epoch. | Tell which device another opening packet belongs to. Read or unwrap another device's traffic on any obfuscated transport. Read that device's past tunnel content, which WireGuard's forward secrecy protects. |
+| A `faketls` transport private key (designed, not built) | Open every ClientHello it has recorded, which a censor's own passive log is enough to supply: the time, the source address and an hourly tag that links one device only within that hour. Compute the transport's public key and so do what a holder of a subscription does. Compute the throwaway key a user's connection is answered with, and so answer a client's hello and be accepted: live impersonation of the node, until profiles carry a new key. | Open anything of `tls`, `ws` or `fronted`, because the transport key of `faketls` is its own and validation refuses a shared one. Read tunnel content, which WireGuard protects. Name a device without the config. See [Borrowed-site mode](../borrowed-site/). |
 | A node transport private key, current or retired, without the config | Open any token it can get hold of: from a CDN, a front server's log, or an interceptor. Like anyone who holds a token that never reached the node, present it once inside its window, which gives a pending session it cannot establish. Each opened token gives the device's tag, which never changes for a secret, so all tokens of one device can be linked, across time and networks. | Make a proof that a node accepts, or give a logged token a new timestamp: the binder covers the timestamp and the tag and needs the device secret. Use again a token the node accepted: its timestamp is outside the window by the time it has left the replay cache. Read tunnel content. Name the device without the config. |
 | An inbound's WireGuard private key | Impersonate the node to clients. Open the first message of every recorded WireGuard handshake to that inbound and read the static key in it, which names the device. On plain `udp` and legacy `ws` those handshakes are readable on the path. On obfuscated transports they are inside the envelope. | Read past sessions. |
 | The whole node (a compromised node) | Everything above for every device of the node, with names. All traffic through it while compromised: destinations, DNS names, client addresses, timing, and the plaintext of anything not encrypted end to end. Lie on the control channel within the bounds on that page. | Read sessions recorded before the compromise. Use a device's identity on another node, as long as device private keys are not stored on that host, which depends on how the provider generates and keeps keys. |
@@ -1157,7 +1143,7 @@ A leak is ended by rotation (see the overview). Rotation does not undo what was 
 - **Unauthenticated input is bounded.** Before a proof is accepted, a direct peer can make a stream listener read one request line within fixed size and time limits and hold one connection in the undecided or the relayed pool, a stranger behind a trusted proxy can have one request head read and at most 16 requests in flight to the decoy, and can make a datagram listener do one HMAC and one table lookup, or one key derivation and one decryption more. Nothing is allocated from a length the peer chose.
 - **Strangers are kept from shutting users out as far as the design can.** Pools are separate, a full pool of strangers makes room among strangers, no count closes a connection at accept, and neither sessions nor proxy connections are ever displaced for strangers. The undecided pool is shared until the request line arrives, and heavy churn there can turn a user's attempt into a refusal.
 - **No amplification.** A datagram listener sends nothing to a stranger, and sends an authenticated newcomer no more than it received until the tunnel has authenticated. A stream listener sends a stranger only what the decoy origin answered that stranger. The one exception on a datagram listener is the raced opening packet described under `udp-obfs`: whoever delivers a device's real opening packet first receives that device's traffic, as ciphertext, until the device speaks again.
-- **No identifying answer, with listed exceptions.** No byte the node itself composes reaches someone who is not a user. The exceptions: the node's own TLS handshake on `tls`, which is why `tls` is capped, a closed connection when the decoy is down, the raced opening packet on `udp-obfs`, and the two exceptions of plain `udp`.
+- **No identifying answer, with listed exceptions.** No byte the node itself composes reaches someone who is not a user. The exceptions: the node's own TLS handshake on `tls`, which is why `tls` is capped, the node's own HTTP/2 frames on a `tls` listener with `http2` set to `on` (designed, not built, see [HTTP/2](../http2/)), a closed connection when the decoy is down, the raced opening packet on `udp-obfs`, and the two exceptions of plain `udp`.
 - **Replay.** A proof is accepted once, including across restarts and clock steps, by the window, the cache, the floor and the limit. Three things undo that, and each is documented with its cost: restoring an old replay file, `veilway replay reset` after a clock fault, and a lost or unusable file on a node whose clock is behind where it has been. A node that cannot write its limit accepts nothing and says so loudly. The rules of the limit are as they are because earlier wording could shut honest clients out with no attack, or left a failed write undefined: the limit follows the clock, so that an honest proof on a quiet node never waits for a write. Nothing is derived from the floor after a start, so that a node that crashes in a loop does not raise its own floor. The node judges by the lowest limit that may be on disk, so that a write whose fate is unknown cannot let a proof through. And the node brings its own limit down after a clock fault, so that a later crash does not turn a past fault into an outage. On `udp-obfs` an opening packet travels in the clear, so a packet the node dropped stayed valid for whoever saw it, a few milliseconds later, from any address. That is why the node now keeps a packet that is waiting for a limit and records one that a limit refused, and why the three cases where it cannot are listed under `udp-obfs`.
 - **No failure is latched silently.** Every state in which the node refuses honest clients (floor ahead of the clock, replay file not writable, cache full, decoy down) has a log line, a counter and an end. The floor running ahead after a clock fault is a real outage that lasts as long as the fault was large, unless the operator resets.
 - **Possession of the secret is proven per proof,** by the binder on streams, which covers the timestamp and the tag, and by the sealed opening packet on `udp-obfs`. A proof alone still does not displace a device's sessions: only a session on which that device's WireGuard has authenticated does.
@@ -1168,7 +1154,7 @@ A leak is ended by rotation (see the overview). Rotation does not undo what was 
 - **Every shared default is a signature.** Padding ranges, timers and close behavior are the same on every installation unless a profile sets them. They are fixed here so that they can be measured, not because they are known to be safe.
 - **A cut is not a refusal.** Only an authenticated close counts as the node saying no. An earlier wording treated any close after the TLS handshake as a refusal, which let one forged reset buy the refusal waits and hold a client on a blocked candidate for hours.
 - **What self-signed certificates cost.** A self-signed certificate on a public address is something a censor can look for: a prober that completes the handshake sees it, and ordinary sites rarely have one. A profile that pins one is still rated Detectable at most, as every `tls` profile is. A new key on the node means a new pin, and a node that runs never makes one: if the key file is gone or changed it keeps the certificate it has and warns. The key files are named by the inbound's tag, so renaming a tag makes a new key too, so rotating it means a refreshed document for every user, and a client that has not refreshed meets a certificate that does not match. Making the next key ahead of time and pinning both avoids that. The trust rests entirely on the signed profile: whoever can sign the provider's subscriptions can point a self-signed candidate at any server.
-- **Third parties.** A decoy origin is the operator's own. A CDN carries load and risk for this protocol, and the client's waits and budgets exist for its sake as well as for the user's.
+- **Third parties.** A decoy origin is the operator's own. A CDN carries load and risk for this protocol, and the client's waits and budgets exist for its sake as well as for the user's. `faketls`, when built, would add a third party that never agreed, the borrowed site (see [Borrowed-site mode](../borrowed-site/)).
 
 ## Open questions
 
@@ -1198,4 +1184,7 @@ Each is listed with the default the code takes. The first six are the ones an ou
 | Limits per source behind carrier-grade address translation, where many users share one address | Config values with the defaults above. They may be too low for large mobile networks. |
 | Whether `tls` and `ws` should stay two names for one format | Two names. |
 | `mtu` default and warning for `veilway` inbounds | As in "MTU". The config reference does not say this yet. |
-| `faketls` and `quic` | Not specified. See their sections. |
+| HTTP/2 on the stream transports | Designed, not built. Its open questions are on [HTTP/2](../http2/), and its items to measure are added to "Still to measure" on [Protocol overview](../overview/). |
+| Other shapes of `fronted` | Designed, not built. See the open questions of [Shapes of fronted](../fronted-shapes/). |
+| `faketls` | Designed, not built, shipped as alpha when built. See the open questions of [Borrowed-site mode](../borrowed-site/). |
+| `quic` | Not specified. See its section. |

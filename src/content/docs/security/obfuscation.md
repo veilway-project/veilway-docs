@@ -56,11 +56,13 @@ Five transports are built, on the node and in the client: `udp`, `udp-obfs`, `tl
 
 Not built: `ws-plain`, `faketls`, `quic`, Encrypted Client Hello and built-in certificate issuance.
 
+Designed and not built, each on a page of its own and none reviewed from outside: [HTTP/2](../../protocol/http2/) on the stream transports, [other shapes of `fronted`](../../protocol/fronted-shapes/), and [borrowed-site mode](../../protocol/borrowed-site/) (`faketls`). Borrowed-site mode ships as alpha when it is built: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. Nothing in the tables below counts them.
+
 ## Four classes of transport
 
 The app sorts transports into four classes, and never moves to a lower one without asking you:
 
-- **Cover** (`tls`, `ws`, `fronted`): the connection is shaped like something ordinary, TLS to a web site.
+- **Cover** (`tls`, `ws`, `fronted`, and the designed `fronted-shaped` and `faketls`): the connection is shaped like something ordinary, TLS to a web site.
 - **No cover** (`udp-obfs`): WireGuard's bytes are hidden, and the result looks like nothing in particular.
 - **Exposed** (`ws-plain`): WireGuard's bytes are hidden, and the connection is plain HTTP. The network can see the server's name and can tell that you use this app, and when and how much, now and later in its records. It cannot see what you send. If the server's key for this transport ever leaks, anyone who kept records of the network can tie all of your connections over it together, back to the key's last change. It is not built.
 - **Plain** (`udp`, and `ws` on a plain `wireguard` inbound): nothing is hidden.
@@ -73,9 +75,11 @@ A class says what a transport tries to do. It does not say that it succeeds.
 |---|---|---|
 | `udp` | Nothing. It is plain WireGuard. | That it is WireGuard. |
 | `udp-obfs` | Makes every byte look random and varies packet sizes. The server stays silent to strangers. | That it is random-looking UDP to a port that answers nobody, which is unusual in itself. It imitates no known protocol, and a network that blocks or slows unknown UDP stops it. It stays rated Detectable. |
-| `tls` | Real TLS to a name the operator owns, ended by the node. Strangers get the operator's web site. | A long, busy connection to that name. The TLS handshake that answers is the node's own and does not match the web site behind it, which a stranger can check without any secret. For that reason it is rated Detectable whatever its tests show. The name is published when its certificate is issued. |
+| `tls` | Real TLS to a name the operator owns, ended by the node. Strangers get the operator's web site. | A long, busy connection to that name. The TLS handshake that answers is the node's own and does not match the web site behind it, which a stranger can check without any secret. For that reason it is rated Detectable whatever its tests show. The name is published when its certificate is issued. A client that offers only HTTP/2 gets a fatal alert from the node, where many web servers would answer. Offering HTTP/2 from the node is designed and not built, and it would widen what a probe can tell, because the node's own HTTP/2 code would answer a stranger and not the web site. |
 | `ws` | The same, behind the operator's ordinary web server or a CDN, so the TLS that answers is that server's. | A long, busy WebSocket connection. Behind a CDN, the CDN sees your address and the shape of the traffic. It has been tested behind nginx and HAProxy, not behind a real CDN. |
-| `fronted` | Sends data as many small web requests through a CDN, for networks where nothing else works. | Steady polling of one CDN host for as long as you are connected. It is slow, and it speaks HTTP/1.1 only. The CDN sees your address, and the CDN can end it. It has not been run behind a real CDN. |
+| `fronted` | Sends data as many small web requests through a CDN, for networks where nothing else works. | Steady polling of one CDN host for as long as you are connected. It is slow, and it speaks HTTP/1.1 only, where a browser would offer HTTP/2 first. HTTP/2 is designed and not built. The CDN sees your address, and the CDN can end it. It has not been run behind a real CDN. |
+| `fronted-shaped` (designed, not built) | The same polling through a CDN, with a method, a place for the data and a downstream form that the operator picks. Data can ride in the query, the path or a header, and answers can come as one long event stream. | Everything `fronted` shows. In addition, the shape is shared by every installation that picks it, and a stream of base64 events, a random header or a long random path is not what a browser sends. Data in a URL is kept in the CDN's logs. It is slower than `fronted`, and a pattern used by many installations is a signature again. |
+| `faketls` (designed, not built) | The server holds no certificate. A client proves itself inside its first TLS message, and everyone else is relayed byte for byte to a real site that the operator borrows, so a prober sees that site's own certificate. | The server's address is not the site's, and the path to it is not the site's path. A censor that records a user's hello can read it with the server's key and link a device within an hour. The server's answer to a user is made by the node and can only be made close to the site's. A site that changes its behavior makes the copy wrong. A holder of a subscription can tell the node from the site. Rated Detectable until its tests pass. |
 
 Limits that every obfuscated transport shares:
 
@@ -83,7 +87,7 @@ Limits that every obfuscated transport shares:
 - **Regular small exchanges remain.** WireGuard renews its keys every minute or two, and an idle tunnel sends a small packet and gets one back. Their sizes and times are varied, and they still happen.
 - **Large transfers show a steady packet size.**
 - **What the apps inside the tunnel do shows through as a pattern of sizes.** Published research has recognized tunnels by the TLS handshakes of the apps inside them. Nothing here defends against that.
-- **The app's own TLS has to look like a browser's, and browsers change.** The app's hello is built on BoringSSL and set up to match Chrome 155. A copy that was right for one browser release becomes rare, and so recognizable, when that release ages. Some details still differ: no TLS session is resumed, and the fetch of a pinned subscription page sends a hello that no browser sends.
+- **The app's own TLS has to look like a browser's, and browsers change.** The app's hello is built on BoringSSL and set up to match Chrome 155. A copy that was right for one browser release becomes rare, and so recognizable, when that release ages. Some details still differ: no TLS session is resumed, the requests inside it are HTTP/1.1 where Chrome offers HTTP/2 first (designed, not built), and the fetch of a pinned subscription page sends a hello that no browser sends.
 - **Switching between transports is visible.** An app that tries one way in, then another, then a third, shows a pattern. An app that sends random-looking UDP to an address and then opens a TLS connection to the same address has pointed at that address.
 - **A stranger's answer comes through the node.** It arrives a little later than it would from the web site itself, and that can be measured.
 
@@ -107,7 +111,7 @@ Some of these techniques lean on people who did not ask to be involved. The spec
 **The decoy web site.** A server answers strangers with a real web site.
 
 - It is the operator's own site, on the operator's own name and certificate. Nothing ships with a default.
-- Version 1 has no option to point a decoy at someone else's site. Doing so would send that site traffic it did not ask for, from the server's address, and show its pages under another name.
+- Version 1 has no option to point a decoy at someone else's site. Doing so would send that site traffic it did not ask for, from the server's address, and show its pages under another name. The one design that does it is `faketls`, below, and it is not built.
 - The server passes strangers to that one site only. It cannot be used as an open relay, and it never sends a stranger more than the site answered.
 
 **Content delivery networks.**
@@ -116,7 +120,7 @@ Some of these techniques lean on people who did not ask to be involved. The spec
 - The app polls no faster than a fixed floor, tries only a few fronts per hour, and waits instead of trying other fronts when a server refuses it, so that a restart or a used-up quota does not turn into load on the CDN.
 - "Domain fronting" in the classic sense shows the network a name that belongs to someone else on the same CDN. Most CDNs forbid it, several have switched it off, and if it is noticed the owner of that name may be the one who is blocked. The app and the panel never set this up by themselves.
 
-**Borrowing another site's TLS (`faketls`).** A transport of this kind would relay strangers to a third-party site so that the server appears to be that site. It is not built and not specified. It would put every probe and every stranger's connection on a site whose owner has not agreed, under that site's name. Whether the project should ship it at all is an open project question, not only a technical one.
+**Borrowing another site's TLS (`faketls`).** This transport relays strangers to a third-party site so that the server appears to be that site. It is designed on its own page and not built. It puts every probe, every stranger's connection and an early connection for each user's handshake on a site whose owner has not agreed, from the server's address and under that site's name. The site learns when users connect and how many strangers come, though not who a user is. If it is noticed, the site may be blocked or its owner questioned, and it may break the site's terms or the law where the operator is. The project decided to ship it as alpha, with these limits: the operator always chooses the site, none is suggested or shipped, the config refuses a site until the operator has acknowledged what this means, connections to the site are capped per source, in total and per second, and the panel and the apps label it new and unreviewed. [Borrowed-site mode](../../protocol/borrowed-site/) has the rest, in "The third party".
 
 ## How a profile is rated
 
@@ -147,6 +151,9 @@ Even then the rating would mean "passed the project's own tests on the release d
 | `udp-obfs` envelope | HKDF-SHA-256, HMAC-SHA-256, ChaCha20-Poly1305 | Shadowsocks AEAD and Shadowsocks 2022, with a mask in the shape of QUIC header protection | No |
 | Replay protection | A time window, a table, a floor and a stored limit | Shadowsocks 2022 | No |
 | Handing strangers to a decoy site | An existing HTTP implementation | Trojan | No |
+| HTTP/2 on the stream transports (designed, not built) | An HTTP/2 implementation on the node and on the client | RFC 9113 and RFC 8441, with values from a capture of Chrome | No. The node would be an HTTP/2 server to strangers and a gateway to the web site, which no earlier part of the design has been. |
+| Shapes of `fronted` (designed, not built) | The `fronted` framing with a new chunk numbering and a Server-Sent Events reader | RFC 9110 and the HTML living standard for event streams | No |
+| `faketls` (designed, not built) | A proof sealed in the ClientHello, a purpose-built TLS 1.3 handshake on the node, and a relay to a third-party site | RFC 9180 for the key agreement, RFC 8446 for the handshake. REALITY in Xray is prior art for the idea, and its code was not read. | No. The proof, the node's handshake and the copy of a site's flights are new constructions with no analysis behind them. |
 | Control channel sign-in | HMAC-SHA-256 | Textbook challenge and response | No |
 
 No cryptographic primitive is new, and none is implemented in this project. The combinations are new. Following a published design does not mean inheriting its analysis.
@@ -198,6 +205,6 @@ For operators:
 | Question | Default today |
 |---|---|
 | Should "Protected" be renamed, or the rating split into "encrypted" and "hard to recognize"? | Undecided. No native profile gets a rating above Detectable, so the question does not block anything. |
-| Should `faketls` be built? | Not decided. It is not built or specified. |
+| Should `faketls` be built? | Yes, as alpha: off by default, labeled new and unreviewed, and rated Detectable until its tests pass. It is designed, not built. Whether it should ever lose the alpha label depends on an outside review. |
 | How does the app learn that a weaker service shares a server's address? | It computes what it can from its own subscription. Beyond that, through a cap in the signed profile that can only lower the rating, which depends on a provider that tells the truth. |
 | How much later does a stranger's answer arrive through the node? | Not measured. |

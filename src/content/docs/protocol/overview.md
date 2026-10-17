@@ -12,7 +12,7 @@ Veilway is a VPN: the client has a virtual network interface, whole IP packets g
 | Layer | What it is | Specified in | New cryptographic constructions |
 |---|---|---|---|
 | Tunnel | WireGuard, unchanged: its handshake (Noise IK), ChaCha20-Poly1305, its timers, key rotation and replay protection, as the boringtun library implements them | The WireGuard paper | None |
-| Transport | How WireGuard datagrams cross the network: `udp`, `udp-obfs`, `tls`, `ws`, `fronted`, later `faketls` and `quic` | [Transports](../transports/) | None invented. Standard constructions combined in a way nobody outside the project has reviewed. |
+| Transport | How WireGuard datagrams cross the network: `udp`, `udp-obfs`, `tls`, `ws`, `fronted`, later `faketls` (designed, see [Borrowed-site mode](../borrowed-site/)) and `quic`. Designed and not built: HTTP/2 on the stream transports ([HTTP/2](../http2/)) and `fronted-shaped` ([Shapes of fronted](../fronted-shapes/)). | [Transports](../transports/) | None invented. Standard constructions combined in a way nobody outside the project has reviewed. |
 | Control channel | A small request and push protocol on one port of the gateway address, inside the tunnel | [Control channel](../control-channel/) | One mutual challenge and response with HMAC-SHA-256 |
 
 Confidentiality, integrity and authentication of user traffic come from the tunnel layer alone. No key or construction of the transport or the control channel is relied on for them, so a flaw in the outer cryptography cannot decrypt what a user sends. It can make a user or a node recognizable, which on a hostile network is the harm that matters. That is why the outer layers carry the label "experimental, not externally reviewed" (see [Obfuscation layer status](../../security/obfuscation/)).
@@ -62,10 +62,13 @@ Two more adversaries shape the control channel: a node that lies to its clients 
 | `veilway` inbound, and the control channel | Built. The node serves it at the gateway address of the inbound, and the client engine speaks it inside the tunnel. |
 | `udp-obfs`, `tls`, native `ws` and native `fronted` on a `veilway` inbound | Built on the node (the replay memory with its file, the stream listener, the proxy path behind the operator's web server) and on the client (the `veilway-transport` library, used by the client engine). `ws` and `fronted` were run behind nginx and HAProxy in tests, and not behind a real CDN. All are rated Detectable. |
 | Subscriptions | Built: the link, the signed document, the encrypted exchange, the panel's endpoint, relay mirrors and static mirrors. See [Subscription format](../subscription-format/). |
-| Node links | Built. See [Node links](../node-links/). |
+| Node links | Built. See [Node links](../node-links/). That includes tunnels: a TCP or UDP port of the entry forwarded through a link to an address past the exit, with limits per source and an answer budget against reflection. |
 | Client apps | The Linux client passes a 70-point check against a real node in Docker. The Android app has been used on a real phone. The Windows client has had a smoke test on a Windows runner and has never connected to a node. The macOS client has never been run on a Mac. |
 | `ws-plain` and its frame appearance | Designs only. Not built. |
-| `faketls`, `quic` | Not built and not specified. The transports page lists goals and open questions only. |
+| HTTP/2 on the stream transports | Designed, not built. See [HTTP/2](../http2/). Today the node and the client offer `http/1.1` only. |
+| `fronted-shaped` | Designed, not built. See [Shapes of fronted](../fronted-shapes/). |
+| `faketls` | Designed, not built, and not reviewed from outside. See [Borrowed-site mode](../borrowed-site/). It ships as alpha when it is built: off by default, labeled alpha in the panel and the apps. |
+| `quic` | Not built and not specified. The transports page lists goals and open questions only. |
 
 ## Terms
 
@@ -93,23 +96,23 @@ Integers on the wire are big-endian unless a row says otherwise. Sizes are in by
 
 "Hidden" in this table means "not readable from the bytes on the wire". It never means an observer cannot tell.
 
-| | `udp` | `udp-obfs` | `tls` | `ws` | `fronted` |
-|---|---|---|---|---|---|
-| Class | Plain | No cover | Cover | Cover | Cover |
-| Carried over | UDP | UDP | TCP, TLS 1.3 ended by the node | TCP, TLS ended by the operator's web server or by a CDN | HTTP requests through a CDN |
-| WireGuard's fixed bytes and exact sizes | Visible | Hidden | Hidden | Hidden, also from whoever ends TLS | Hidden, also from the CDN |
-| Answer to a prober | Silence, with two known exceptions (see transports page) | Silence | The operator's own site, behind a TLS handshake that is the node's and not the site's | The operator's own site | The operator's own site |
-| Looks like a known protocol | No, it is WireGuard | No. Uniformly random bytes, which is its own class | TLS to a web server, with a handshake that does not match the site | TLS to a web server | HTTPS polling |
-| Node's address visible to the path | Yes | Yes | Yes | Yes, unless a CDN is in front | No, the CDN's address is |
-| Client's address visible to | Path, node | Path, node | Path, node | Path, node, the CDN if any | Path, CDN, node |
-| Volume, timing and direction | Visible | Visible | Visible | Visible | Visible, with the rhythm of polling |
-| Survives blocking of unknown UDP | No | No | Yes | Yes | Yes |
-| Survives blocking of the node's address | No | No | No | Only behind a CDN | Yes, until the CDN or the front is blocked |
-| TCP inside TCP | No | No | Yes | Yes | Yes, and slow |
-| Recognizable in recorded traffic by a holder of this device's secret | n/a | Yes | No. It takes the node's transport key and the TLS plaintext to link a device's connections. | Same | Same |
-| Highest rating in version 1 | Detectable | Detectable, for good | Detectable, whatever its tests show | Detectable until the tests are recorded | Detectable until the tests are recorded |
+| | `udp` | `udp-obfs` | `tls` | `ws` | `fronted` | `faketls` (designed, not built) |
+|---|---|---|---|---|---|---|
+| Class | Plain | No cover | Cover | Cover | Cover | Cover |
+| Carried over | UDP | UDP | TCP, TLS 1.3 ended by the node | TCP, TLS ended by the operator's web server or by a CDN | HTTP requests through a CDN | TCP, TLS 1.3 ended by the node with a throwaway certificate for a user. A stranger meets the borrowed site. |
+| WireGuard's fixed bytes and exact sizes | Visible | Hidden | Hidden | Hidden, also from whoever ends TLS | Hidden, also from the CDN | Hidden |
+| Answer to a prober | Silence, with two known exceptions (see transports page) | Silence | The operator's own site, behind a TLS handshake that is the node's and not the site's | The operator's own site | The operator's own site | The real site's own handshake and answers, relayed. A copy of a user's hello gets a flight the node makes. |
+| Looks like a known protocol | No, it is WireGuard | No. Uniformly random bytes, which is its own class | TLS to a web server, with a handshake that does not match the site | TLS to a web server | HTTPS polling | TLS 1.3 to a real site's name, from an address that is not the site's |
+| Node's address visible to the path | Yes | Yes | Yes | Yes, unless a CDN is in front | No, the CDN's address is | Yes. No CDN or TLS-ending proxy can sit in front. |
+| Client's address visible to | Path, node | Path, node | Path, node | Path, node, the CDN if any | Path, CDN, node | Path, node |
+| Volume, timing and direction | Visible | Visible | Visible | Visible | Visible, with the rhythm of polling | Visible |
+| Survives blocking of unknown UDP | No | No | Yes | Yes | Yes | Yes |
+| Survives blocking of the node's address | No | No | No | Only behind a CDN | Yes, until the CDN or the front is blocked | No |
+| TCP inside TCP | No | No | Yes | Yes | Yes, and slow | Yes |
+| Recognizable in recorded traffic by a holder of this device's secret | n/a | Yes | No. It takes the node's transport key and the TLS plaintext to link a device's connections. | Same | Same | No. A holder of the node's `faketls` key opens every recorded hello and links a device within one hour, with no TLS plaintext needed. |
+| Highest rating in version 1 | Detectable | Detectable, for good | Detectable, whatever its tests show | Detectable until the tests are recorded | Detectable until the tests are recorded | Detectable until the tests of its page pass |
 
-In version 1 every native profile is rated Detectable. `ws` and `fronted` are the only transports that could be rated higher later, and only when the tests the threat model names are recorded for a release, and only on an address that carries no datagram listener and no legacy listener. The rating is explained on [Obfuscation layer status](../../security/obfuscation/).
+`fronted-shaped` (designed, not built) is `fronted` with another shape and the same rows. HTTP/2 (designed, not built) changes what the path sees of `tls`, `ws` and `fronted`, and the rows above stay as they are until it is built. In version 1 every native profile is rated Detectable. `ws` and `fronted` are the only transports that could be rated higher later, and only when the tests the threat model names are recorded for a release, and only on an address that carries no datagram listener and no legacy listener. The rating is explained on [Obfuscation layer status](../../security/obfuscation/).
 
 ## Keys and who holds them
 
@@ -168,7 +171,7 @@ These hold for every transport and for the control channel. A design choice that
 
 ## Config and profile fields
 
-The keys below are in the [config reference](../../reference/config/), which is the authority. The exceptions are `ws-plain` and `appearance`, which are designs and are not in the config.
+The keys below are in the [config reference](../../reference/config/), which is the authority. The exceptions are `ws-plain` and `appearance`, which are designs and are not in the config, and the three rows marked designed, not built, which the config reference lists as not built.
 
 | Key | Type | Meaning |
 |---|---|---|
@@ -183,6 +186,9 @@ The keys below are in the [config reference](../../reference/config/), which is 
 | `transports[].tls` on a `tls` transport | `cert` and `key` files | As on the built `ws`. |
 | `transports[].decoy` | object with `origin` and optional `proxy_protocol` | The decoy origin of a `tls`, `ws` or `fronted` listener: the operator's own web server. There is no default. |
 | `transports[].trusted_proxies`, `client_address_header` | list of networks, header name | The reverse proxies or CDN ranges from which a `ws` or `fronted` listener accepts a forwarded client address. |
+| `transports[].http2` on a `tls` transport | `off` or `on`, default `off` | Whether the node offers `h2`. Designed, not built. See [HTTP/2](../http2/). |
+| `transports[].type` value `fronted-shaped`, and its `shape` | enum value, object | A `fronted` transport with a method, a place for the data and a downstream form. Designed, not built. See [Shapes of fronted](../fronted-shapes/). |
+| `transports[].type` value `faketls`, and its `site` | enum value, object | A transport that borrows a real site. Designed, not built, alpha when built. See [Borrowed-site mode](../borrowed-site/). |
 | `transports[].limits` | object | Node capacity numbers: `sessions`, `undecided`, `undecided_per_source`, `relayed`, `proxy_connections`, `decoy_requests_per_source`, `fronted_sessions`. Defaults on the transports page. |
 | `replay` | object | Replay cache size and the accepted proofs per source. |
 | `notices` | list of at most 4 | Operator notices served on the control channel. A notice's `text` is a string, or a map from language tags to strings with a required `default`. |
@@ -199,6 +205,8 @@ This page chooses four numbers: at most 2 transport secrets per device and 2 tra
 ## Still to measure
 
 These pages deliberately do not state how browsers, web servers, CDNs and libraries behave. Each item below needs a dated capture. The specification is corrected where a measurement disagrees, and a rule that depends on an item stays unproven until it is measured.
+
+The designs that are not built add their own items, and they belong to this list. [HTTP/2](../http2/) has a table of ten items (Chrome's HTTP/2 frames and fields, ALPS, the behavior of web servers and CDNs on extended CONNECT, `421`, flow control and `content-length`). [Borrowed-site mode](../borrowed-site/) has a table of eleven (the hello of the claimed Chrome, the key shares, and how real sites time and size their flights). [Shapes of fronted](../fronted-shapes/) has no list of its own: every number on it is a judgement call, and its open questions say what is unmeasured.
 
 | What to measure | What depends on it |
 |---|---|
@@ -262,5 +270,8 @@ Built means the code exists, with tests and fuzz targets where the input is host
 | Appearance of `ws-plain` frames | Designed, not built | The media appearance only: an interface with requirements, and no container named, so no value is defined in version 1. A text appearance was considered and not adopted. |
 | Client TLS and HTTP fingerprint | Partly built | The client's TLS ClientHello is built on BoringSSL and shaped like Chrome's, from a capture, for a `wss://` connection, with `http/1.1` as its only protocol offer. A `fronted` session is still an HTTP/1.1 client where Chrome would offer `h2`, and the subscription fetch of a pinned endpoint does not yet use this hello. |
 | Node links | Built | Specified on the [node links](../node-links/) page: a link as a peer on an inbound, one translated address per link, and pairing with two codes and two values the operators exchange. Its key agreement at pairing has had no outside review. |
-| `faketls`, `quic` | Goals only | No wire format. `faketls` waits for a project decision on relaying to third parties. |
+| HTTP/2 on the stream transports | Designed, not built | Specified on [HTTP/2](../http2/). The node's own HTTP/2 stack would end the rule that the node changes no byte of a stranger's request, on a `tls` listener with `http2` on. Every value taken from Chrome is a draft until captured. |
+| `fronted-shaped` | Designed, not built | Specified on [Shapes of fronted](../fronted-shapes/). Every number is a judgement call with no measurement behind it, and it has not been run behind a CDN. |
+| `faketls` | Designed, not built | Specified on [Borrowed-site mode](../borrowed-site/). Nobody outside the project has reviewed the proof, the node's handshake or the way it copies a site. It ships as alpha when built: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. |
+| `quic` | Goals only | No wire format. |
 | Subscription format | Built | The link with its gateway key, the signed document, the encrypted exchange, the client's state machine, the panel's endpoint, relay and static mirrors, and sealed files are implemented. Open: a browser-like handshake for the subscription fetch and static mirrors, and fetching a subscription through the fronting options. See the [subscription format](../subscription-format/) page. |

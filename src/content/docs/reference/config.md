@@ -172,12 +172,14 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 | `tls` | `listen` (`ip:port`), `path`, `tls` with `cert` and `key`, `decoy` with `origin` and optional `proxy_protocol`, optional `limits` with `sessions`, `undecided`, `undecided_per_source` and `relayed` | The WebSocket session of the [protocol](../../protocol/transports/) inside TLS that the node ends itself. Whoever is not a user is handed to the decoy origin. Only on a `veilway` inbound. See `tls` below. |
 | `ws` with a `decoy` | `listen` (`ip:port`), `path`, `decoy`, `trusted_proxies`, optional `client_address_header`, optional `limits`. No `tls` key. | The same WebSocket session behind your own web server, which ends TLS. Only on a `veilway` inbound. See "`ws` and `fronted` behind your web server" below. |
 | `fronted` | the keys of `ws` with a `decoy` | Polling with HTTP requests, for a CDN that allows neither WebSocket nor long-lived connections. Only on a `veilway` inbound. See the same section. |
+| `fronted-shaped` | the keys of `fronted`, and `shape` | Not built. `fronted` with a method, a place for the data and a downstream form that you pick. See "`fronted-shaped`" below. |
+| `faketls` | `listen` (`ip:port`), `site` and the limits of its section | Not built, v0.2.0 alpha. Borrows a real site. See "`faketls`" below. |
 
 `ws` is two transports under one name, and its keys say which one it is. Without `decoy`, `trusted_proxies`, `client_address_header` and `limits` it is the `ws` of a `wireguard` inbound, which carries WireGuard datagrams as they are. With any of them it is the native `ws` of a `veilway` inbound, which needs `decoy` and `trusted_proxies` and takes no `tls`. Validation refuses each on the other kind of inbound and never takes one for the other.
 
 A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws` and `fronted`. A `wireguard` inbound takes `udp` and the `ws` without a decoy: its devices have no transport secret for the others to be keyed with.
 
-`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`. On `tls`, the native `ws` and `fronted` it is at least 12 bytes.
+`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`, except for a `fronted-shaped` transport whose data rides in the path, which is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `fronted` and `fronted-shaped` it is at least 12 bytes.
 
 Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped, and one source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once. This also applies to a reverse proxy in front of a plain `ws` listener, whose connections all come from one source.
 
@@ -188,6 +190,8 @@ Listen conflicts, across all inbounds:
 - Two `ws` transports may share an address and port when their `path` differs and their `tls` is identical. Otherwise they conflict.
 - Two `tls` transports may share an address and port when their `path` differs and their `tls`, `decoy` and `limits` are identical: they are two paths of one listener. Otherwise they conflict.
 - The `ws` and `fronted` transports of `veilway` inbounds may share an address and port when their `path` differs and their `decoy`, `trusted_proxies`, `client_address_header` and `limits` are identical: one listener, to which the web server hands a `GET` for one path and a `POST` for another.
+- A `fronted-shaped` transport shares a listener on the same terms as `fronted`. Its `path` may not be a prefix of the `path` of another transport on the same listener, because a shape that puts the data in the path is matched by prefix. Validation refuses it.
+- A `faketls` transport never shares an address and port with another transport, and its key is never equal to the key of another transport of the node.
 - A listener serves one kind of peer. A `tls` transport, a `ws` transport of a `wireguard` inbound, and the `ws` and `fronted` transports of `veilway` inbounds never share an address and port with one another.
 
 ### `udp-obfs`
@@ -242,6 +246,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 | `limits.undecided` | integer 1 to 65,536 | `512` | Connections that have not sent their request line yet. |
 | `limits.undecided_per_source` | integer 1 to `undecided` | `64` | How many of those one source may have. A source is an IPv4 address or an IPv6 /64. |
 | `limits.relayed` | integer 1 to 65,536 | `1024` | Connections that are relayed to the origin. |
+| `http2` | `off` or `on` | `off` | Not built. Whether the node offers `h2` as well as `http/1.1`. With `on` the node is an HTTP/2 server to strangers and a gateway to the origin, which widens what a probe can tell from your web server. See [HTTP/2](../../protocol/http2/). Not in the config today: a key that is set is refused. |
 
 **What the decoy origin must be.**
 
@@ -258,7 +263,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 
 - **Who is let in.** A device sends a WebSocket upgrade request for `path` with a proof in its query: a token that only a holder of one of the device's `transport_secrets` can make, sealed to one of the inbound's `transport_keys`, valid once and for about a minute. The node decides at the end of the request line. An accepted proof gets the upgrade answer, and then the connection carries that device's WireGuard and no other device's. The node sends nothing more on it until a WireGuard packet of that device has authenticated.
 - **What everybody else gets.** The origin's answer, and nothing of the node's: no status line, no header field and no error page. Every byte the peer sent goes to the origin unchanged, and from then on the node relays both directions blindly until either side closes. Everything the origin sends is passed on at once, and when the origin closes, the peer is closed once it has been given all of it, however slowly it reads. An origin that resets the connection resets the peer's. This holds for a browser, for garbage, for a wrong path, for a wrong or used proof, and for the proof of a device that was removed or whose user is disabled, expired or over quota: they all look like a visitor who asked for a page the site does not have.
-- **What this does not hide.** The TLS handshake is the node's, as said above. An answer through the node is later than one from the origin by the hop between them. The node offers `http/1.1` only, and TLS 1.2 and 1.3 as its library does: a client that offers only `h2` gets a TLS alert, and plain HTTP sent to the port gets the library's alert where a web server sends an error page. A proof under TLS 1.2 is never accepted. When the origin answers before it has read a whole upload and closes its side, the node closes the peer's connection then, where a web server that lingers would take the rest of the upload first.
+- **What this does not hide.** The TLS handshake is the node's, as said above. An answer through the node is later than one from the origin by the hop between them. The node offers `http/1.1` only (an `http2` of `on` is designed and not built), and TLS 1.2 and 1.3 as its library does: a client that offers only `h2` gets a TLS alert, and plain HTTP sent to the port gets the library's alert where a web server sends an error page. A proof under TLS 1.2 is never accepted. When the origin answers before it has read a whole upload and closes its side, the node closes the peer's connection then, where a web server that lingers would take the rest of the upload first.
 - **An origin that gives a connection up first.** The node watches the origin while a request line is not complete. When the origin says something or closes in that time, as a web server does with a connection that sends nothing, the peer is given that at that moment, and the connection is not a user's. A request line that is complete is always looked at first. An origin that closes connections before a request can arrive would therefore cost users an attempt now and then: a web server does not, and its timeout for a request head should not be shorter than a second or two.
 - **When the origin is down.** Whoever is not a user is closed with no answer, which tells the node from a web site for as long as it lasts. It is counted in `stream.decoy_down` of `/v1/stats` and logged at warn once a minute, and at info when the origin is back. Users are not affected.
 - **The upgrade answer.** After the status line it carries the fields of `upgrade_headers` in that order: `Date` with the node's time, and every other field with the value your origin sent for it, spelled as the origin spelled it. A field the origin did not send is left out. Then come the three fields of the upgrade and one cookie named `upgrade_cookie` with a random value of a random length. The node asks the origin once for its page at start and at every reload to learn those values. While that has not worked the answer carries only `Date` of the list, which is logged at warn, and the node asks again every 60 seconds. `upgrade_headers` may not name `Upgrade`, `Connection`, `Sec-WebSocket-Accept`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Content-Type`, `Content-Encoding`, `Trailer` or `Keep-Alive`, and no name twice.
@@ -313,7 +318,7 @@ Your own web server ends TLS, with the name and the certificate of your site, an
 | `limits.decoy_requests_per_source` | integer 1 to 65,536 | `16` | Requests of one source that may wait for the origin at once. One more closes the connection of the oldest. All strangers together have half of `proxy_connections`. |
 | `limits.undecided`, `undecided_per_source`, `relayed` | as for `tls` | as for `tls` | The pools for peers that reach the listener from outside `trusted_proxies`. |
 
-Transports that share a listener have the same `decoy`, `trusted_proxies`, `client_address_header` and `limits`.
+Transports that share a listener have the same `decoy`, `trusted_proxies`, `client_address_header` and `limits`. A `limits.proxy_connections` that is not set is twice `fronted_sessions`, and three times the shaped `sse` sessions on a listener of a `fronted-shaped` transport (see below).
 
 **The web server in front.** An example for nginx, with the site and the node on one host. The first server is the site as the world sees it. The second is the same site on a plain loopback listener, without the two rules that hand a path to the node: that one is the decoy origin.
 
@@ -399,9 +404,77 @@ What the example does, and why:
 - A device may have 2 `fronted` sessions among its 8. A third takes the place of its oldest `fronted` session once it is established.
 - An opening request whose body brings no WireGuard packet of its device is held, since the node sends nothing before that, and is answered by the origin when the session ends, 10 seconds later.
 
+**HTTP/2 behind your web server.** Your web server may speak HTTP/2 to the client. It must speak HTTP/1.1 to the node, whatever it speaks to the client: the node offers no HTTP/2 on these listeners, and a client's HTTP/2 is turned into HTTP/1.1 by the web server as for any site behind it. Using HTTP/2 or `h2c` towards the node is not supported. See [HTTP/2](../../protocol/http2/), where a client side for `ws` and `fronted` over HTTP/2 is designed and not built.
+
 **Limits that are fixed** are those of `tls` where they are the same thing: 2 sessions that are not yet established and 8 that are for a device, 16 accepted proofs at once and then one a second, counted across every native transport together. A `ws` session ends after 300 seconds without a chunk and a `fronted` session after 60 seconds without an accepted request. Replay and being cut off are as on `tls`: a proof is accepted once, also across restarts, and whatever cuts a device off ends its sessions within a second.
 
 **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached. Nothing is logged for a single request, and no line names a client address, a path, a token, a session id or a key. Counters are in `stream` of `/v1/stats`.
+
+### `fronted-shaped`
+
+:::caution[Not built, designed in version 0.2.0]
+Nothing here is in the node, the client or the panel, and a `fronted-shaped` transport in a config is refused today. The specification is [Shapes of fronted](../../protocol/fronted-shapes/), which nobody outside the project has reviewed and which has not been run behind a CDN. It changes nothing about `fronted`, which is written above and called the classic form.
+:::
+
+A `fronted` transport has one shape: a `POST` with the data in the body, answered in the body. A `fronted-shaped` transport lets you pick the method, where in the request the data goes, and whether the node answers each request or writes to one Server-Sent Events stream. Its keys are those of `fronted`, and one more.
+
+| Key | Type | Meaning |
+|---|---|---|
+| `shape` | object, required | `up` with `method`, `in`, and optionally `name`, `limit`, `inflight` and `gather`, and `down` with `mode` and optionally `gather`, `life` and `fallback`. The members, the valid combinations and the ranges are on the page. The panel writes the same object to the profile, and the two must say the same thing: the node cannot see the profile, and a difference shows as refusals at the client. |
+
+```json
+{"type": "fronted-shaped", "listen": "127.0.0.1:8443", "path": "/assets/feed-5a1e9c30.js",
+ "shape": {"up": {"method": "POST", "in": "body"}, "down": {"mode": "sse"}},
+ "decoy": {"origin": "http://127.0.0.1:8080"},
+ "trusted_proxies": ["127.0.0.1"], "client_address_header": "X-Forwarded-For"}
+```
+
+- **Validation** refuses a shape that breaks the rules of the page: a method and `in` that do not go together (a `GET` with a body), a refused method or header name, a limit or a range out of bounds, an `up.inflight` above 1 with `poll`, and an unknown member or value. It warns above 256 shaped sessions on a listener, and counts them among the 1,024 `fronted` sessions.
+- **The path** of a shape that puts the data in the path (`up.in` `path`) is matched as a prefix, so your web server hands the node every path under it, and the origin must serve nothing there. Validation refuses a `path` that is a prefix of another transport's path on the same listener.
+- **Limits.** The node reads a request line of up to 8,192 bytes when `up.limit` is above 4,000. A shaped session holds at most 603,136 bytes. `limits.proxy_connections` is three times the shaped `sse` sessions when it is not set, because a shaped client keeps up to 5 connections to the host.
+- **Your web server.** For `sse` the web server must not buffer the answer: in nginx, `proxy_buffering off` for the path, a `proxy_read_timeout` above the longest stream (`down.life`, at most 3,600 s) and `proxy_http_version 1.1`. For `GET` the CDN must not cache the path. The prefix location is for `up.in` `path` only.
+
+```nginx
+# A fronted-shaped transport with an event stream down. Use a location with a
+# trailing slash instead of "=" when the data rides in the path.
+location = /assets/feed-5a1e9c30.js {
+    proxy_pass http://veilway;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection "";
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_buffering off;
+    proxy_read_timeout 3700s;
+    client_max_body_size 128k;
+    access_log off;
+}
+```
+
+- **A node link refuses it**, as it refuses `fronted`.
+- **`veilway doctor`** prints the shape of each such transport.
+- **Data in a URL is logged** by your web server and the CDN. For `query` and `path` that is every upstream byte, sealed. If that worries you, use `body`.
+
+### `faketls`
+
+:::danger[Not built, designed for the v0.2.0 alpha]
+Nothing here is built, and a `faketls` transport in a config is refused today. The specification is [Borrowed-site mode](../../protocol/borrowed-site/). It is new, nobody outside the project has reviewed it, and it ships as alpha: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. It is rated Detectable until its tests pass. The field names below are the page's proposals.
+:::
+
+The node holds no certificate. It borrows a real site that you choose: a client proves itself inside its ClientHello and gets the tunnel, and every other connection is relayed byte for byte to the site, so a prober sees the site's own certificate. The node must be reached directly: no CDN, no TLS-ending proxy and no `trusted_proxies`. The site is a third party that has not agreed to any of this. Read "The third party" on the page before you set it.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `listen` | `ip:port` | required | Where the node takes connections. It shares its address and port with no other transport. |
+| `site.host` | host name | required | The site's name. It is the only server name a user's hello may carry, and the name used in relayed and probe connections. |
+| `site.names` | list of at most 4 host names | none | Extra server names a user's hello may carry. |
+| `site.port` | port | `443` | The site's port. |
+| `site.address` | IP address | none | An address to connect to instead of resolving the name. |
+| `site.acknowledged` | bool | required | Must be `true`. Validation refuses the transport without it. The panel's form says what it means before it sets it. |
+| `transport_key` | secret | required | A key of this transport alone. Validation refuses a key equal to the transport key of any other transport on the node. |
+| `limits.relayed` | integer | `256` | Strangers relayed to the site at once. |
+| `limits.site_rate` | integer | `16` | New connections to the site a second. When it is spent, users are still served and only a stranger that needs a connection is closed. |
+
+Validation also refuses a listener with `trusted_proxies` and a `site` that resolves to the node's own address. The site must be one a user in your country can reach, large enough that the node's connections do not matter to its owner, and, if you can, hosted in the same network as the node. None is suggested or shipped. A profile's candidate for this transport has the node's address, the site's name as its server name and the transport's public key, and no pin, `self_signed`, `ech`, `host`, `path` or fronting value.
 
 ## `outbounds`
 
@@ -688,7 +761,7 @@ Do not write a link by hand. `veilway link offer` and `veilway link answer` pair
 | `addresses` | object | required | `dialler`: 1 or 2 addresses, at most one IPv4 and one IPv6. `listener`: one address for each family of `dialler`, in the same order, in a reverse link and in no other. They lie in the pool of the inbound the link connects to. |
 | `mtu` | integer 1280 to 1500 | `1390` when the link lists `udp-obfs`, else `1420` | MTU inside the link's tunnel. Above the default is a warning, since nothing is fragmented for a link. |
 | `transport_secret` | secret | required | The secret the two nodes agreed on when they were paired. It never travels. No device and no other link has the same, and it is not a WireGuard key or a transport key of the config. |
-| `inbound` | inbound tag | none | On the node that is dialled: the `veilway` inbound the link connects to. It has no `fronted` transport and carries no users' devices. Needs `public_key`. |
+| `inbound` | inbound tag | none | On the node that is dialled: the `veilway` inbound the link connects to. It has no `fronted` or `fronted-shaped` transport and carries no users' devices. Needs `public_key`. |
 | `public_key` | key | none | On the node that is dialled: the WireGuard public key the other node made for this link. Needs `inbound`. |
 | `private_key` | key | none | Secret. On the node that dials: the WireGuard key it made for this link. Needs `peer`. |
 | `peer` | object | none | On the node that dials: `inbound_public_key` (the key of the other node's inbound), `transport_public_key` (needed when a `tls` or `ws` transport is listed) and `transports` (1 to 8). Needs `private_key`. See below. |
@@ -704,7 +777,7 @@ Which half a node is follows from `direction` and from whether the link has `inb
 
 | Key | Type | Meaning |
 |---|---|---|
-| `type` | `udp`, `udp-obfs`, `tls` or `ws` | `fronted` is read and refused: a link carries the traffic of many users, and polling that through a CDN is not a transport of a link. |
+| `type` | `udp`, `udp-obfs`, `tls` or `ws` | `fronted` and `fronted-shaped` are read and refused: a link carries the traffic of many users, and polling that through a CDN is not a transport of a link. |
 | `endpoints` | list of 1 to 16 `ip:port` | For `udp` and `udp-obfs`, which take neither `path` nor `candidates`. |
 | `path` | as for `tls` | For `tls` and `ws`, together with `candidates`. |
 | `candidates` | list of 1 to 16 objects | For `tls` and `ws`. Each has `address` (`ip:port`), `sni` (a lowercase host name, or `""` for none), `host` (the `Host` of the request), `verify_name` (the name the certificate is held against: required when `sni` is empty and not allowed otherwise) and `pins` (1 to 4 SHA-256 hashes of the certificate's SubjectPublicKeyInfo, in base64). A `tls` candidate needs `pins`. The chain is always validated and a pin is a second condition. |
@@ -891,7 +964,7 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 3. Every listen address of every inbound: whether it can be bound right now, over UDP or over TCP as the transport needs. Transports that share an address are tried once.
 4. Every certificate and key of a `ws` or `tls` transport: both load, the key matches the certificate, the certificate is not expired and not yet valid, and the names it covers. Under 14 days left is a warning.
 5. The decoy origin of every `tls` transport, with two requests made the way the node makes its own. The first asks for the origin's page: an origin that is not reached, or does not answer as a web server, is a failure, because whoever is not a user would then be closed with no answer. An answer that redirects to an `https://` address is a warning: behind the node's TLS that redirect never ends. A field of `upgrade_headers` that the origin does not send is a warning. The line says which `Host` the request carried. The second asks for the path of the transport with a query that is no proof: the origin has to answer it itself, as it answers a path it does not have. An answer below 400 is a warning, since the origin must serve nothing there. A 5xx answer, or none in time, is a failure: an origin that hands the path on to the node would send every stranger's request round in a loop. The path is sent to the origin and printed nowhere. That request, with the path and a query of 144 letters, is in the origin's access log afterwards. `doctor` does not measure how long the origin keeps a connection that sends nothing.
-6. The proxy path of every `ws` and `fronted` listener: whether anybody but this host can reach it, whether the web server in front speaks HTTP/1.1 to the node, and, from a running node, whether the requests it has read named their source in `client_address_header`.
+6. The proxy path of every `ws` and `fronted` listener: whether anybody but this host can reach it, whether the web server in front speaks HTTP/1.1 to the node, and, from a running node, whether the requests it has read named their source in `client_address_header`. For a `fronted-shaped` transport (not built) the line also prints the shape the transport uses, so that it can be compared with the profile.
 7. Every link that is enabled, without dialing anything: a clock that is set, whether an exit with a `chain` backend names each entry half, whether its `mtu` is below that of an inbound with users, and, from a running node, each link's state.
 8. Every DNS server of the config, those of `dns.servers` and then those of every DNS set: one query over UDP and the same query over TCP from the node itself, with the answer time. The line of a server of a set names the set, as in `set family, servers[0], udp`. A server that stands in two lists is asked once for each. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
 9. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds, and when the config has sets a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where the queries of a set leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.

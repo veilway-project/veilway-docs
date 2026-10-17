@@ -20,12 +20,12 @@ Two rules shape everything on this page:
 |---|---|
 | Address | The gateway address of the inbound, IPv4 or IPv6 |
 | Port | TCP 47873 for the channel. UDP 47873 for MTU probes only. Fixed, not configurable. |
-| Inbound types | `veilway` only. On a `wireguard` inbound the port is not served and the gateway answers DNS and nothing else, as today. |
+| Inbound types | `veilway` only. On a `wireguard` inbound the port is not served and the gateway answers DNS and ping from the devices of its own inbound and nothing else, as today. |
 | Carried in | Plain TCP inside the tunnel. No TLS: the tunnel already encrypts and authenticates, and a TLS handshake inside the tunnel would add a recognizable pattern. |
 | Routing | Handled by the node before the routing rules and before any exit, the way gateway DNS is. No rule can block, redirect or open it. `dns.hijack` has no effect on it. |
 | Counting | Its bytes are inner IP bytes like any others and count towards usage. |
 
-This changes one sentence of the [config reference](../../reference/config/) ("A gateway address answers DNS and nothing else") and invariant 9 of the threat model, for `veilway` inbounds only. This draft changes neither document. Both must change in the same change that builds the channel.
+This changes one sentence of the [config reference](../../reference/config/) ("A gateway address answers DNS and ping from the devices of its own inbound and nothing else") and invariant 9 of the threat model, for `veilway` inbounds only. This draft changes neither document. Both must change in the same change that builds the channel.
 
 ## Numbers that are judgement calls
 

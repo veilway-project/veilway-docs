@@ -22,6 +22,17 @@ Every parser that reads network input, subscription data, theme files or provide
 - Your device's routes and DNS settings, with a kill switch so that traffic does not leave outside the tunnel.
 - Other users of a node from a hostile user, within what the node's routing rules allow.
 
+## Designed, not built
+
+Three designs for version 0.2.0 are specified and not built: [HTTP/2](../../protocol/http2/) on the stream transports, [other shapes of `fronted`](../../protocol/fronted-shapes/), and [borrowed-site mode](../../protocol/borrowed-site/) (`faketls`). They are not part of what this page describes. Borrowed-site mode would ship as alpha, off by default, without outside review. It changes the threat model in these ways:
+
+- **A third party that never agreed.** The node relays strangers to a real site that the operator borrows. The site carries every probe and every stranger's connection, from the node's address, and can be harmed by it. The operator must choose the site and acknowledge this.
+- **A new parser of attacker input.** The node reads a TLS ClientHello from any stranger, in clear on the path, and decides on it.
+- **A proof in the clear.** A holder of the node's `faketls` key can open every hello a censor has recorded and so learn the time and source of every connection, and can answer a client as the node. The tunnel stays protected by WireGuard.
+- **Not a stronger rating.** It is rated Detectable until its tests pass.
+
+The full model, `THREAT_MODEL.md`, has the rows.
+
 ## What it does not protect against
 
 - **Detection.** No transport is claimed to be undetectable or unblockable. Every transport is rated Detectable.

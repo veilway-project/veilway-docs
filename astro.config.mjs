@@ -40,6 +40,7 @@ export default defineConfig({
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
 						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },
 						{ label: "Offline bundle", translations: { fa: "بسته آفلاین" }, slug: "protocol/offline-bundle" },
+						{ label: "Xray in the desktop apps", translations: { fa: "Xray در برنامه‌های دسکتاپ" }, slug: "protocol/xray-client" },
 					],
 				},
 				{ label: "Config reference", translations: { fa: "مرجع پیکربندی" }, slug: "reference/config" },

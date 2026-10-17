@@ -80,7 +80,9 @@ The **Dashboard** is the first page after sign-in. It shows the speed now and th
 
 ## Users and devices
 
-The **Users** page lists every user. You can search by name, group or note, and filter by enabled or disabled. Select one or more users to enable, disable, reset usage, delete, or change them in bulk: add or remove a group, set the quota, set the expiry, set the device limit, or set the exits to all exits or a chosen set. A default exit the new set leaves out is cleared.
+The **Users** page lists every user. You can search by name, group or note, and filter by enabled or disabled. Select one or more users to enable, disable, reset usage, reset links, delete, or change them in bulk: add or remove a group, set the quota, set the expiry, set the device limit, or set the exits to all exits or a chosen set. A default exit the new set leaves out is cleared.
+
+**Reset links** makes a new link and new Xray credentials for each selected user, and the old links stop working at once. Each user then needs the new link. Tick **Also remove the devices enrolled with the old links** to remove those devices too. Without the tick they keep working until you remove them. The dialog does not show the new links. Open the user's page and choose **Show link and QR** to see one. With **Show links once** on, the panel keeps no copy, so reset that user's link on their page instead, which is the only time the link is shown.
 
 ### Add a user
 
@@ -480,6 +482,42 @@ The tunnel addresses must come from a network that no inbound pool on either nod
 A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **Ended**. **Drop the pairing** removes a pairing that is still waiting.
 
 **Manage** on a link changes it after pairing. **Link on** turns it off without losing its keys: it neither dials nor answers until you turn it on again. On the node that is the exit you also set where the link's traffic leaves when no rule names an exit, which exits it may use, whether rules may reach private networks through it, how many connections it may hold at once, a quota and its period. On both sides you can set an expiry and the MTU. **Remove** asks you to confirm with the other node's name and then goes through the review. The other node keeps its half until its operator removes it there, and linking again needs a new pairing.
+
+### Tunnels
+
+A tunnel forwards one TCP or UDP port of this node through a [node link](#node-links) to one address on the far node, such as a server at home that has no open port of its own. Nobody signs in. Whoever reaches the port reaches the target. The **Tunnels** card on the **Nodes** page lists them below the links. A tunnel needs a link first, and an exit that leaves through it, since those are the only exits its **Exit** field offers.
+
+Two presets under **Guided setup** start a tunnel with its protocol already set:
+
+- **Forward a port to a home server** makes a TCP tunnel, for web, SSH, databases and most other services.
+- **Forward a UDP port to a home server** makes a UDP tunnel, for games, VoIP and DNS.
+
+To add a tunnel without a preset, choose **Add a tunnel** on the card. The form has these fields:
+
+- **Name**: 1 to 64 lowercase letters, digits, dashes or underscores. The counters show it.
+- **Exit**: the exit that leaves through the link.
+- **Protocol**: TCP or UDP. The presets set it for you.
+- **Listen on**: the address and port of this node that people connect to, such as `203.0.113.5:8443`. An IPv6 address goes in brackets.
+- **Target**: the address and port the far node connects to, such as `192.168.1.10:8080`.
+- **Allowed sources**: one address or network per line, such as `203.0.113.0/24`. Only these may connect. Empty means anyone who reaches the port.
+- **At most at once**: connections at once, or sessions for UDP. Empty means 256. One source holds at most 16.
+- **Tunnel on**: off keeps the tunnel in the list without opening the port.
+
+Some rules apply:
+
+- A UDP tunnel on an address that is not loopback needs allowed sources, and the panel does not save it without them. A source address can be forged, so the sources decide who gets answers, and the target has to check its own clients.
+- A TCP tunnel on an address that is not loopback, with no allowed sources, shows a warning, because anyone who reaches the port can connect.
+- A target on a private network, such as `192.168.1.10`, is reached only when the far node's operator turns on **Let rules reach private networks** for that link, under **Manage**. Without it the far node refuses the connection, and this node cannot change that.
+- Every change goes through the review, like the rest of the node's config. A node holds at most 64 tunnels, and all tunnels together at most 16,384 connections.
+
+Each card shows its status and counters, refreshed every 10 seconds. The status is **Listening** while the port is open, **Not running** when it is not, and **Off** when the tunnel is switched off.
+
+- **Exit** is the exit the tunnel leaves through. **Open now** is how many connections or sessions are open, out of its limit.
+- **Opened** counts the connections or sessions made since the node started.
+- **Refused** counts the refusals and gives the reason for each: source not listed, limit reached, too many from one source, too fast from one source, link down, or no free port.
+- **Sent to the target** and **Sent back** are the bytes in each direction.
+
+How a tunnel carries traffic, and its limits, are in the [Tunnels section of node links](../../protocol/node-links/#tunnels).
 
 ### Notices
 

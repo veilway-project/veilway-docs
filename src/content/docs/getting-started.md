@@ -9,7 +9,7 @@ This page installs the alpha, `v0.1.0-alpha`. Its files come from the [core rele
 
 - A Linux server with systemd, on x86_64 or aarch64, that you can reach from the internet on the ports you choose.
 - Root access (`sudo`) and `curl`. The script installs `minisign` from your package manager if it is missing.
-- For the panel: a domain name and a web server with a TLS certificate in front of it.
+- For the panel: a domain name that points at the server. The script can set up the web server and its certificate for you (see [Put a web server in front](#put-a-web-server-in-front)), or you can bring your own.
 
 ## Install with the script
 
@@ -61,6 +61,7 @@ Run the script with no arguments to get this menu:
 | Command | What it does |
 |---|---|
 | `install node\|panel\|both\|mirror [--version vX.Y.Z]` | Installs the chosen parts from the latest release, or from the tag you give. `mirror` installs a relay mirror of the subscription endpoint, see [Relay mirrors](../manuals/panel/#relay-mirrors). |
+| `install panel\|both --domain <name> [--web caddy\|nginx]` | Also sets up a web server with HTTPS for that domain, and a plain site for every path that is not the panel's. See [Put a web server in front](#put-a-web-server-in-front). |
 | `update [node\|panel\|mirror\|both]` | Installs the latest release, or the tag you give, and restarts the service. The panel's **Update** button runs this for the panel, see [Updating the panel](../manuals/panel/#updating-the-panel). |
 | `status` | Shows the state of each service, its version, and the config and state folders. Does not need root. |
 | `logs [node\|panel\|mirror]` | Follows the last 100 journal lines of the service. |
@@ -71,7 +72,9 @@ Run the script with no arguments to get this menu:
 | `restore <file>` | Restores a backup after you confirm. It saves the current files first. |
 | `panel-prefix [/path]` | Moves the admin pages to a new path, random when none is given. It prints the lines to change in your web server, and puts the old path back if the panel does not start. |
 | `addon xray [install\|remove\|status]` | Installs, removes or shows the Xray add-on. `install` is the default. It downloads one pinned release of the official Xray-core, refuses it unless its SHA-256 matches the one built into the script, and puts the `xray` executable in `/usr/local/lib/veilway/addons/xray`, owned by root. Xray then runs as its own user, `veilway-xray`, and the node starts it when its config has an Xray inbound. See [Xray add-on](../manuals/xray/). |
+| `mirror-sync <folder> [--version vX.Y.Z]` | Copies a release of the node and of the panel, with their signatures and the signed `latest` pointers, into a folder laid out as GitHub does. Every file is checked first. Serve the folder, or carry it on a USB stick. See [Installing from a mirror](#installing-from-a-mirror). Needs no root. |
 | `uninstall` | Removes the binaries and units. It asks before it deletes the config and data. Backups stay. |
+| `uninstall web` | Takes back what `--domain` set up: the site file, the plain site if you did not edit it, the panel's `not_found`, and the packages the script installed. |
 | `version` | Prints the script, node and panel versions. |
 
 Flags:
@@ -79,11 +82,15 @@ Flags:
 - `--dry-run` prints what the command would do and changes nothing.
 - `--yes` (or `-y`) answers every question with its default.
 - `--version <tag>` picks a release tag instead of the latest.
+- `--allow-downgrade` lets `--version` name a tag older than the installed one. Without it the script refuses, and it warns when you use it.
+- `--mirror <url>` installs from a mirror (repeat it for several), see [Installing from a mirror](#installing-from-a-mirror). `--mirror-only` never falls back to GitHub.
+- `--domain <name>` and `--web caddy|nginx` set up a web server for the panel. `caddy` is the default.
 
 Environment:
 
 - `NO_COLOR` turns off colors.
 - `VEILWAY_PANEL_PORT` sets the panel's port. The default is `8480`.
+- `VEILWAY_MIRRORS` lists mirror addresses separated by spaces, tried after any `--mirror`.
 
 ### Checked downloads
 
@@ -120,7 +127,36 @@ The panel prints the token only while no admin account exists. Keep it private.
 
 ### Put a web server in front
 
-The panel has no TLS of its own, so a web server must serve it over HTTPS. The examples use `panel.example.com`, the admin path `/3f9c0a7e21b84d65` and the subscription path `/sub`. Use your own domain and your own admin path.
+The panel has no TLS of its own, so a web server must serve it over HTTPS. There are two ways: let the script do it, or do it by hand.
+
+#### The automatic way
+
+Point a domain name at the server (an A record, and an AAAA record if the server has IPv6), then add `--domain`:
+
+```
+sudo bash veilway.sh install panel --domain panel.example.com
+```
+
+`install both` takes it too. Without `--domain`, a script that runs in a terminal asks whether you want a web server, and for the domain. With `--yes` it never asks.
+
+What it does, on Debian and Ubuntu:
+
+1. **Installs Caddy**, from the system packages if they are version 2.6 or newer, otherwise from Caddy's own apt repository with its signing key. `--web nginx` installs nginx and certbot (`python3-certbot-nginx`) instead.
+2. **Writes the site as a file of its own.** For Caddy that is `/etc/caddy/conf.d/veilway-panel.caddy`, and the script adds one line, `import /etc/caddy/conf.d/*.caddy`, to the end of `/etc/caddy/Caddyfile`. A Caddyfile you already have is kept as it is, and a copy goes to `/var/backups/veilway` first. For nginx the file is `/etc/nginx/conf.d/veilway-panel.conf`.
+3. **Forwards the panel's two paths**, the admin prefix and the subscription path, which it reads from `panel.json`, to the panel on `127.0.0.1:8480`.
+4. **Serves a plain site everywhere else**: one ordinary page in `/var/www/veilway-site`, with no Veilway name or text. It is yours to edit or replace, and the script never overwrites it.
+5. **Sets the panel's `not_found` to the web server's own 404 answer**, so a stranger cannot tell the panel's paths from any other missing page.
+6. **Gets a certificate.** Caddy does it by itself, and renews it. For nginx, certbot does it once and its timer renews it. Both need the domain to point at this server and port 80 to be reachable. If certbot fails, the script says so and the site answers on http only until you run `sudo certbot --nginx -d panel.example.com`.
+
+If a web server already runs on the server, or something else holds port 80 or 443, the script explains and stops before it changes anything. It never stops or replaces a server it did not install. If Caddy (or nginx, with `--web nginx`) already runs, it asks before it adds its one file and import line, and `--yes` answers yes.
+
+**Port 443 and the node.** A node with a `tls` transport on port 443 holds the port the web server needs. The script's choice is the safe one: the web server takes 443 and the node's TCP transports on 443 move to 8443. The script asks first (`--yes` answers yes), backs up the node's config, checks the changed config, restarts the node, and restores the old config if anything fails. **Profiles that name port 443 stop working until you publish them again in the panel.** The other design, the node keeping 443 and the web server behind it, was not built: the node could not read the web server's certificate files, because its sandbox and their owner both forbid it. To keep the node on 443, do not use `--domain`: put the web server on another port or host by hand.
+
+`sudo bash veilway.sh uninstall web` takes it back: the site file, the import line, the plain site if it is unchanged, the panel's `not_found`, and the packages the script installed. The node's moved transports stay on 8443.
+
+#### By hand
+
+The examples use `panel.example.com`, the admin path `/3f9c0a7e21b84d65` and the subscription path `/sub`. Use your own domain and your own admin path.
 
 For nginx, the script prints this block with your admin path filled in:
 
@@ -146,7 +182,52 @@ panel.example.com {
 }
 ```
 
-Then open `https://panel.example.com/3f9c0a7e21b84d65/`, enter the setup token with a username and a password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
+Then open `https://panel.example.com/3f9c0a7e21b84d65/`, enter the setup token with a username and a password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). With the manual way, set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
+
+## Installing from a mirror
+
+A mirror is a copy of the release files on a server people can reach, for networks that block GitHub. Anyone can run one ([host a release mirror](../guides/release-mirror/)), and you do not have to trust it: the installer checks every file against the key built into the script, whichever mirror it came from.
+
+```
+sudo bash veilway.sh install node --mirror https://mirror.example.org
+```
+
+- `--mirror <url>` can be repeated. The mirrors are tried in order for each download, and GitHub is the last resort. `--mirror-only` never falls back to GitHub. Without `--mirror`, `VEILWAY_MIRRORS` (addresses separated by spaces) does the same.
+- Only `https://` addresses work. `http://` is accepted for `127.0.0.1`, `localhost` and `[::1]`, for tests.
+- The layout is GitHub's: `<mirror>/<owner>/<repo>/releases/download/<tag>/<file>`.
+- A mirror that is down, blocked or gives a file that fails its signature is passed over with a warning, and the next one is tried.
+- Without `--version`, the newest tag comes from a signed pointer file, `latest-veilway.txt` (`latest-veilway-panel.txt` for the panel), read from the mirrors first and from GitHub's `releases/latest/download/` address after. The script refuses a pointer older than what is installed, so a stale mirror cannot roll you back. A tag older than the installed one needs `--version <tag> --allow-downgrade`.
+- Releases from before the pointer existed have none. The script then asks GitHub for the latest release, unless you gave `--mirror-only`: use `--version` there.
+- The Xray add-on and the example config still come from GitHub.
+
+### Get the script from a mirror
+
+The installer itself is on the mirror too, signed. Fetch it and check it by hand before you run it. This needs `minisign` (`apt install minisign`):
+
+```
+curl -fsSLO https://mirror.example.org/veilway.sh
+curl -fsSLO https://mirror.example.org/veilway.sh.minisig
+minisign -V -m veilway.sh -x veilway.sh.minisig -P RWQiodKlFCiJ3bkZD3ojKV7AYyTYf3F5x/XY8upWvpSFTVm3O2cNRbrV
+```
+
+The output must say `Signature and comment signature verified` and a `Trusted comment:` of `veilway <tag> veilway.sh`. Only then run it:
+
+```
+sudo bash veilway.sh install both --mirror https://mirror.example.org
+```
+
+Do not pipe a script from a mirror straight into `bash`: check it first.
+
+### Make a folder to serve or carry
+
+`mirror-sync` makes the same layout from a machine that can reach GitHub (or another mirror), for a web server or a USB stick:
+
+```
+bash veilway.sh mirror-sync ./veilway-mirror
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.1.0-alpha
+```
+
+It downloads the node's and the panel's files with their signatures and the pointers, verifies each one before it stores it, and puts `veilway.sh` at the top of the folder. It keeps a newer pointer that is already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.
 
 ## Install with Docker
 

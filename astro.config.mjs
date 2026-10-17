@@ -22,7 +22,10 @@ export default defineConfig({
 				{
 					label: "Guides",
 					translations: { fa: "آموزش‌ها" },
-					items: [{ label: "Entry node", translations: { fa: "گره ورودی" }, slug: "guides/entry-node" }],
+					items: [
+						{ label: "Entry node", translations: { fa: "گره ورودی" }, slug: "guides/entry-node" },
+						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
+					],
 				},
 				{
 					label: "Protocol specification",

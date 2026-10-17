@@ -268,6 +268,26 @@ Every change of state is logged at info with the link's tag, and counted.
 - **Parallel links between the same two nodes.** A `chain` exit may name 1 to 4 links. Each has its own keys and its own addresses. A new flow goes to one of the links that are up by the rule the transports page has for parallel connections: for each link the entry hashes the flow together with the link's id and takes the link with the highest result. The hash is the implementation's choice and is keyed with a value the node draws at start. Nothing of it is on the wire. A flow stays on its link. When that link goes down the flow is reset, and it is not moved to another link, because its translated address belongs to the link.
 - **One entry, several exits.** Each exit node is its own `chain` exit in the entry's config, with its own name and country, and rules and users choose between them as between any exits. Spreading users over several exit nodes by load is not part of this page.
 
+## Tunnels
+
+A tunnel forwards one TCP or UDP port of the entry to one address on the far side of a link, with no client and no user. A port on a public node can reach a service behind a home node that has no open port of its own: the public node is the entry, the home node is the exit, and the home node dials the link, which is a reverse link.
+
+| Rule | |
+|---|---|
+| Where | A tunnel is on the entry half only, and names a `chain` exit. The node listens on the tunnel's address and opens each connection, or each UDP session, inside the link to the tunnel's target. |
+| The other way round | A tunnel from the exit's side towards the entry's side is a tunnel on a second link whose roles are swapped: the node that was the exit is that link's entry. Either node can dial either link. A link's exit never opens flows towards its entry, so nothing on this page about what the entry accepts from the link changes. |
+| What the exit sees | A flow from the entry's link address, like any user's flow. It is decided by the exit's rules for the link, its `exits` and its caps. A target on a private network needs `allow_private` on the exit half, which is the exit operator's consent to being reached at home. The exit cannot tell a tunnel's flow from a user's, and is not told. |
+| Addresses and ports | Source: the entry's link address. Source port: drawn from the entry's translation, from the same range and the same table as users' flows, with the same rest time. The target is never a link address, an address of the entry's pools, or anything the destination gate refuses. |
+| Which link | For each connection or session, the rule for parallel links, hashed over the client's address and port. A connection stays on its link and is reset when that link goes down. While the `chain` exit is down, a connection is refused at once and a UDP datagram is dropped, and both are counted. |
+| TCP | The entry ends the client's TCP connection with the system's TCP, and opens its own TCP connection inside the link with a userspace TCP stack. Bytes are copied both ways, a half close is passed on, and a reset on either side resets the other. An opening that is not answered within 10 s closes the client's connection. A connection with no byte either way for 1 hour is closed. The segment size the entry announces fits the link's MTU. |
+| UDP | A session per client address and port, with its own translated port. A datagram from the link reaches a client only when it answers that client's session, by the tunnel's target address and port. A session ends 60 s after the client last sent. A datagram larger than the link carries is dropped and counted. |
+| Who may connect | Anyone who reaches the address, unless `sources` lists networks: then the connection or datagram from another address is refused (TCP) or dropped (UDP) and counted. Without `sources` on an address that is not loopback, validation warns. |
+| Limits | `max_connections` TCP connections or UDP sessions at once per tunnel, and at most 16 of them for one client address. The translated ports a tunnel holds count against the same table as users' flows. No user's quota is charged: a tunnel belongs to the operator. |
+| Counters | Per tunnel: connections or sessions opened, refused for each reason, open now, and bytes and packets in each direction. |
+| Reload | A tunnel whose entry did not change keeps its connections. One that changed or went away closes its listener and its connections. |
+
+A tunnel publishes the target to whoever can reach the entry's address. The entry's operator decides who that is with `sources`, and the exit's operator decides what the link may reach. Neither node holds the other's configuration.
+
 ## Limits and failure
 
 **A link that is down.** A `chain` exit is down when none of its links is up. While it is down, every flow routed to it is refused with the ICMP error or reset that an unreachable exit gives, new and live flows alike, and the refusal is counted. Nothing routed to it leaves through another exit, the node's own address or another link. It comes back when a link does, with no action by anyone. This is the behavior of a failed `l3` exit.
@@ -306,6 +326,7 @@ These keys are in the [config reference](../../reference/config/), which is the 
 | `links[].max_flows`, `links[].quota_bytes`, `links[].quota_period`, `links[].expires_at` | the exit half | How much the link may use. The quota and its period mean what they mean for a user. |
 | `routing.rules[].link` | the exit half | A condition: a list of link tags. |
 | `exits[].backend` of type `chain` with `links` | the entry half | A list of 1 to 4 link tags that lead to the same exit node. |
+| `tunnels[]` | the entry half | Ports forwarded through a `chain` exit to an address on the far side, see "Tunnels". |
 
 Which half a node is follows from `direction` and from whether the link is listed with `inbound` or with `peer`.
 

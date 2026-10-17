@@ -27,7 +27,7 @@ This page is about the node's config. Endpoints, gateway keys, mirrors, relays a
 
 - **Strict JSON.** Unknown keys and duplicate keys are errors at every level. A byte order mark, data after the document, invalid UTF-8 and a NUL inside a string are errors. Where an integer is expected, only an integer token is accepted (`1`, never `1.0`).
 - **Growth.** Version 1 only grows by new optional keys and new enum values. A build that meets a key or value it does not know refuses the file and says the config may be newer than the build.
-- **Tags.** Inbounds, outbounds, exits, routing rules, DNS sets, links and Xray inbounds each have a `tag` matching `[a-z0-9][a-z0-9_-]{0,63}`, unique within its section. These words cannot be tags: `all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`.
+- **Tags.** Inbounds, outbounds, exits, routing rules, DNS sets, links, tunnels and Xray inbounds each have a `tag` matching `[a-z0-9][a-z0-9_-]{0,63}`, unique within its section. These words cannot be tags: `all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`.
 - **References.** Every tag, user name and group name used anywhere must exist. A dangling reference is an error.
 - **Lists.** A list never contains the same entry twice. Inside a routing rule, a condition that is present must not be an empty list.
 - **Canonical spelling.** Numbers inside strings (a port, a prefix length, a `lo-hi` range) have no sign and no leading zeros. A timestamp uses `T` between date and time.
@@ -35,7 +35,7 @@ This page is about the node's config. Endpoints, gateway keys, mirrors, relays a
 - **Secrets.** `private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `transport_secret`, `username`, `password`, `server_key` and the `secret` of an Xray client are secrets. No error, warning, log line or API response contains a field's value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read unless started with `--allow-readable-config`; `veilway check` warns.
 - **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
 - **Paths.** A file path in the config is relative to the directory of the config file. Absolute paths and any `..` component are errors.
-- **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users, 16 devices per user, 4 notices, 8 public addresses, 64 links and 16 Xray inbounds.
+- **Limits.** File at most 64 MiB and at most 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users, 16 devices per user, 4 notices, 8 public addresses, 64 links, 64 tunnels and 16 Xray inbounds.
 - **Errors and warnings.** Validation reports problems with the path of the field, at most 100 errors and 100 warnings followed by a count of the rest. An error refuses the config. A warning lets it load and is logged. Warnings are advice and are not part of the format.
 
 ## `version`
@@ -714,6 +714,23 @@ An address the node dials may not be loopback, link-local, unspecified, multicas
 Other checks: a link's key is not an inbound's or a device's, and no two links share a key. The addresses of a link must be host addresses (not the gateway, network or broadcast address) of its inbound's pool on the node it connects to. On the node that dials they must lie outside every pool of this node, inside `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10` or `fc00::/7`, where the pool they come from lies. The `chain` exit that names a link must name an entry half, and no two exits name the same link.
 
 Engine. A link that is down carries nothing, and nothing routed to it goes round it: the flows are answered as unreachable. The dialler tries one candidate at a time and never latches a failure. `GET /v1/links` of the control API shows each link's state, and `veilway doctor` checks the links.
+
+## `tunnels`
+
+A list of at most 64 tunnels. A tunnel forwards one TCP or UDP port of this node to one address on the far side of a node link, through a `chain` exit, with no client. See "Tunnels" on the [node links page](../../protocol/node-links/) for what each node does.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | |
+| `enabled` | bool | `true` | A tunnel that is not enabled is validated and does not listen. |
+| `protocol` | `tcp` or `udp` | required | |
+| `listen` | `ip:port` | required | The address this node listens on. No other tunnel, inbound transport or listener of this node uses the same address, port and protocol. |
+| `exit` | exit tag | required | A `chain` exit. |
+| `target` | `ip:port` | required | The address the far node is asked to reach. Not a link address, not inside an inbound pool of this node, and nothing the destination gate refuses. A private address works only when the far node set `allow_private` for the link. |
+| `sources` | list of 1 to 64 networks | anyone | The networks that may connect. Without it, a tunnel that listens on an address that is not loopback is a warning. |
+| `max_connections` | integer 1 to 4096 | `256` | TCP connections or UDP sessions at once. One client address holds at most 16. |
+
+Engine. A tunnel's connections leave from the entry's link address with ports from the entry's translation, as users' flows do, and are decided by the far node's rules for the link. While the `chain` exit is down, connections are refused. `/v1/stats` counts each tunnel under `tunnels`.
 
 ## `xray`
 

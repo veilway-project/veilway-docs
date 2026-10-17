@@ -469,7 +469,7 @@ A shared network for games on one tunnel, with every other tunnel isolated, is o
 
 Users on `gaming` reach each other. They do not reach users of other tunnels, and users of other tunnels reach nobody.
 
-Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and nothing else, and on a `veilway` inbound the control channel of that inbound. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
+Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and ping from the devices of its own inbound and nothing else, and on a `veilway` inbound the control channel of that inbound. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players; connecting by address works.
 
 ### `proxy_only` and `unsupported`
 

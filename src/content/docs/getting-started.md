@@ -108,7 +108,7 @@ To check the config at any time, run `sudo bash veilway.sh check`.
 
 ## Set up the panel
 
-`install panel` writes `/etc/veilway/panel.json` once. An existing file is never changed. The panel listens on `127.0.0.1:8480` only, its cookies are marked secure, and its admin path is random, such as `/p-0123456789abcdef`. To move the admin pages later, run `sudo bash veilway.sh panel-prefix [/new-path]`.
+`install panel` writes `/etc/veilway/panel.json` once. An existing file is never changed. The panel listens on `127.0.0.1:8480` only, its cookies are marked secure, and its admin path is random, such as `/3f9c0a7e21b84d65`. To move the admin pages later, run `sudo bash veilway.sh panel-prefix [/new-path]`.
 
 The script prints the admin path and a one-time setup token at the end of the install. To read the token again, run:
 
@@ -120,12 +120,12 @@ The panel prints the token only while no admin account exists. Keep it private.
 
 ### Put a web server in front
 
-The panel has no TLS of its own, so a web server must serve it over HTTPS. The examples use `panel.example.com`, the admin path `/p-0123456789abcdef` and the subscription path `/sub`. Use your own domain and your own admin path.
+The panel has no TLS of its own, so a web server must serve it over HTTPS. The examples use `panel.example.com`, the admin path `/3f9c0a7e21b84d65` and the subscription path `/sub`. Use your own domain and your own admin path.
 
 For nginx, the script prints this block with your admin path filled in:
 
 ```
-location ~ ^(/p-0123456789abcdef|/sub)(/|$) {
+location ~ ^(/3f9c0a7e21b84d65|/sub)(/|$) {
     proxy_pass http://127.0.0.1:8480;
     client_max_body_size 100m;
     proxy_set_header Host $host;
@@ -137,7 +137,7 @@ For Caddy, use:
 
 ```
 panel.example.com {
-    handle /p-0123456789abcdef/* {
+    handle /3f9c0a7e21b84d65/* {
         reverse_proxy 127.0.0.1:8480
     }
     handle /sub/* {
@@ -146,7 +146,7 @@ panel.example.com {
 }
 ```
 
-Then open `https://panel.example.com/p-0123456789abcdef/`, enter the setup token with a username and a password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
+Then open `https://panel.example.com/3f9c0a7e21b84d65/`, enter the setup token with a username and a password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). Set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
 
 ## Install with Docker
 

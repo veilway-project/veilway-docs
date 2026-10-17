@@ -513,7 +513,7 @@ The admin API sits under `{prefix}/api`. Its description is at `{prefix}/api/ope
 A browser uses its session and sends a CSRF token with every change. A script uses an API token in a Bearer header:
 
 ```
-curl -H "Authorization: Bearer <token>" https://panel.example.com/p-0123456789abcdef/api/users
+curl -H "Authorization: Bearer <token>" https://panel.example.com/3f9c0a7e21b84d65/api/users
 ```
 
 Each operation in the file says what it needs, in its `x-access` field:

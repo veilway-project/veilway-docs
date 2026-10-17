@@ -513,7 +513,7 @@ API مدیریتی زیر `{prefix}/api` قرار دارد. توضیح آن در
 مرورگر از نشست خودش استفاده می‌کند و برای هر تغییر یک توکن CSRF می‌فرستد. اسکریپت یک توکن API را در سرآیند Bearer می‌فرستد:
 
 ```
-curl -H "Authorization: Bearer <token>" https://panel.example.com/p-0123456789abcdef/api/users
+curl -H "Authorization: Bearer <token>" https://panel.example.com/3f9c0a7e21b84d65/api/users
 ```
 
 هر عملیات در فایل می‌گوید به چه چیزی نیاز دارد، در فیلد `x-access` آن:

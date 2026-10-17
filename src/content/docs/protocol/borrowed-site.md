@@ -4,7 +4,7 @@ description: The faketls transport. The node answers with the shape of a real si
 ---
 
 :::danger[Design draft, not built, not reviewed]
-Nothing on this page is implemented. It is the specification that comes before the build, as [Protocol overview](../overview/) requires, and nobody outside the project has read it. The proof, the node's handshake and the way the node copies a site are new constructions with no analysis behind them. **This mode must have an outside review before it is offered to anyone**, and until it has passed the tests of `THREAT_MODEL.md` invariant 7a it is rated Detectable like every other native transport. Do not rely on any property described here.
+Nothing on this page is implemented. It is the specification that comes before the build, as [Protocol overview](../overview/) requires, and nobody outside the project has read it. The proof, the node's handshake and the way the node copies a site are new constructions with no analysis behind them. **Nobody outside the project has reviewed it.** It is offered as alpha only: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. Until it has passed the tests of `THREAT_MODEL.md` invariant 7a it is rated Detectable like every other native transport. Do not rely on any property described here.
 :::
 
 `tls` shows the node's own certificate to anyone who connects, which is why it is rated Detectable. This mode, called `faketls` in the tables of [Transports](../transports/), removes that. The node holds no certificate and needs no name. It borrows a real site that the operator chooses. A client that proves itself inside its first TLS message gets the tunnel. Every other connection is relayed byte for byte to the real site, so a prober completes a real handshake with the real site and sees its genuine certificate.
@@ -333,7 +333,7 @@ This section is the one `THREAT_MODEL.md` and its page are to refer to for `fake
 
 **Out of scope.** Traffic analysis of the tunnel, a compromised node (it holds the key and the config), and a censor that blocks every address it has not seen the site on.
 
-**Needs an outside review.** The proof (the key agreement, the associated data, the truncated binder), the node's handshake (the key schedule, the record padding, the throwaway key derived from a shared secret, the hybrid encapsulation), the relay's timing and its half-close and reset handling, the live copy and the budget rule, and the claim that the live copy and the sampled shapes are close enough to the site's flights. This mode is not offered, and no panel form or app screen makes it available, until a reviewer outside the project has read this page and the code and the tests of "Tests before it is offered" have passed.
+**Not reviewed from outside.** The proof (the key agreement, the associated data, the truncated binder), the node's handshake (the key schedule, the record padding, the throwaway key derived from a shared secret, the hybrid encapsulation), the relay's timing and its half-close and reset handling, the live copy and the budget rule, and the claim that the live copy and the sampled shapes are close enough to the site's flights. There is no outside review. The mode is offered as alpha, off by default, behind a panel switch and an app label that say it is new and unreviewed, and only once the tests of "Tests before it is offered" pass. An outside review stays wanted, and its findings would be built before the alpha label comes off.
 
 ## Security considerations
 

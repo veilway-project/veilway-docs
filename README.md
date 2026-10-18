@@ -26,7 +26,7 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 ## Status
 
-The site describes the alpha, `v0.2.0-alpha`, which is tagged and released in the core repository. Parts of the site are still stubs.
+The site describes the alpha, `v0.2.1-alpha`, which is tagged and released in the core repository. Parts of the site are still stubs.
 
 - Written, in English: the alpha release page, getting started, the entry-node guide, the operator terms and provider templates, the panel, client, Android, home network and Xray manuals, the config reference, the control API reference, the obfuscation status page, and the draft protocol specification (overview, transports, control channel, subscription format with static mirrors, and node links).
 - Written, in Persian: the alpha release page, getting started, the entry-node guide, the legal pages, the manuals (Xray included), and the config and control API references.

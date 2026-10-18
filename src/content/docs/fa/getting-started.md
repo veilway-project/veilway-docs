@@ -3,7 +3,7 @@ title: شروع به کار
 description: نصب گره و پنل نسخهٔ آلفای Veilway با اسکریپت نصب، یا با Docker.
 ---
 
-این صفحه آلفای `v0.2.0-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
+این صفحه آلفای `v0.2.1-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
 
 ## چه چیزی لازم است
 
@@ -138,6 +138,8 @@ sudo bash veilway.sh install panel --domain panel.example.com
 
 `install both` هم آن را می‌پذیرد. بدون `--domain`، اسکریپتی که در یک ترمینال اجرا شود می‌پرسد وب‌سرور می‌خواهید یا نه، و دامنه را می‌پرسد. با `--yes` هرگز نمی‌پرسد.
 
+`--https-port <port>` سایت HTTPS را روی درگاهی غیر از ۴۴۳ می‌گذارد، برای نمونه `--https-port 8443`. پنل بعد از آن در `https://panel.example.com:8443/<prefix>/` است. درگاه ۸۰ در هر حال باز بماند، چون گواهی از روی آن بررسی می‌شود. هر انتقال TCP گره که روی آن درگاه گوش می‌دهد به ۸۴۴۳ می‌رود (یا به ۸۴۴۴ اگر خود ۸۴۴۳ را انتخاب کرده باشید)، همان‌طور که در مورد درگاه ۴۴۳ پایین‌تر آمده است. اجرای دوباره بدون این گزینه همان درگاهی را نگه می‌دارد که با آن راه افتاده بود.
+
 کاری که روی Debian و Ubuntu انجام می‌دهد:
 
 1. **Caddy را نصب می‌کند**، از بسته‌های خود سیستم اگر نسخهٔ ۲٫۶ یا جدیدتر باشند، وگرنه از مخزن apt خود Caddy با کلید امضای آن. `--web nginx` به‌جای آن nginx و certbot (`python3-certbot-nginx`) را نصب می‌کند.
@@ -223,7 +225,7 @@ sudo bash veilway.sh install both --mirror https://mirror.example.org
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.0-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.1-alpha
 ```
 
 فایل‌های گره و پنل را با امضاها و اشاره‌گرها دانلود می‌کند، هر یک را پیش از ذخیره بررسی می‌کند، و `veilway.sh` را بالای پوشه می‌گذارد. اشاره‌گر جدیدتری را که از قبل آنجا باشد نگه می‌دارد. صفحهٔ `index.html` قابل مرورِ [`veilway-release-mirror`](../guides/release-mirror/) را نمی‌نویسد.

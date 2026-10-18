@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.0-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.1-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.0-alpha`. It follows `v0.1.0-alpha`, the first public release. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.1-alpha`. It follows `v0.2.0-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.0-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.0-alpha)
+- Node and install script: [v0.2.1-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.1-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.1-alpha
+
+- **The panel is released again.** v0.2.0 shipped without a new panel release, so installs got the v0.1.0 panel. v0.2.1 ships the panel with all the v0.2.0 panel work: the borrowed-site transport, relays per user and per group, tunnels, bulk link reset, fronted-shaped presets and the HTTP/2 switch.
+- **Profile editor.** The panel's hand-written profile editor has fronted-shaped and borrowed-site. Relays can carry fronted-shaped.
+- **TLS names in profiles.** Profiles for `tls`, `ws` and fronted-shaped with a decoy take their TLS name from the certificate, the decoy or the node's DNS name. A transport with no name is left out and named on the Profiles page, instead of being published broken.
+- **Installer.** `--https-port` with `--domain` puts the panel's web server on a port other than 443. See [Getting started](../getting-started/).
 
 ## New in v0.2.0-alpha
 

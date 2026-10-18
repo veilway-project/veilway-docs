@@ -4,7 +4,7 @@ description: The faketls transport. The node answers with the shape of a real si
 ---
 
 :::danger[Alpha]
-The node and client sides are built in v0.2.0 and reviewed three times inside the project, with no outside review. A profile can carry it, and a client dials it only after the user turns on `alpha_transports`. The panel does not emit it yet, and it has not run against real sites. Do not rely on it.
+The node and client sides are built in v0.2.0 and reviewed three times inside the project, with no outside review. A profile can carry it, and a client dials it only after the user turns on `alpha_transports`. The panel sets it up and emits it in a profile of its own since v0.2.1. It has not run against real sites. Do not rely on it.
 :::
 
 `tls` shows the node's own certificate to anyone who connects, which is why it is rated Detectable. This mode, called `faketls` in the tables of [Transports](../transports/), removes that. The node holds no certificate and needs no name. It borrows a real site that the operator chooses. A client that proves itself inside its first TLS message gets the tunnel. Every other connection is relayed byte for byte to the real site, so a prober completes a real handshake with the real site and sees its genuine certificate.

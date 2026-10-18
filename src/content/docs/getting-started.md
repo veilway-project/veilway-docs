@@ -3,7 +3,7 @@ title: Getting started
 description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-This page installs the alpha, `v0.2.0-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
+This page installs the alpha, `v0.2.1-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
 
 ## What you need
 
@@ -139,6 +139,8 @@ sudo bash veilway.sh install panel --domain panel.example.com
 
 `install both` takes it too. Without `--domain`, a script that runs in a terminal asks whether you want a web server, and for the domain. With `--yes` it never asks.
 
+`--https-port <port>` puts the HTTPS site on a port other than 443, for example `--https-port 8443`. The panel is then at `https://panel.example.com:8443/<prefix>/`. Port 80 must stay reachable either way, because the certificate is checked over it. A node TCP transport that listens on that port moves to 8443 (to 8444 when you chose 8443), as described for port 443 below. A re-run without the flag keeps the port it was set up with.
+
 What it does, on Debian and Ubuntu:
 
 1. **Installs Caddy**, from the system packages if they are version 2.6 or newer, otherwise from Caddy's own apt repository with its signing key. `--web nginx` installs nginx and certbot (`python3-certbot-nginx`) instead.
@@ -224,7 +226,7 @@ Do not pipe a script from a mirror straight into `bash`: check it first.
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.0-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.1-alpha
 ```
 
 It downloads the node's and the panel's files with their signatures and the pointers, verifies each one before it stores it, and puts `veilway.sh` at the top of the folder. It keeps a newer pointer that is already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.

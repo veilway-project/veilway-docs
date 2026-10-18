@@ -5,8 +5,8 @@ description: Connect to vless, vmess, trojan and shadowsocks links of other apps
 
 Some providers give out links for other apps: `vless://`, `vmess://`, `trojan://` and `ss://`. The Veilway client can connect to them by running Xray-core next to the tunnel. Xray-core is an official program that Veilway does not write. Veilway runs one release of it that the app has pinned.
 
-:::caution[Linux only, and new]
-In this version, connecting to these links works on Linux only. On macOS and Windows the command says it is not built for that system yet. The desktop window also refuses these links when you import them, so you connect from the command line. The client gate for this path (`scripts/gate-xray-client.sh`) is written but has not been run yet.
+:::caution[Desktop only, and new]
+In v0.2.0-alpha, the desktop app connects to these links on Linux, macOS and Windows. Paste a link or a list into the window, or use the command line. The macOS and Windows parts are compiled and tested on CI only, not on a real Mac or PC. The Android app does not connect to them yet. Profiles from these links show "TCP and UDP only".
 :::
 
 For the server side, see [Xray add-on](../../manuals/xray/). The design is in [Xray in the desktop apps](../../protocol/xray-client/).

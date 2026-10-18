@@ -3,8 +3,8 @@ title: Xray add-on
 description: Running the official Xray beside a Veilway node, so that stock VLESS, Trojan and Shadowsocks apps can connect.
 ---
 
-:::note[Server side only]
-This page describes the server side as it is built. Its tests run in Docker containers (`scripts/gate-xray.sh`, 119 checks, all passing), over TCP and UDP. It has not run on a real server yet. The Veilway apps do not connect to Xray links yet, and the client side is not built.
+:::note[Server side]
+This page describes the server side as it is built. Its tests run in Docker containers (`scripts/gate-xray.sh`, 119 checks, all passing), over TCP and UDP. It has not run on a real server yet. The desktop app can connect to Xray links since v0.2.0-alpha, see [Xray profiles](../../guides/xray-profiles/). The Android app cannot yet.
 :::
 
 ## What it is

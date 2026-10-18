@@ -3,8 +3,8 @@ title: HTTP/2 on the stream transports
 description: How the client offers and speaks HTTP/2 on tls, ws and fronted, WebSocket over HTTP/2, what the node must answer, and what stays visible.
 ---
 
-:::caution[Not built, designed here]
-This page is a design for version 0.2.0. Nothing on it runs. Today the node offers `http/1.1` only, the client offers `http/1.1` only, and `fronted` is an HTTP/1.1 client. Every value that says it comes from Chrome is a draft taken from published descriptions of recent Chrome versions, and it is replaced by a dated capture of Chrome 155 before the client sends it. Nobody outside the project has reviewed the design. Every transport stays rated Detectable, and `tls` stays capped.
+:::caution[Built in v0.2.0-alpha, not run behind a real CDN]
+The node and the client follow this page in v0.2.0-alpha. The client offers `h2` on `tls`, `ws` and `fronted`, and falls back to HTTP/1.1 when the server picks it. The node offers `h2` only when the transport's `http2` setting is on, and it is off by default. It has not been run behind a real CDN. Nobody outside the project has reviewed the design. Every transport stays rated Detectable, and `tls` stays capped.
 :::
 
 The client's TLS hello is shaped like Chrome's, but the requests inside it are HTTP/1.1, where Chrome offers `h2` first. This page adds HTTP/2 (RFC 9113) to the stream transports of [Transports](../transports/): ALPN `h2` in the hello, Chrome's frames and fields, WebSocket over HTTP/2 (RFC 8441) where the server allows it, and `fronted` requests as HTTP/2 streams. It also says what the node must answer when it ends TLS, and what changes behind a web server or a CDN. Read [Transports](../transports/) first for the proof, the chunk, the decoy handoff and the proxy path. Nothing here changes the proof, the chunk, the keys or the replay rule. Statements about how browsers, web servers and CDNs behave are not made on this page as facts. They are drafts, and they are listed under "Still to measure".

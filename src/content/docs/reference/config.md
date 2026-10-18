@@ -173,7 +173,7 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 | `ws` with a `decoy` | `listen` (`ip:port`), `path`, `decoy`, `trusted_proxies`, optional `client_address_header`, optional `limits`. No `tls` key. | The same WebSocket session behind your own web server, which ends TLS. Only on a `veilway` inbound. See "`ws` and `fronted` behind your web server" below. |
 | `fronted` | the keys of `ws` with a `decoy` | Polling with HTTP requests, for a CDN that allows neither WebSocket nor long-lived connections. Only on a `veilway` inbound. See the same section. |
 | `fronted-shaped` | the keys of `fronted`, and `shape` | `fronted` with a method, a place for the data and a downstream form that you pick. See "`fronted-shaped`" below. |
-| `faketls` | `listen` (`ip:port`), `site`, `transport_key` and the limits of its section | Alpha in v0.2.0. Borrows a real site. Only on a `veilway` inbound, and no profile carries it yet. See "`faketls`" below. |
+| `faketls` | `listen` (`ip:port`), `site`, `transport_key` and the limits of its section | Alpha in v0.2.0. Borrows a real site. Only on a `veilway` inbound. A profile carries it as "The `faketls` transport" of the subscription format, and a client dials it only after the user turns on `alpha_transports`. See "`faketls`" below. |
 
 `ws` is two transports under one name, and its keys say which one it is. Without `decoy`, `trusted_proxies`, `client_address_header` and `limits` it is the `ws` of a `wireguard` inbound, which carries WireGuard datagrams as they are. With any of them it is the native `ws` of a `veilway` inbound, which needs `decoy` and `trusted_proxies` and takes no `tls`. Validation refuses each on the other kind of inbound and never takes one for the other.
 

@@ -3,8 +3,8 @@ title: Borrowed-site mode
 description: The faketls transport. The node answers with the shape of a real site's TLS handshake, a client proves itself inside its ClientHello, and everyone else is relayed to the real site.
 ---
 
-:::danger[Alpha, not usable from profiles yet]
-The node and client sides are built in v0.2.0 and reviewed three times inside the project, with no outside review. It is not wired into profiles or the panel yet, and it has not run against real sites. Do not rely on it.
+:::danger[Alpha]
+The node and client sides are built in v0.2.0 and reviewed three times inside the project, with no outside review. A profile can carry it, and a client dials it only after the user turns on `alpha_transports`. The panel does not emit it yet, and it has not run against real sites. Do not rely on it.
 :::
 
 `tls` shows the node's own certificate to anyone who connects, which is why it is rated Detectable. This mode, called `faketls` in the tables of [Transports](../transports/), removes that. The node holds no certificate and needs no name. It borrows a real site that the operator chooses. A client that proves itself inside its first TLS message gets the tunnel. Every other connection is relayed byte for byte to the real site, so a prober completes a real handshake with the real site and sees its genuine certificate.
@@ -387,7 +387,9 @@ Each item needs a dated capture. The page is corrected where a measurement disag
 | How sites react after the handshake: the time to tickets, to the first application data, to a close_notify and to a record that fails to decrypt, and the idle timeouts | The reactions in the shape |
 | How many new connections a second a site's owner tolerates from one address | The budget of 16 a second |
 
-## Config and profile fields (proposed)
+## Config and profile fields
+
+The profile side is specified and built: see "The `faketls` transport" in [Subscription format](../subscription-format/#the-faketls-transport), which is the reference and wins where this section differs. The node side is in the [config reference](../../reference/config/).
 
 An inbound of type `veilway` takes a transport of type `faketls`.
 
@@ -404,7 +406,7 @@ An inbound of type `veilway` takes a transport of type `faketls`.
 
 Validation refuses a `faketls` listener that has `trusted_proxies`, shares its address and port with another transport, or is given a `site` that resolves to the node's own address (a loop). A `faketls` listener on an address with a weaker listener is capped at that listener's rating, as on the transports page.
 
-The profile's candidate for this transport has the node's address and port, the server name (which must be the site's), and the node transport public key. It takes the public key of the `faketls` transport key and no other. It takes no certificate pin, no `self_signed`, no `ech`, no `host` and no `path`, and none of the fronting values, because there is no CDN and no front. A candidate that sets one is refused.
+The profile's transport carries the public key of the `faketls` transport key and no other, and each candidate has the node's address and port and the server name, which must be the site's. It takes no certificate pin, no `self_signed`, no `ech`, no `host` and no `path`, and none of the fronting values, because there is no CDN and no front. A candidate that sets one is dropped.
 
 ## Open questions
 

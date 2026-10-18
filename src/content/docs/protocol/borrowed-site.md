@@ -3,8 +3,8 @@ title: Borrowed-site mode
 description: The faketls transport. The node answers with the shape of a real site's TLS handshake, a client proves itself inside its ClientHello, and everyone else is relayed to the real site.
 ---
 
-:::danger[Design draft, not built, not reviewed]
-Nothing on this page is implemented. It is the specification that comes before the build, as [Protocol overview](../overview/) requires, and nobody outside the project has read it. The proof, the node's handshake and the way the node copies a site are new constructions with no analysis behind them. **Nobody outside the project has reviewed it.** It is offered as alpha only: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. Until it has passed the tests of `THREAT_MODEL.md` invariant 7a it is rated Detectable like every other native transport. Do not rely on any property described here.
+:::danger[Alpha, not usable from profiles yet]
+The node and client sides are built in v0.2.0 and reviewed three times inside the project, with no outside review. It is not wired into profiles or the panel yet, and it has not run against real sites. Do not rely on it.
 :::
 
 `tls` shows the node's own certificate to anyone who connects, which is why it is rated Detectable. This mode, called `faketls` in the tables of [Transports](../transports/), removes that. The node holds no certificate and needs no name. It borrows a real site that the operator chooses. A client that proves itself inside its first TLS message gets the tunnel. Every other connection is relayed byte for byte to the real site, so a prober completes a real handshake with the real site and sees its genuine certificate.
@@ -24,7 +24,7 @@ Read [Transports](../transports/) first. This page uses its terms, its replay ru
 | Behind a CDN or a TLS-ending proxy | Yes (`ws`) | No. The node must be reached directly. |
 | What carries the tunnel | WebSocket frames | Length-prefixed chunk plaintext in TLS 1.3 application data |
 | Third party involved | None. The decoy is the operator's own. | The real site, which has not agreed |
-| Status | Built | Designed here, not built |
+| Status | Built | Built as alpha, not in profiles yet |
 
 What this mode claims: a prober that has no device secret gets the real site's bytes on every path, except that a copy of a user's hello gets a flight the node makes with the sizes and times the site showed for that same hello, and an observer who sees one connection sees a TLS 1.3 handshake to a real site's name whose flight has the sizes that site's flights have. What it does not claim is in "What remains detectable". The first item there is that the node's address is not the site's address.
 

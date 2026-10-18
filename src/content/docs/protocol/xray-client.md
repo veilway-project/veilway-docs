@@ -3,8 +3,8 @@ title: Xray in the desktop apps
 description: How the Linux, macOS and Windows apps connect to VLESS, VMess, Trojan and Shadowsocks profiles through a pinned Xray-core that runs as a supervised child process, how the binary is fetched and checked, how traffic and names reach it, and what the app says is not protected.
 ---
 
-:::caution[Draft]
-This page is a draft specification. Nothing on it is built: the client engine refuses legacy links today (`ImportError::Legacy`), there is no client-side userspace stack, no Xray supervisor and no install flow in the apps. It reuses the legacy reader of [Subscription format](../subscription-format/) and the add-on rules of the node (`veilway.sh addon xray`, `xray.rs`, `xray_host.rs`), which are built. No one outside the project has reviewed it. Do not rely on any property described here.
+:::caution[Linux only so far]
+Built for Linux in v0.2.0 and reviewed: the pinned install, the supervisor, the loopback SOCKS5 hop and the checks on links. macOS and Windows have no run path yet, the desktop window does not import legacy links yet, and the gate script has not run against a real Xray.
 :::
 
 Some providers sell only links of other apps: `vless://`, `vmess://`, `trojan://` and `ss://`. The desktop apps can connect to them by running Xray-core, an official binary the project does not write, next to the engine. This page decides how. Read "Native and legacy" of the subscription page first: this page uses its reader, its "unsigned" marking and its rating cap, and does not restate them.

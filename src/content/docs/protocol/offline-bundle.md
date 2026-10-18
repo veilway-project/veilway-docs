@@ -3,8 +3,8 @@ title: Offline bundle
 description: One signed file that carries an app update, a provider's sealed subscription documents and a provider notice over any one-way channel, how the app checks and imports it, and what it refuses.
 ---
 
-:::caution[Draft]
-This page is a draft specification. Nothing on it is built: there is no bundle reader in the client, no `veilway bundle` command and no panel button. It reuses parts that are built or drafted on other pages (the signed envelope, the sealed static files, the app updater's signature checks). The project has checked its claims about the other pages, the threat model, the desktop updater plugin and the Android updater against the text and the code, and attacked the design once. No one outside the project has reviewed it. Do not rely on any property described here.
+:::note[Built in v0.2.0]
+The bundle reader and writer, `veilway bundle make` and `inspect`, and the review screens of the desktop and Android apps are built and reviewed. Not built yet: the panel button and the release job that makes the project's two bundles.
 :::
 
 A bundle is a file that an app can apply without a network: an update of the app, new subscription documents, a notice from a provider, or all three. It travels by any channel that moves bytes one way, such as a USB stick, Bluetooth, a shared folder or satellite datacasting. Read [Subscription format](../subscription-format/) first, in particular "The signed document", "Static mirrors" and "Import". This page reuses their rules and does not restate them. A section name in quotes is a section of that page unless this page has a section of that name.

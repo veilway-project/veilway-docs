@@ -25,6 +25,8 @@ export default defineConfig({
 					items: [
 						{ label: "Entry node", translations: { fa: "گره ورودی" }, slug: "guides/entry-node" },
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
+						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },
+						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },
 					],
 				},
 				{

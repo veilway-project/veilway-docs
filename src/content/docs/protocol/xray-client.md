@@ -3,8 +3,8 @@ title: Xray in the desktop apps
 description: How the Linux, macOS and Windows apps connect to VLESS, VMess, Trojan and Shadowsocks profiles through a pinned Xray-core that runs as a supervised child process, how the binary is fetched and checked, how traffic and names reach it, and what the app says is not protected.
 ---
 
-:::caution[Linux only so far]
-Built for Linux in v0.2.0 and reviewed: the pinned install, the supervisor, the loopback SOCKS5 hop and the checks on links. macOS and Windows have no run path yet, the desktop window does not import legacy links yet, and the gate script has not run against a real Xray.
+:::caution[Built, not yet run against a real Xray on every system]
+Built in v0.2.0 for Linux, macOS and Windows and reviewed: the pinned install, the supervisor, the loopback SOCKS5 hop, the checks on links, and on each system the way Xray's own traffic is kept out of the tunnel. macOS and Windows are compiled and unit-tested on CI only. The desktop window does not import legacy links yet, and the gate script has not run against a real Xray.
 :::
 
 Some providers sell only links of other apps: `vless://`, `vmess://`, `trojan://` and `ss://`. The desktop apps can connect to them by running Xray-core, an official binary the project does not write, next to the engine. This page decides how. Read "Native and legacy" of the subscription page first: this page uses its reader, its "unsigned" marking and its rating cap, and does not restate them.

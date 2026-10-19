@@ -54,6 +54,7 @@ Run the script with no arguments to get this menu:
 | 8 | Backup | `backup` |
 | 9 | Restore | `restore <file>` |
 | 10 | Uninstall | `uninstall` |
+| 11 | Add-ons | `addon xray status`, then asks whether to install or remove it |
 | 0 | Quit | |
 
 ### Commands

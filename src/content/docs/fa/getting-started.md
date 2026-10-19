@@ -54,6 +54,7 @@ sudo bash veilway.sh
 | 8 | پشتیبان‌گیری | `backup` |
 | 9 | بازگردانی | `restore <file>` |
 | 10 | حذف | `uninstall` |
+| 11 | افزونه‌ها | `addon xray status`، و بعد می‌پرسد که نصب یا حذف شود |
 | 0 | خروج | |
 
 ### دستورها

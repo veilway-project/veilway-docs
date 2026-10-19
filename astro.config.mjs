@@ -14,6 +14,9 @@ export default defineConfig({
 				root: { label: "English", lang: "en" },
 				fa: { label: "فارسی", lang: "fa", dir: "rtl" },
 			},
+			components: { ThemeSelect: "./src/components/ThemeSelect.astro" },
+			// Applies the reader's layout direction before the page is drawn; the language's own direction is kept in data-lang-dir for "Automatic".
+			head: [{ tag: "script", content: "(function(){var h=document.documentElement;h.dataset.langDir=h.dir;try{var d=localStorage.getItem('veilway-dir');if(d==='ltr'||d==='rtl')h.dir=d}catch(e){}})()" }],
 			social: [{ icon: "github", label: "GitHub", href: "https://github.com/veilway-project/veilway" }, { icon: "telegram", label: "Telegram", href: "https://t.me/VeilwayGroup" }],
 			sidebar: [
 				{ label: "Introduction", translations: { fa: "معرفی" }, slug: "" },
@@ -23,7 +26,7 @@ export default defineConfig({
 					label: "Guides",
 					translations: { fa: "آموزش‌ها" },
 					items: [
-						{ label: "Entry node", translations: { fa: "گره ورودی" }, slug: "guides/entry-node" },
+						{ label: "Entry node", translations: { fa: "نود ورودی" }, slug: "guides/entry-node" },
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
 						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },
 						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },

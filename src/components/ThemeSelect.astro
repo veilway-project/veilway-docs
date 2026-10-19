@@ -1,0 +1,27 @@
+---
+// Starlight's theme picker, with a layout direction picker next to it: some readers want Persian text on a left-to-right page. The choice is kept in the browser and applied before paint by the head script in astro.config.mjs.
+import Default from "@astrojs/starlight/components/ThemeSelect.astro";
+import Select from "@astrojs/starlight/components/Select.astro";
+const fa = Astro.locals.starlightRoute.lang === "fa";
+---
+
+<Default />
+<veilway-dir-select>
+	<Select icon="right-arrow" label={fa ? "جهت صفحه" : "Layout direction"} width="8.5em" options={[{label: fa ? "جهت خودکار" : "Auto direction", selected: true, value: "auto"}, {label: fa ? "چپ به راست" : "Left to right", selected: false, value: "ltr"}, {label: fa ? "راست به چپ" : "Right to left", selected: false, value: "rtl"}]}/>
+</veilway-dir-select>
+
+<script>
+	class DirSelect extends HTMLElement {
+		connectedCallback() {
+			const select = this.querySelector("select"), root = document.documentElement;
+			if (!select) return;
+			try {select.value = localStorage.getItem("veilway-dir") || "auto";} catch {select.value = "auto";}
+			select.addEventListener("change", () => {
+				const value = select.value === "ltr" || select.value === "rtl" ? select.value : "";
+				try {value ? localStorage.setItem("veilway-dir", value) : localStorage.removeItem("veilway-dir");} catch {}
+				root.dir = value || root.dataset.langDir || root.dir;
+			});
+		}
+	}
+	customElements.define("veilway-dir-select", DirSelect);
+</script>

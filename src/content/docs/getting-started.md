@@ -120,10 +120,10 @@ To check the config at any time, run `sudo bash veilway.sh check`.
 The script prints the admin path and a one-time setup token at the end of the install. To read the token again, run:
 
 ```
-sudo journalctl -u veilway-panel | grep 'Setup token'
+sudo journalctl -u veilway-panel -o cat | grep 'Setup token' | tail -n 1
 ```
 
-The panel prints the token only while no admin account exists. Keep it private.
+The panel prints the token only while no admin account exists. Every start of the panel before that, a restart or a reinstall included, prints a new token, and the earlier ones stop working: use the last one. Keep it private.
 
 ### Put a web server in front
 

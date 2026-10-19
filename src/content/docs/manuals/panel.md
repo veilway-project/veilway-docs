@@ -54,6 +54,15 @@ Add this line to `panel.json`, then restart the panel with `sudo bash veilway.sh
 "two_step": "off"
 ```
 
+The install script does not write `two_step`, and a file without it has the code on, so add the line rather than look for one to change. These two commands put it first in the file and restart the panel:
+
+```
+sudo sed -i '0,/^{$/s//{\n\t"two_step": "off",/' /etc/veilway/panel.json
+sudo bash veilway.sh restart panel
+```
+
+`curl -s http://127.0.0.1:8480/<prefix>/api/status` on the server then shows `"two_step":false`.
+
 Sign-in, first setup, adding an admin and re-authentication then ask for the password only. Every admin still gets an authenticator key, shown once, so the key is ready when the code comes back. Everything else stays: passwords of 12 characters or more, sessions, CSRF checks, API tokens and the audit log. Sign-in is stricter in this mode: a source gets 5 tries in 15 minutes, and an account that is waiting after wrong tries refuses even the right password until the wait ends. Because of that, someone who keeps guessing can keep the admin waiting for up to 15 minutes at a time.
 
 The switch is read from `panel.json` only. No page or API route of the panel can change it, so whoever can write that file already owns the panel. While it is off, every page shows a red banner, the login page says so, the panel logs a warning at every start, and the audit log records `panel.two_step` with `off`, or with `on` and the counts below, whenever the value differs from the last start.
@@ -63,7 +72,7 @@ To turn it on again, remove the line (or set it to `"on"`) and restart the panel
 ## First login
 
 1. Open `https://your-domain/<prefix>/`. The admin path is the `prefix` value.
-2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, tick **I have read and accept these terms**, then choose **Make admin account**. The token is printed in the panel's log when it first starts, and the install script prints it too.
+2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, tick **I have read and accept these terms**, then choose **Make admin account**. The token is printed in the panel's log at every start until the first admin exists, a new one each time, and the install script prints it too. Only the newest works.
 3. The next page shows a TOTP key and a QR code for your authenticator app. The key is shown once. Add it to the app, then choose **I added it, go to login**. Without the key you cannot log in.
 4. Log in with your username, your password and the 6-digit code from the app. Login is rate limited, so after several wrong tries you must wait a few minutes.
 5. Before you add users, go to **Settings**. Set the node address under **Provider**, add an endpoint under **Endpoints**, and set the device address pool under **New users**. Then add an inbound on **Inbounds** and publish its profile on **Profiles**.

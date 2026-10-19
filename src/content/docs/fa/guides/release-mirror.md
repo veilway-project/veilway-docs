@@ -27,7 +27,7 @@ description: نگه‌داشتن رونوشتی از انتشارهای Veilway 
 
 1. برنامه را بگیرید: یک فایل اجرایی انتشار برای لینوکس x86_64 یا aarch64، یا تصویر Docker که از `Dockerfile` مخزن ساخته می‌شود. فایل اجرایی را در `/usr/local/bin/veilway-release-mirror` بگذارید.
 2. یک کاربر و یک پوشه بسازید: `useradd --system veilway-mirror`، سپس `install -d -o veilway-mirror /var/lib/veilway-mirror`.
-3. پوشه را یک بار پر کنید: `sudo -u veilway-mirror veilway-release-mirror sync --out /var/lib/veilway-mirror`. برای هر فایلی که ذخیره می‌کند یک خط چاپ می‌کند. سه انتشار تازهٔ گره و پنل را نگه می‌دارد، به‌علاوهٔ انتشاری که اشارگر امضاشده نام می‌برد.
+3. پوشه را یک بار پر کنید: `sudo -u veilway-mirror veilway-release-mirror sync --out /var/lib/veilway-mirror`. برای هر فایلی که ذخیره می‌کند یک خط چاپ می‌کند. سه انتشار تازهٔ نود و پنل را نگه می‌دارد، به‌علاوهٔ انتشاری که اشارگر امضاشده نام می‌برد.
 4. تازه نگهش دارید. پوشهٔ `examples/` مخزن فایل‌های `veilway-release-mirror-sync.service` و `.timer` را دارد که همگام‌سازی را هر ساعت اجرا می‌کنند. هر دو را به `/etc/systemd/system/` کپی کنید و `systemctl enable --now veilway-release-mirror-sync.timer` را اجرا کنید.
 5. پوشه را سرو کنید، به یکی از دو روش:
    - `veilway-release-mirror serve --dir /var/lib/veilway-mirror --listen 127.0.0.1:8080` (سرویس نمونهٔ `veilway-release-mirror.service` آن را اجرا می‌کند)، با nginx یا Caddy جلویش برای TLS. نمونه‌ها `examples/nginx.conf` و `examples/Caddyfile` هستند.

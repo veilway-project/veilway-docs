@@ -12,10 +12,10 @@ crateها در پوشهٔ `crates/` [مخزن](https://github.com/veilway-projec
 | Crate | مسیر | چه کار می‌کند |
 |---|---|---|
 | `veilway-proto` | `crates/veilway-proto` | قالب‌های سیمی پروتکل بومی: کلیدها، chunkها، کانال کنترل، اشتراک‌ها. کد خالص، بدون IO. |
-| `veilway-transport` | `crates/veilway-transport` | سمت کلاینتِ `udp-obfs`، `tls`، `ws` و `fronted`: نشستی به گره باز می‌کند و دیتاگرام‌های WireGuard را حمل می‌کند. |
+| `veilway-transport` | `crates/veilway-transport` | سمت کلاینتِ `udp-obfs`، `tls`، `ws` و `fronted`: نشستی به نود باز می‌کند و دیتاگرام‌های WireGuard را حمل می‌کند. |
 | `veilway-engine` | `crates/veilway-engine` | موتور کلاینت بدون لایهٔ سیستم‌عامل: رقابت کاندیداها، حمل نشست، واردکردن اشتراک و وضعیت. |
 | `veilway-wg` | `crates/veilway-wg` | لایهٔ WireGuard چندهمتا روی boringtun، با رلهٔ WebSocket. |
-| `veilway-core` | `crates/veilway-core` | موتور گره: پیکربندی v1، مسیریابی، سهمیه، خروجی‌های TCP/IP در فضای کاربر و ترنسپورت‌های بومی. |
+| `veilway-core` | `crates/veilway-core` | موتور نود: پیکربندی v1، مسیریابی، سهمیه، خروجی‌های TCP/IP در فضای کاربر و ترنسپورت‌های بومی. |
 | `veilway-api` | `crates/veilway-api` | سمت سرورِ [API کنترل](../../reference/api/)، روی سوکت یونیکس. کلاینت نیست. |
 | `veilway-linux`، `veilway-macos`، `veilway-windows` | `crates/veilway-*` | لایهٔ کلاینت برای هر سیستم‌عامل: دستگاه TUN، مسیرها، kill switch و DNS. |
 

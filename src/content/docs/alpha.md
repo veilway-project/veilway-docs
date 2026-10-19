@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.3-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.4-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.3-alpha`. It follows `v0.2.2-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.4-alpha`. It follows `v0.2.3-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.3-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.3-alpha)
+- Node and install script: [v0.2.4-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.4-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.4-alpha
+
+- **Xray caps only the profiles on its address.** Put Xray on a separate IP address of the server, with its own host name, and the other profiles keep their rating. See [Xray add-on](../manuals/xray/).
+- **Panel.** Xray is a choice when you add an inbound. Account, Display has a layout direction, and the docs and the website have the same choice. The side panel's config counter reads as a config version.
 
 ## New in v0.2.3-alpha
 

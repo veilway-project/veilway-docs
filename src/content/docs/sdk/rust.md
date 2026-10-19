@@ -4,7 +4,7 @@ description: Building a custom client or server on the Veilway Rust crates.
 ---
 
 :::caution[Not a full guide yet]
-There is no minimal client or server example here yet, and the API of these crates is not stable. They are at version `0.2.3`. No crate is confirmed on crates.io, so use them as git or path dependencies.
+There is no minimal client or server example here yet, and the API of these crates is not stable. They are at version `0.2.4`. No crate is confirmed on crates.io, so use them as git or path dependencies.
 :::
 
 The crates live in `crates/` of the [repository](https://github.com/veilway-project/veilway):

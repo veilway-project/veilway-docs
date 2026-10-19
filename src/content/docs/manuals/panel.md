@@ -4,7 +4,7 @@ description: Running a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.2.3-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
+The panel ships in the alpha, `v0.2.4-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.
@@ -436,7 +436,7 @@ The `tls`, `ws` and `fronted` transports need more than the form holds: their ce
 
 If the Xray add-on is installed (`sudo bash veilway.sh addon xray install`, see the [Xray add-on](../xray/)), the **Xray add-on** section of the **Inbounds** page shows its release and the inbounds made here, with an **Add Xray inbound** button. Without the add-on that section says so and shows the install command. Choose VLESS, Trojan or Shadowsocks, a port, and for VLESS and Trojan the certificate and key files on the node and a decoy web server. Every current user gets a credential for the inbound, and users added later get one too. **Host in links** is the host name the links carry, and empty uses the node's first public address. Shadowsocks uses its port for UDP as well, so open both. You can edit an Xray inbound later: the port, listen address, certificate files, decoy, host, and for Shadowsocks a new server key. Users keep their credentials, but their links change when the port, the host or the server key does. Each user's links are on the user page.
 
-An Xray inbound answers on the server's own address, next to the profiles you serve. Anyone who finds it can tell the address is a proxy server, so the panel caps every profile in the subscriptions at Detectable. The review says so before you apply.
+An Xray inbound answers on the server's own address, next to the profiles you serve. Anyone who finds it can tell the address is a proxy server, so the panel caps the profiles on that address at Detectable in the subscriptions. The review says so before you apply. Since v0.2.4 only the profiles that share an address with an Xray inbound are capped: an inbound that listens on every address (the default) caps them all, and one that listens on a separate IP address of the server, with a host name of its own, leaves profiles on the other addresses as they are. A name the panel cannot resolve, or that resolves to the Xray address, counts as shared.
 
 ### Outbounds
 
@@ -569,7 +569,7 @@ The **Account** page has six tabs.
 - **Admins** lists everyone who can sign in. **Add admin** takes a name (3 to 32 characters of a to z, 0 to 9, dot, dash and underscore) and a password of 12 to 256 characters, then shows the new admin's authenticator key once. Hand over the password and the key in person or over a channel you trust. **Reset** gives an admin a new password and a new authenticator key, shown once, and ends their sessions. **Remove** ends their sessions and API tokens, and their lines in the audit log stay. You cannot remove yourself or the last admin. Each of these asks for your password and code again, and no API token can do them.
 - **Audit log** lists logins and every change made in the panel or through a token. The log never holds a link, token or key.
 - **Backup and restore** is described under [Backups and secrets](#backups-and-secrets).
-- **Display** sets the appearance (system, dark or light) and the language. In Persian, date fields use the Solar Hijri calendar, such as `1405/02/15`.
+- **Display** sets the appearance (system, dark or light), the language, and the layout direction: automatic (follows the language), left to right, or right to left, kept in this browser. In Persian, date fields use the Solar Hijri calendar, such as `1405/02/15`.
 
 ## The admin API
 

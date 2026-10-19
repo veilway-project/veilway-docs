@@ -73,7 +73,7 @@ Shadowsocks has no decoy. The test does not check what a stranger gets from a Sh
 
 ### The shared address
 
-Xray answers on the same address as your native Veilway profiles. Anyone who finds that address can tell that it runs a proxy. Because of this, every native profile is rated **Detectable** in the subscriptions, and the panel says so before it creates the inbound. Choose this knowingly.
+Xray answers on the same address as your native Veilway profiles. Anyone who finds that address can tell that it runs a proxy. Because of this, the native profiles on that address are rated **Detectable** in the subscriptions, and the panel says so before it creates the inbound. Choose this knowingly. Since v0.2.4 only the profiles that share an address with an Xray inbound are capped: an inbound that listens on every address (the default) caps them all, and one that listens on a separate IP address of the server, with a host name of its own, leaves profiles on the other addresses as they are. A name the panel cannot resolve, or that resolves to the Xray address, counts as shared.
 
 ## Changing credentials
 

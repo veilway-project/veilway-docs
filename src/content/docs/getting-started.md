@@ -73,7 +73,7 @@ Run the script with no arguments to get this menu:
 | `panel-prefix [/path]` | Moves the admin pages to a new path, random when none is given. It prints the lines to change in your web server, and puts the old path back if the panel does not start. |
 | `addon xray [install\|remove\|status]` | Installs, removes or shows the Xray add-on. `install` is the default. It downloads one pinned release of the official Xray-core, refuses it unless its SHA-256 matches the one built into the script, and puts the `xray` executable in `/usr/local/lib/veilway/addons/xray`, owned by root. Xray then runs as its own user, `veilway-xray`, and the node starts it when its config has an Xray inbound. See [Xray add-on](../manuals/xray/). |
 | `mirror-sync <folder> [--version vX.Y.Z]` | Copies a release of the node and of the panel, with their signatures and the signed `latest` pointers, into a folder laid out as GitHub does. Every file is checked first. Serve the folder, or carry it on a USB stick. See [Installing from a mirror](#installing-from-a-mirror). Needs no root. |
-| `uninstall` | Removes the binaries and units. It asks before it deletes the config and data. Backups stay. |
+| `uninstall` | Removes the binaries, the units and the installer itself. It asks before it deletes the config and data. Backups stay, and so does a web server setup until `uninstall web`, with the installer it needs for that. |
 | `uninstall web` | Takes back what `--domain` set up: the site file, the plain site if you did not edit it, the panel's `not_found`, and the packages the script installed. |
 | `version` | Prints the script, node and panel versions. |
 

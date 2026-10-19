@@ -14,7 +14,7 @@ export default defineConfig({
 				root: { label: "English", lang: "en" },
 				fa: { label: "فارسی", lang: "fa", dir: "rtl" },
 			},
-			social: [{ icon: "github", label: "GitHub", href: "https://github.com/veilway-project/veilway" }],
+			social: [{ icon: "github", label: "GitHub", href: "https://github.com/veilway-project/veilway" }, { icon: "telegram", label: "Telegram", href: "https://t.me/VeilwayGroup" }],
 			sidebar: [
 				{ label: "Introduction", translations: { fa: "معرفی" }, slug: "" },
 				{ label: "The alpha release", translations: { fa: "نسخهٔ آلفا" }, slug: "alpha" },

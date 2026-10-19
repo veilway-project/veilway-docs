@@ -1,16 +1,22 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.1-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.2-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.1-alpha`. It follows `v0.2.0-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.2-alpha`. It follows `v0.2.1-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.1-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.1-alpha)
+- Node and install script: [v0.2.2-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.2-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.2-alpha
+
+- **Update the node from the panel.** The panel checks for a newer node release next to its own, and has **Update node**, **Update panel** and **Update both**. See [Updating the panel](../manuals/panel/#updating-the-panel). Updating the node restarts it, which drops every live tunnel for a moment.
+- **The installer updates itself.** Every `veilway.sh update` also replaces the saved installer with the signed one of the same release, never with an older one. Servers installed before v0.2.2 need one update with the command in [Getting started](../getting-started/) to get it.
+- **Installer.** The interactive install asks for the HTTPS port, and an empty domain name now skips the web server instead of stopping the install.
 
 ## New in v0.2.1-alpha
 

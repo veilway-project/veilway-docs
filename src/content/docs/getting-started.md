@@ -3,7 +3,7 @@ title: Getting started
 description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-This page installs the alpha, `v0.2.1-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
+This page installs the alpha, `v0.2.2-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
 
 ## What you need
 
@@ -62,7 +62,7 @@ Run the script with no arguments to get this menu:
 |---|---|
 | `install node\|panel\|both\|mirror [--version vX.Y.Z]` | Installs the chosen parts from the latest release, or from the tag you give. `mirror` installs a relay mirror of the subscription endpoint, see [Relay mirrors](../manuals/panel/#relay-mirrors). |
 | `install panel\|both --domain <name> [--web caddy\|nginx]` | Also sets up a web server with HTTPS for that domain, and a plain site for every path that is not the panel's. See [Put a web server in front](#put-a-web-server-in-front). |
-| `update [node\|panel\|mirror\|both]` | Installs the latest release, or the tag you give, and restarts the service. The panel's **Update** button runs this for the panel, see [Updating the panel](../manuals/panel/#updating-the-panel). |
+| `update [node\|panel\|mirror\|both]` | Installs the latest release, or the tag you give, and restarts the service. It also replaces the saved installer, `/usr/local/sbin/veilway.sh`, with the signed one of the same release, never with an older one. The panel's update buttons run this for the panel, the node or both, see [Updating the panel](../manuals/panel/#updating-the-panel). |
 | `status` | Shows the state of each service, its version, and the config and state folders. Does not need root. |
 | `logs [node\|panel\|mirror]` | Follows the last 100 journal lines of the service. |
 | `restart [node\|panel\|mirror\|both]` | Restarts the service. A node restart drops every live tunnel for a moment. |
@@ -226,7 +226,7 @@ Do not pipe a script from a mirror straight into `bash`: check it first.
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.1-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.2-alpha
 ```
 
 It downloads the node's and the panel's files with their signatures and the pointers, verifies each one before it stores it, and puts `veilway.sh` at the top of the folder. It keeps a newer pointer that is already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.

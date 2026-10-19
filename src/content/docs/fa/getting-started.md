@@ -3,7 +3,7 @@ title: شروع به کار
 description: نصب گره و پنل نسخهٔ آلفای Veilway با اسکریپت نصب، یا با Docker.
 ---
 
-این صفحه آلفای `v0.2.1-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
+این صفحه آلفای `v0.2.2-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
 
 ## چه چیزی لازم است
 
@@ -62,7 +62,7 @@ sudo bash veilway.sh
 |---|---|
 | `install node\|panel\|both\|mirror [--version vX.Y.Z]` | بخش‌های انتخاب‌شده را از آخرین نسخه، یا از برچسبی که می‌دهید، نصب می‌کند. `mirror` یک آینهٔ رله از نقطهٔ پایانی اشتراک را نصب می‌کند، [آینه‌های رله](../manuals/panel/#آینههای-رله) را ببینید. |
 | `install panel\|both --domain <name> [--web caddy\|nginx]` | علاوه بر آن، برای آن دامنه یک وب‌سرور با HTTPS راه می‌اندازد، و برای هر مسیری که مال پنل نیست یک سایت ساده. [یک وب‌سرور جلوی پنل بگذارید](#یک-وبسرور-جلوی-پنل-بگذارید) را ببینید. |
-| `update [node\|panel\|mirror\|both]` | آخرین نسخه، یا برچسبی که می‌دهید، را نصب می‌کند و سرویس را دوباره راه می‌اندازد. دکمهٔ **به‌روزرسانی** پنل همین کار را برای پنل انجام می‌دهد، [به‌روزرسانی پنل](../manuals/panel/#بهروزرسانی-پنل) را ببینید. |
+| `update [node\|panel\|mirror\|both]` | آخرین نسخه، یا برچسبی که می‌دهید، را نصب می‌کند و سرویس را دوباره راه می‌اندازد. نصب‌کنندهٔ ذخیره‌شده، `/usr/local/sbin/veilway.sh`، را هم با نسخهٔ امضاشدهٔ همان انتشار جایگزین می‌کند، و هرگز با نسخهٔ قدیمی‌تر. دکمه‌های به‌روزرسانی پنل همین کار را برای پنل، گره یا هر دو انجام می‌دهند، [به‌روزرسانی پنل](../manuals/panel/#بهروزرسانی-پنل) را ببینید. |
 | `status` | وضعیت هر سرویس، نسخهٔ آن، و پوشه‌های پیکربندی و وضعیت را نشان می‌دهد. نیازی به root ندارد. |
 | `logs [node\|panel\|mirror]` | ۱۰۰ خط آخر گزارش سرویس را دنبال می‌کند. |
 | `restart [node\|panel\|mirror\|both]` | سرویس را دوباره راه می‌اندازد. راه‌اندازی مجدد گره برای لحظه‌ای همهٔ تونل‌های زنده را قطع می‌کند. |
@@ -225,7 +225,7 @@ sudo bash veilway.sh install both --mirror https://mirror.example.org
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.1-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.2-alpha
 ```
 
 فایل‌های گره و پنل را با امضاها و اشاره‌گرها دانلود می‌کند، هر یک را پیش از ذخیره بررسی می‌کند، و `veilway.sh` را بالای پوشه می‌گذارد. اشاره‌گر جدیدتری را که از قبل آنجا باشد نگه می‌دارد. صفحهٔ `index.html` قابل مرورِ [`veilway-release-mirror`](../guides/release-mirror/) را نمی‌نویسد.

@@ -4,7 +4,7 @@ description: Running a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.2.1-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
+The panel ships in the alpha, `v0.2.2-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.
@@ -602,7 +602,7 @@ To restore, pick the file and enter its passphrase. The panel checks the file be
 
 ### Updating the panel
 
-The panel checks GitHub for a newer published release (not a draft or a prerelease) at start and every 6 hours (set `update_check` to `false` in `panel.json` to turn this off). When one exists, a banner shows "Veilway Panel <version> is available" with a link to the release notes and an **Update** button. The button needs a recent re-authentication and is audited, and no API token can use it.
+The panel checks GitHub for a newer published release (not a draft or a prerelease) of the panel and of the node at start and every 6 hours (set `update_check` to `false` in `panel.json` to turn this off). It compares the node's release with the version the node on the same server reports. When either is newer, a banner shows the versions with links to their release notes, and **Update panel**, **Update node** or **Update both** as they apply. Each button needs a recent re-authentication and is audited, and no API token can use it. Updating the node restarts it, which drops every live tunnel for a moment, and the panel says so before it asks.
 
-The panel never updates itself. It writes the word `panel` to a file in `/var/lib/veilway-panel-update/`, and a root service started by a systemd path unit deletes the file and runs the script's `panel-update-request` command. That does what `veilway.sh update panel --yes` does, and checks the release signature before it installs. Nothing in the file is used except that word. Servers installed before this feature need `sudo bash veilway.sh update panel` once to get the service.
+The panel never updates itself. It writes the word `panel`, `node` or `both` to a file in `/var/lib/veilway-panel-update/`, and a root service started by a systemd path unit deletes the file and runs the script's `panel-update-request` command. That does what `veilway.sh update <word> --yes` does, and checks the release signatures before it installs. Nothing in the file is used except that word. Servers installed before v0.2.2 have an installer that only knows `panel`: run `curl -fsSL https://raw.githubusercontent.com/veilway-project/veilway/main/scripts/veilway.sh | sudo bash -s update` on them once.
 

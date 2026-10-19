@@ -54,7 +54,7 @@ Add this line to `panel.json`, then restart the panel with `sudo bash veilway.sh
 "two_step": "off"
 ```
 
-The install script does not write `two_step`, and a file without it has the code on, so add the line rather than look for one to change. These two commands put it first in the file and restart the panel:
+Installs from 2026-10-19 on have `"two_step": "on"` in the file, so change `on` to `off`. Older installs have no such line, and a file without it has the code on: there, add the line. These two commands put it first in the file and restart the panel:
 
 ```
 sudo sed -i '0,/^{$/s//{\n\t"two_step": "off",/' /etc/veilway/panel.json

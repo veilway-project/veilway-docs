@@ -483,11 +483,21 @@ An outbound is a way for the userspace stack to open TCP and UDP flows.
 | `type` | Keys | Meaning |
 |---|---|---|
 | `direct` | optional `bind` (a local IP, not a wildcard) | Connects from the node itself. With `bind`, flows of the other address family are rejected. |
-| `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes) | Connects through a SOCKS5 proxy. UDP uses UDP ASSOCIATE when the proxy offers it. |
+| `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes), optional `via` (the tag of another `socks5` outbound) | Connects through a SOCKS5 proxy, or through a chain of them when `via` is set. UDP uses UDP ASSOCIATE when the proxy offers it. |
 
 Every outbound also has a `tag`.
 
 Engine: a `server` host name is resolved by the system resolver each time the node dials the proxy, never through a tunnel exit. The UDP relay address a proxy returns is used only if it is the address the control connection is connected to. A relay address on another host means the proxy counts as having no UDP.
+
+**`via`** (`socks5` only) sends the connection to this outbound's `server` through another `socks5` outbound, which may have a `via` of its own. A chain of up to 8 proxies is allowed, counting this outbound. The first proxy is dialled from the node itself. Each hop then does its own SOCKS5 handshake and authentication over the connection the hop before it made, and the flow's destination is the last CONNECT. A host name in `server` is sent to the hop before it, not resolved by the node, except for the first proxy, which the node resolves.
+
+- `via` names a `socks5` outbound. A `direct` outbound cannot be named, and a `direct` outbound cannot have `via`.
+- Following `via` from an outbound must not come back to it. A loop is a config error.
+- A chain has at most 8 `socks5` outbounds. A longer one is a config error at the `via` of the outbound that makes it too long.
+- A chain carries TCP only. A UDP ASSOCIATE relay cannot be reached through a TCP chain, so a UDP flow through a chain is refused as a proxy without UDP is: the exit's `unsupported.udp` policy decides, and the default `reject` refuses it. `direct` is a config error on such an exit, since it would send that UDP from this node's own address, around the chain. DNS over UDP falls back to TCP through the chain, as it does for any proxy without UDP.
+- The chain is shown as one outbound: its latency is the time the whole chain took to answer the greeting of the last hop.
+- A chain that cannot be dialled makes its flows fail. Nothing goes around it.
+- **Plain text.** SOCKS5 is not encrypted. Each proxy of a chain sees the user name and password of the proxies after it, the CONNECT targets and the bytes of the flows. Put a chain only through proxies whose operators may see that, or run TLS inside every flow yourself.
 
 ## `exits`
 

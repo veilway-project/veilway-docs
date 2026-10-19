@@ -240,6 +240,16 @@ Each is shown as 8 groups of 4 hexadecimal digits. A label is its ASCII bytes fo
 - **A copied answer allows nothing.** It holds public keys and an id.
 - **What each panel stores once the link is confirmed.** The listener: the link's id, the dialler's public key, the transport secret, the addresses and the direction. The dialler: the same, the listener's keys and transports, and its own private key. Neither keeps a code or a pairing key after that, and before that everything is in memory only.
 
+## Through an outbound
+
+A dialling node may reach the other node through one of its `socks5` outbounds, for when the direct path is blocked. The dialler's `links[].via` names that outbound, and the link's TCP transports open their connection through the outbound's chain, as the config reference's `outbounds` section sets out. Every TCP transport a link can list goes through the chain: `tls` and `ws`. The client library sends `fronted` and `fronted-shaped` through a chain too, but a link cannot list either in this version: validation refuses `fronted`, and `fronted-shaped` is not a link transport. Nothing else changes: the proofs, the pins, the certificate checks and the WireGuard session are the same as on a direct path.
+
+- **Only on the node that dials.** A link the node is dialled for, with `inbound`, cannot have `via`.
+- **A `socks5` outbound.** `via` names one, and the same rules hold for its chain: no loop, at most 8 proxies, and no `direct` outbound in it.
+- **TCP transports only.** `udp` and `udp-obfs` cannot pass through a TCP chain. Their candidates are skipped. The node logs at info when a link that starts this way skips them, and validation warns about each skipped transport and refuses the link when it lists no other one.
+- **Nothing goes round it.** When the chain cannot be dialled, the link is unreachable. The dialler does not try the direct path.
+- **What the proxies see.** SOCKS5 is plain text. Each proxy of the chain sees the user name and password of the proxies after it, the CONNECT targets and the bytes of the flows it carries. The link's own payload stays protected end to end: the TLS session or the WebSocket inside the chain is opaque to every proxy, and so is WireGuard. The server name a candidate shows in its TLS handshake is in the clear, as on a direct path, so the proxies see it too.
+
 ## Lifetime
 
 **Connecting and reconnecting.** The dialler follows the client rules of the transports page, with two rules of version 1 on top: it tries one candidate at a time, never two in flight, and every attempt that did not open is followed by a wait of at least the 2 to 10 s that those rules give between transports, whatever its outcome. Otherwise the client rules hold without change: the order of transports in the offer, candidates and their marks, the difference between a refusal, an unreachable candidate and a fault of the node itself, the waits and their doubling, and "the last transport is never set aside". There is no user to ask, so there is no consent to a class: the listener's operator decided which transports the offer lists, and the dialler's operator accepted them at pairing.
@@ -321,6 +331,7 @@ These keys are in the [config reference](../../reference/config/), which is the 
 | `links[].public_key` | listener | The dialler's WireGuard public key. |
 | `links[].private_key` | dialler | The link's WireGuard private key on this node. Secret. |
 | `links[].peer` | dialler | The listener's `inbound_public_key`, `transport_public_key` and `transports`, as the offer gave them. |
+| `links[].via` | dialler | The tag of a `socks5` outbound whose chain the TCP transports of the link go through. See "Through an outbound". |
 | `links[].exit`, `links[].exits` | the exit half | The link's default exit, and the exits it may leave through. |
 | `links[].allow_private` | the exit half | Whether private networks are decided by the rules for this link. Default `false`. |
 | `links[].max_flows`, `links[].quota_bytes`, `links[].quota_period`, `links[].expires_at` | the exit half | How much the link may use. The quota and its period mean what they mean for a user. |

@@ -48,7 +48,7 @@ The types in `src/schema.ts` are generated from `crates/veilway-api/openapi.json
 
 ## The panel SDK
 
-`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.1.0`.
+`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.6`.
 
 ```
 npm install @veilway/panel-sdk

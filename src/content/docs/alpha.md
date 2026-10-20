@@ -15,6 +15,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 ## New in v0.2.7-alpha
 
 - **Easier first setup.** The first endpoint becomes the default by itself, and a missing default now says where to pick one. The panel makes each inbound's public key from the private key it applies, so a profile is ready to publish without pasting the key. The new guide [First inbound and user](../guides/first-user/) goes from the first sign-in to a user's link.
+- **Security.** `rustls-webpki` 0.103.16 and `webpki-roots` and `webpki-root-certs` 1.0.10, for advisories about distrusted certificate intermediates (RUSTSEC-2026-0381, 0382 and 0383), in the node, the panel and the apps.
 
 ## New in v0.2.6-alpha
 

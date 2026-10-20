@@ -1,16 +1,20 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.6-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.7-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.6-alpha`. It follows `v0.2.5-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.7-alpha`. It follows `v0.2.6-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.6-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.6-alpha)
+- Node and install script: [v0.2.7-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.7-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.7-alpha
+
+- **Easier first setup.** The first endpoint becomes the default by itself, and a missing default now says where to pick one. The panel makes each inbound's public key from the private key it applies, so a profile is ready to publish without pasting the key. The new guide [First inbound and user](../guides/first-user/) goes from the first sign-in to a user's link.
 
 ## New in v0.2.6-alpha
 

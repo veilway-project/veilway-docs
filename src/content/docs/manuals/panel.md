@@ -4,7 +4,7 @@ description: Running a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.2.6-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
+The panel ships in the alpha, `v0.2.7-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Operators use it in a browser, or call its [admin API](#the-admin-api) from scripts.
@@ -75,7 +75,7 @@ To turn it on again, remove the line (or set it to `"on"`) and restart the panel
 2. On the setup page, enter the one-time setup token, a username, and a password of 12 characters or more. Enter the password again, tick **I have read and accept these terms**, then choose **Make admin account**. The token is printed in the panel's log at every start until the first admin exists, a new one each time, and the install script prints it too. Only the newest works.
 3. The next page shows a TOTP key and a QR code for your authenticator app. The key is shown once. Add it to the app, then choose **I added it, go to login**. Without the key you cannot log in.
 4. Log in with your username, your password and the 6-digit code from the app. Login is rate limited, so after several wrong tries you must wait a few minutes.
-5. Before you add users, go to **Settings**. Set the node address under **Provider**, add an endpoint under **Endpoints**, and set the device address pool under **New users**. Then add an inbound on **Inbounds** and publish its profile on **Profiles**.
+5. Before you add users, go to **Settings**. Set the node address under **Provider**, add an endpoint under **Endpoints**, and set the device address pool under **New users**. Then add an inbound on **Inbounds** and publish its profile on **Profiles**. The guide [First inbound and user](../../guides/first-user/) walks through these steps.
 
 The same setup can be done by script. Send the token, a username and a password to `{prefix}/api/setup`. The answer holds the TOTP secret, shown once.
 
@@ -369,7 +369,7 @@ Go to **Settings** > **Endpoints**. Each endpoint has:
 - A **URL**: `https://host/path`, or `http://host/path` for a plain endpoint.
 - **Pins** (optional): one or two SHA-256 SPKI pins in standard base64, for `https` only. They are required when the host is an IP address, which means a self-signed certificate.
 
-One endpoint is the default. Each endpoint needs its own host and port.
+One endpoint is the default. The first endpoint you add becomes the default by itself. With more than one, pick it under **Default endpoint**, below the list. Each endpoint needs its own host and port.
 
 Each endpoint has its own path on the panel: `sub_path`, a slash and the endpoint's name. Your web server maps each endpoint's public host and path to that panel path, for example `https://sub.example.org/s` to `http://127.0.0.1:8480/sub/main`. The panel tells the endpoints apart by that path alone. It never reads the `Host` header for this, because the sender or a proxy in between can write anything there. A request to a path under `sub_path` that no endpoint has is answered as an unknown path. The bare `sub_path` reaches no named endpoint: it answers (a panel with no named endpoint is served there), and its documents list no pins. A document lists the pins of the endpoint the request reached.
 
@@ -425,7 +425,7 @@ An inbound is a tunnel that devices connect to, with the transports it is reache
 - **Veilway** is WireGuard with the control channel. The obfuscated transports need it.
 - **Plain WireGuard** is for stock WireGuard apps. Its handshake is easy to spot.
 
-Each inbound has a private key, which you make on the node with `veilway genkey`. The panel asks for the private half when you add it. It also has gateway addresses, one per line, and an MTU. The default MTU is `1420`, or `1390` with `udp-obfs`.
+Each inbound has a private key, which you make on the node with `veilway genkey`. The panel asks for the private half when you add it, and makes the public half from it for the inbound's profile. It also has gateway addresses, one per line, and an MTU. The default MTU is `1420`, or `1390` with `udp-obfs`.
 
 The transports are:
 
@@ -477,7 +477,7 @@ A rule can be turned off. It stays in the list and is skipped. For a home networ
 
 ### Profiles
 
-The **Profiles** page has one profile for each Veilway inbound, made from the node's config. Apps get these profiles through their subscription once you publish them. A profile is ready when it has what it needs. The panel lists what is still missing for each one: the inbound's public key, the transport's public key for `tls` and `ws`, and the node's public address, which you set as **Node address** under **Settings**. Each profile also has **Overrides**, a JSON object of fields that replace the derived ones. It cannot hold `id` or `device`. Choose **Publish profiles** when all are ready. Apps pick up the change at their next refresh.
+The **Profiles** page has one profile for each Veilway inbound, made from the node's config. Apps get these profiles through their subscription once you publish them. A profile is ready when it has what it needs. The panel lists what is still missing for each one: the transport's public key for `tls` and `ws`, and the node's public address, which you set as **Node address** under **Settings**. The inbound's public key is filled in by the panel when the inbound is applied with its private key. An inbound added before v0.2.7 still asks for it: enter its private key again on **Inbounds** and apply, or paste the public half that `veilway genkey` printed. Each profile also has **Overrides**, a JSON object of fields that replace the derived ones. It cannot hold `id` or `device`. Choose **Publish profiles** when all are ready. Apps pick up the change at their next refresh.
 
 ### Node links
 

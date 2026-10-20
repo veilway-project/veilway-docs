@@ -69,6 +69,14 @@ The switch is read from `panel.json` only. No page or API route of the panel can
 
 To turn it on again, remove the line (or set it to `"on"`) and restart the panel. Every admin has an authenticator key whatever the switch says, so the code is asked again from then on. The start that turns it on ends every session and revokes every API token made while the switch was off, and the audit entry counts both, for example `on, 2 sessions ended, 1 tokens revoked`. An admin made while the switch was off that has no key gets a new one at that start, which nobody has seen. That admin cannot sign in while the code is on, so they change the authenticator under Account while the switch is off (the key is shown there), or another admin resets the account under Admins.
 
+### Lost the authenticator
+
+The panel never shows an authenticator key again, but a new one can always be made. It is shown once.
+
+- Signed in: open **Account**, then **Password and code**, and choose **Change authenticator code**.
+- Another admin can sign in: they open **Account**, then **Admins**, and choose **Reset** for your account. You get a new password and a new key.
+- You are the only admin and cannot sign in: `sudo bash veilway.sh admin reset <username>` changes the password only, and the old key stays. Turn two-step sign-in off as above, restart the panel, sign in with the password, make a new key under **Password and code**, then turn it on again and restart. Turning it on ends every session.
+
 ## First login
 
 1. Open `https://your-domain/<prefix>/`. The admin path is the `prefix` value.

@@ -482,10 +482,12 @@ An outbound is a way for the userspace stack to open TCP and UDP flows.
 
 | `type` | Keys | Meaning |
 |---|---|---|
-| `direct` | optional `bind` (a local IP, not a wildcard) | Connects from the node itself. With `bind`, flows of the other address family are rejected. |
+| `direct` | optional `bind` (a local IP, not a wildcard), optional `interface` (a network interface of the host by name, 1 to 15 characters of letters, digits, `_`, `-` and `.`, starting with a letter or digit; since v0.2.8) | Connects from the node itself. With `bind`, flows of the other address family are rejected. With `interface`, every socket of the outbound is tied to that interface (`SO_BINDTODEVICE` on Linux, `IP_BOUND_IF` on macOS), so its traffic leaves there whatever the routing table says. |
 | `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes), optional `via` (the tag of another `socks5` outbound) | Connects through a SOCKS5 proxy, or through a chain of them when `via` is set. UDP uses UDP ASSOCIATE when the proxy offers it. |
 
 Every outbound also has a `tag`.
+
+An `interface` that is the interface of an `l3` exit is an error: the outbound's traffic would go back into the tunnel. A `socks5` outbound takes no `interface`. Engine: on a system other than Linux and macOS, `run` refuses a config whose exits use an outbound with `interface`. An interface the host does not have when the config comes into force is logged as a warning, and the outbound's flows fail until it is there. `veilway doctor` names a missing interface.
 
 Engine: a `server` host name is resolved by the system resolver each time the node dials the proxy, never through a tunnel exit. The UDP relay address a proxy returns is used only if it is the address the control connection is connected to. A relay address on another host means the proxy counts as having no UDP.
 

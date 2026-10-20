@@ -455,7 +455,7 @@ An Xray inbound answers on the server's own address, next to the profiles you se
 
 ### Outbounds
 
-The **Outbounds** tab of **Exits and routing** lists how the node dials out. **Direct** dials from the node's own address. **SOCKS5 proxy** dials through a proxy you run or rent. For a SOCKS5 proxy, give its address and, if it has them, a username and password. A source address is optional.
+The **Outbounds** tab of **Exits and routing** lists how the node dials out. **Direct** dials from the node's own address. **SOCKS5 proxy** dials through a proxy you run or rent. For a SOCKS5 proxy, give its address and, if it has them, a username and password. A Direct outbound has two optional fields: **Source address**, a local IP of the server its traffic leaves from, and, since v0.2.8, **Network interface**, a network interface of the server by name, such as `eth1`. Traffic of an outbound with an interface leaves through that interface whatever the routing table says. This needs Linux or macOS. An interface that is missing when the node starts is a warning in the log, and that outbound's flows fail until it is there.
 
 ### Exits
 

@@ -462,6 +462,8 @@ The **Exits** tab lists where a user's traffic leaves. Users pick among the exit
 
 Rules are checked from the top. The first rule that matches decides. Traffic that no rule matches goes to the default exit.
 
+A fresh node keeps users apart: its first rule, `isolate-users`, refuses traffic to `tunnel:users`, the tunnel addresses of every device. No device reaches another device, even one of the same user. Remove that rule, or put a rule above it that allows `tunnel:users` for a group, only when users should reach each other, for example for games on a shared network. See [Traffic between users](../../reference/config/#traffic-between-users).
+
 Each rule has conditions, and every condition you add must hold for the rule to match. The conditions are: user, group, inbound, node link, destination network, domain, protocol, port, ICMP type and ICMP code. A domain covers its subdomains.
 
 A rule then sends traffic to one of these:

@@ -3,7 +3,7 @@ title: SDK برای TypeScript
 description: استفاده از کلاینت‌های تایپ‌دار API کنترل Veilway و API مدیریتی پنل در TypeScript.
 ---
 
-`@veilway/sdk` یک کلاینت تایپ‌دار برای [API کنترل](../../reference/api/) نود Veilway است. به Node نسخهٔ 20 یا بالاتر نیاز دارد و وابستگی زمان اجرا ندارد. نسخهٔ آن `0.2.4-alpha` است.
+`@veilway/sdk` یک کلاینت تایپ‌دار برای [API کنترل](../../reference/api/) نود Veilway است. به Node نسخهٔ 20 یا بالاتر نیاز دارد و وابستگی زمان اجرا ندارد. نسخهٔ آن `0.2.5-alpha` است.
 
 ```
 npm install @veilway/sdk

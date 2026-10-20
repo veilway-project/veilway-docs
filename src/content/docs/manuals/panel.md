@@ -293,6 +293,13 @@ Links carry the active key. Every signed document lists the active key, then the
 
 Both files have mode `600` and sit outside the database. The panel's backup holds `gateway.keys`, with the active and retired private keys and the public half of the next key. It never holds the next key's private half, which stays with you. Back `gateway.next` up apart from the server. Their paths are the `gateway` and `gateway_next` fields of the config.
 
+To move the next key off a server set up by the install script, copy it to your own computer, keep that copy offline (a USB stick or a password manager), then delete it on the server. The warning goes away once the file is gone:
+
+```sh
+scp root@your-server:/var/lib/veilway-panel/gateway.next .
+ssh root@your-server rm /var/lib/veilway-panel/gateway.next
+```
+
 ### The page
 
 **Settings** > **Gateway keys** shows:

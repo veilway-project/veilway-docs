@@ -55,6 +55,7 @@ Run the script with no arguments to get this menu:
 | 9 | Restore | `restore <file>` |
 | 10 | Uninstall | `uninstall` |
 | 11 | Add-ons | `addon xray status`, then asks whether to install or remove it |
+| 12 | Admins | `admin list`, then asks for a username to give a new password |
 | 0 | Quit | |
 
 ### Commands
@@ -64,7 +65,7 @@ Run the script with no arguments to get this menu:
 | `install node\|panel\|both\|mirror [--version vX.Y.Z]` | Installs the chosen parts from the latest release, or from the tag you give. `mirror` installs a relay mirror of the subscription endpoint, see [Relay mirrors](../manuals/panel/#relay-mirrors). |
 | `install panel\|both --domain <name> [--web caddy\|nginx]` | Also sets up a web server with HTTPS for that domain, and a plain site for every path that is not the panel's. See [Put a web server in front](#put-a-web-server-in-front). |
 | `update [node\|panel\|mirror\|both]` | Installs the latest release, or the tag you give, and restarts the service. It also replaces the saved installer, `/usr/local/sbin/veilway.sh`, with the signed one of the same release, never with an older one. The panel's update buttons run this for the panel, the node or both, see [Updating the panel](../manuals/panel/#updating-the-panel). |
-| `status` | Shows the state of each service, its version, and the config and state folders. Does not need root. |
+| `status` | Shows the state of each service, its version, and the config and state folders. Does not need root. With root it also shows the panel's admin pages address, its subscription path and the admin usernames. |
 | `logs [node\|panel\|mirror]` | Follows the last 100 journal lines of the service. |
 | `restart [node\|panel\|mirror\|both]` | Restarts the service. A node restart drops every live tunnel for a moment. |
 | `check` | Runs `veilway check` on the node's config. |
@@ -72,6 +73,7 @@ Run the script with no arguments to get this menu:
 | `backup [file]` | Writes a `tar.gz` of the config, the node's usage state, the panel's data and the mirror's config. The archive holds keys, and `gateway.next` too while it is still on the server, so keep it private. |
 | `restore <file>` | Restores a backup after you confirm. It saves the current files first. |
 | `panel-prefix [/path]` | Moves the admin pages to a new path, random when none is given. It prints the lines to change in your web server, and puts the old path back if the panel does not start. |
+| `admin [list\|reset <username>]` | `list` shows the panel's admin usernames. `reset` asks twice for a new password of 12 characters or more and gives it to that admin, for when you are locked out. It signs the admin out everywhere and keeps their authenticator key and API tokens. Needs panel v0.2.5 or later. |
 | `addon xray [install\|remove\|status]` | Installs, removes or shows the Xray add-on. `install` is the default. It downloads one pinned release of the official Xray-core, refuses it unless its SHA-256 matches the one built into the script, and puts the `xray` executable in `/usr/local/lib/veilway/addons/xray`, owned by root. Xray then runs as its own user, `veilway-xray`, and the node starts it when its config has an Xray inbound. See [Xray add-on](../manuals/xray/). |
 | `mirror-sync <folder> [--version vX.Y.Z]` | Copies a release of the node and of the panel, with their signatures and the signed `latest` pointers, into a folder laid out as GitHub does. Every file is checked first. Serve the folder, or carry it on a USB stick. See [Installing from a mirror](#installing-from-a-mirror). Needs no root. |
 | `uninstall` | Removes the binaries, the units and the installer itself. It asks before it deletes the config and data. Backups stay, and so does a web server setup until `uninstall web`, with the installer it needs for that. |

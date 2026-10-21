@@ -27,11 +27,11 @@ Source of the documentation site for [Veilway](https://github.com/veilway-projec
 
 ## Status
 
-The site describes the alpha, `v0.2.1-alpha`, which is tagged and released in the core repository. Parts of the site are still stubs.
+The site describes the alpha, `v0.2.10-alpha`, which is tagged and released in the core repository. Parts of the site are still stubs.
 
-- Written, in English: the alpha release page, getting started, the entry-node guide, the operator terms and provider templates, the panel, client, Android, home network and Xray manuals, the config reference, the control API reference, the obfuscation status page, and the draft protocol specification (overview, transports, control channel, subscription format with static mirrors, and node links).
-- Written, in Persian: the alpha release page, getting started, the entry-node guide, the legal pages, the manuals (Xray included), and the config and control API references.
-- Still stubs: the threat model summary, the Persian protocol pages (there is no Persian node links page yet) and the Persian obfuscation status page.
+- Written, in English: the alpha release page, getting started, the guides (entry node, first inbound and user, release mirror, offline bundles, Xray profiles), the operator terms, app privacy policy and provider templates, the panel, client, Android, home network and Xray manuals, the config reference, the control API reference, the TypeScript SDK guide, the threat model summary, the obfuscation status page, and the draft protocol specification (overview, transports, HTTP/2, shapes of fronted, borrowed site, control channel, subscription format, node links, offline bundle and Xray in the desktop apps).
+- Written, in Persian: the alpha release page, getting started, the guides, the legal pages, the manuals (Xray included), the config and control API references, the TypeScript SDK guide and the threat model summary.
+- Still stubs: the Rust SDK guide (it lists the crates but has no example yet), the Persian protocol pages (there are no Persian pages yet for HTTP/2, shapes of fronted, borrowed site, node links, offline bundle and Xray in the desktop apps) and the Persian obfuscation status page, which is only partly translated.
 
 The protocol pages are a draft. They have been reviewed only inside the project, and each page says which parts are built. The alpha release page lists what each part has been tested on and what has not.
 

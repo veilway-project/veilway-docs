@@ -112,7 +112,7 @@ A fresh `install node` writes `/etc/veilway/node/config.json` if the file does n
 
 The script checks the config with `veilway check`, and it starts the node only if the check passes. If the check fails, the node is left stopped and the script says why.
 
-A node with no inbound does nothing useful yet. Add one in the panel: open **Inbounds**. The panel asks for the inbound's private key, which you make on the node with `veilway genkey`. The guide [First inbound and user](../guides/first-user/) goes from the panel's first sign-in to a user's link step by step, and the [panel manual](../manuals/panel/) describes the rest.
+A node with no inbound does nothing useful yet. Add one in the panel: open **Inbounds**. The **Generate** button next to the inbound's private key makes one in the panel, and the panel fills in the public half. The guide [First inbound and user](../guides/first-user/) goes from the panel's first sign-in to a user's link step by step, and the [panel manual](../manuals/panel/) describes the rest.
 
 To check the config at any time, run `sudo bash veilway.sh check`.
 

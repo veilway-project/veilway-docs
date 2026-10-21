@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.7-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.8-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.7-alpha`. It follows `v0.2.6-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.8-alpha`. It follows `v0.2.7-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.7-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.7-alpha)
+- Node and install script: [v0.2.8-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.8-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.8-alpha
+
+- **Outbound on a network interface.** A `direct` outbound can name a network interface of the server with `interface`, such as `eth1`, so its traffic leaves through that card. It works on Linux and macOS, and `veilway doctor` says when the interface is missing. In the panel it is the **Network interface** setting of a Direct outbound. See `outbounds` in the [config reference](../reference/config/).
+- **Android updates install.** On Android 10 and later the app downloaded an update but never showed the installer, so it downloaded again on the next tap. The installer now opens while the app is on screen, and a failed install says why. A phone on v0.2.7 or older needs this update installed by hand once, from the release page.
 
 ## New in v0.2.7-alpha
 

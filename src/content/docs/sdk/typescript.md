@@ -3,7 +3,7 @@ title: TypeScript SDK
 description: Using the typed clients of the Veilway control API and the panel's admin API from TypeScript.
 ---
 
-`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.7-alpha`.
+`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.8-alpha`.
 
 ```
 npm install @veilway/sdk
@@ -48,7 +48,7 @@ The types in `src/schema.ts` are generated from `crates/veilway-api/openapi.json
 
 ## The panel SDK
 
-`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.7`.
+`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.8`.
 
 ```
 npm install @veilway/panel-sdk

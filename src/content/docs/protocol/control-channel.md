@@ -49,7 +49,7 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Pushed snapshot messages the client applies (`session`, `exits`, `usage`, `notices`, `hints`) | at most 1 of each kind every 5 s. A newer one replaces one that waits. Every other message is handled at once. |
 | Subscription refresh caused by the channel | at most 1 in 6 hours, through the tunnel |
 | MTU probe run | 1 per device per 60 s, token valid 30 s, at most 16 probes in each direction, 2 s wait per probe, 1 retry |
-| MTU probe sizes | The profile's `mtu`, and those of 1280, 1320, 1360, 1390, 1420 and 1440 that are below it |
+| MTU probe sizes | The profile's `mtu`, and those of 1080, 1160, 1240, 1280, 1320, 1360, 1390, 1420 and 1440 that are below it and not below the tunnel's smallest MTU |
 | Remembered MTU on the client | per network and transport, 7 days |
 | MTU re-confirmation | one probe in each direction after a time drawn uniformly from 300 to 900 s, for as long as the session lasts |
 | Wait after `bye` | see "Being cut off" |
@@ -174,8 +174,8 @@ Client to node:
 | `0x10` | `refresh` | Empty | After `auth_ok` |
 | `0x11` | `set_exit` | Exit tag. An empty tag clears the selection. | After `auth_ok` |
 | `0x12` | `probe_start` | Empty | After `auth_ok` |
-| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | Only after a `probe_token` was received on this connection and while that token is live. At any other time the node answers `error` code 2. A `size` outside 1280 to `max_size`, or a `port` of 0, is a malformed body: the node closes the connection with no message. |
-| `0x14` | `set_mtu` | `mtu` (2) | After `auth_ok`. A value outside 1280 to the inbound's `mtu` is not malformed: it changes nothing and is answered with `mtu_result` carrying the value in force. |
+| `0x13` | `probe_down` | `seq` (1), `size` (2), `port` (2) | Only after a `probe_token` was received on this connection and while that token is live. At any other time the node answers `error` code 2. A `size` outside the tunnel's smallest MTU to `max_size`, or a `port` of 0, is a malformed body: the node closes the connection with no message. |
+| `0x14` | `set_mtu` | `mtu` (2) | After `auth_ok`. A value outside the tunnel's smallest MTU to the inbound's `mtu` is not malformed: it changes nothing and is answered with `mtu_result` carrying the value in force. |
 
 Node to client:
 
@@ -226,8 +226,8 @@ A catalog that breaks any of these is dropped whole, nothing of it is shown, and
 | A failed `auth` | Closes the connection with no message, and counts it. There is no lockout. |
 | A message of any type over the limit for all messages | Answers `error` with code 1 (rate limited) and ignores the message. An ignored `set_exit` does not count against the `set_exit` limit. |
 | A `set_exit` that is within the limit for all messages and over the `set_exit` limit | Answers `exit_result` with status 2 and the tag in force, and changes nothing |
-| A `probe_down` with a `size` outside 1280 to `max_size` or a `port` of 0 | Malformed body: closes the connection with no message |
-| A `set_mtu` outside 1280 to the inbound's `mtu` | Changes nothing and answers `mtu_result` with the value in force |
+| A `probe_down` with a `size` outside the tunnel's smallest MTU to `max_size` or a `port` of 0 | Malformed body: closes the connection with no message |
+| A `set_mtu` outside the tunnel's smallest MTU to the inbound's `mtu` | Changes nothing and answers `mtu_result` with the value in force |
 | `probe_start` on any transport but `udp` and `udp-obfs`, or `probe_down` without a live token | Answers `error` with code 2 (not applicable) |
 | `probe_start` while a run is open or too soon after one | Answers `error` with code 3 (busy) |
 | `set_exit` for a tag that does not exist, or one the user is not entitled to | Answers `exit_result` with status 1. Both cases look the same, so the channel does not reveal which tags exist. |
@@ -292,12 +292,14 @@ A probe is sent like any data packet of the transport, with fragmentation prohib
 2. **Upstream.** The client sends a probe to the gateway. When one arrives with a live token from an address of that device, the node sends `probe_ack` on the channel with the `seq` and the size it received. It sends no UDP reply.
 3. **Downstream.** The client sends `probe_down` with a `seq`, a `size` and a UDP port of its own. The node sends one probe of that size to the device's address and that port. The client sees it arrive, or does not.
 4. The client first probes the profile's `mtu` in both directions. If both pass, it is done after two packets. Otherwise it walks down the table of sizes. A size fails after a lost probe and one lost retry.
-5. The result is the largest size that passed in both directions. If 1280 fails, this datagram transport does not work on this path, and the client moves on under the rules of "Transport fallback".
+5. The result is the largest size that passed in both directions. If the tunnel's smallest MTU fails, this datagram transport does not work on this path, and the client moves on under the rules of "Transport fallback".
 6. The client sets its tunnel MTU to the result and sends `set_mtu`. The node answers `mtu_result`.
 7. The client remembers the result per network and transport, and next time confirms it with one probe in each direction. After every reconnect and every change of network it sends `set_mtu` again.
 8. **A path that shrinks later.** Because nothing is fragmented, a path whose MTU drops in the middle of a session would lose every full-size packet from then on. The client therefore confirms the current size again with one probe in each direction on the timer in the table of numbers, and at once when its system reports an ICMP "fragmentation needed" or "packet too big" for the transport's outer packets. Such a report is only a reason to probe. The size in it is never used, because anyone on the path can forge one. A confirmation that fails starts a walk down the table.
 
-Bounds: a `probe_down` with a `size` outside 1280 to `max_size` is malformed and closes the connection. A `set_mtu` outside 1280 to the inbound's `mtu` changes nothing and gets `mtu_result` with the value in force. The client never raises its MTU above the signed profile's, whatever the node says.
+The tunnel's smallest MTU is 1280 when the device has an IPv6 address, or for the client when the device or a gateway of the profile has one, since IPv6 needs 1280. When the tunnel is IPv4 alone it is 1080, so that a datagram transport still works on a path that cannot carry 1280 and the transport's overhead. A node before v0.2.10 takes nothing below 1280: it does not confirm a smaller probe, so the walk of a newer client ends there as before.
+
+Bounds: a `probe_down` with a `size` outside the tunnel's smallest MTU to `max_size` is malformed and closes the connection. A `set_mtu` outside the tunnel's smallest MTU to the inbound's `mtu` changes nothing and gets `mtu_result` with the value in force. The client never raises its MTU above the signed profile's, whatever the node says.
 
 A probe run belongs to the gateway it was started at: its token, its probes and its `probe_down` requests all use that gateway's address, also for a device with addresses in two inbounds.
 
@@ -357,7 +359,7 @@ A compromised node is a malicious provider. This table is the whole list of valu
 
 | Field | Bound the client enforces | What the client does with it |
 |---|---|---|
-| `mtu` in `session` and `mtu_result` | 1280 to the `mtu` of the signed profile | Lowers the tunnel MTU to it. A value outside the bound is ignored. |
+| `mtu` in `session` and `mtu_result` | The tunnel's smallest MTU to the `mtu` of the signed profile | Lowers the tunnel MTU to it. A value outside the bound is ignored. |
 | Addresses and gateways | None needed | Compares them with the profile and reports a difference. Applies nothing. |
 | `node_time` | None needed | Shows a warning. Sets no clock. |
 | Exit catalog | At most 256 entries, and the checks under "Messages". A name is first filtered (control, bidirectional formatting, zero-width and other invisible characters are removed) and then cut to 64 characters. A name that is too long for the screen is cut, never a reason to close the connection. Tags need no filter. | Shows it. A later catalog replaces the earlier one. A catalog that fails a check is dropped whole and closes the connection. |
@@ -371,7 +373,7 @@ A compromised node is a malicious provider. This table is the whole list of valu
 
 A client never takes from the channel: an address, a route, a resolver, an address or name to dial, a transport, a certificate pin, a rating, a kill switch or resolver setting, a URL, or anything that is executed or shown as markup (threat model invariant 23).
 
-What remains: a node can lie about usage, show false notices, hide exits, report "working" wrongly, push the MTU down to 1280 and make its own client wait. It can make a client prefer one of the profile's own candidates over another. All of this is annoyance or misinformation from a party the user already sends all traffic through. None of it moves traffic outside the tunnel.
+What remains: a node can lie about usage, show false notices, hide exits, report "working" wrongly, push the MTU down to the tunnel's smallest MTU and make its own client wait. It can make a client prefer one of the profile's own candidates over another. All of this is annoyance or misinformation from a party the user already sends all traffic through. None of it moves traffic outside the tunnel.
 
 ## What a malicious client can do
 

@@ -270,10 +270,10 @@ A TCP segment with timestamps carries 1448 bytes over IPv4 and 1428 over IPv6. A
 Rules:
 
 - **No outer fragmentation.** On a `veilway` inbound, the client and the node send every outer packet of a datagram transport with fragmentation prohibited. A packet that does not fit the path is lost, not fragmented, and path MTU discovery on the control channel finds the size that fits. Data packets and probes are therefore treated alike by the path. As built: on Linux the sockets of `veilway` inbounds set the system's path MTU discovery to its probing mode. That sets "do not fragment" on everything sent and ignores the path MTU the system has cached, so that one forged "fragmentation needed" message cannot make the node refuse its own packets. A packet the host refuses for its size is not sent and is counted. On other systems the option is not set and the node warns at start, so the rule is not yet kept there.
-- The smallest `mtu` is 1280, which IPv6 inside the tunnel requires. The outer path must therefore carry 1280 + 32 + 48 = 1360 bytes for `udp` over IPv6, and 1280 + 62 + 48 = 1390 bytes for `udp-obfs` over IPv6. On a path that cannot, those transports do not work and the client moves on under "Transport fallback".
+- The smallest `mtu` of a profile is 1280, which IPv6 inside the tunnel requires. The tunnel's smallest MTU is 1280 too when the device or a gateway has an IPv6 address, and 1080 when the tunnel is IPv4 alone, which lets path MTU discovery go below 1280. The outer path must therefore carry 1280 + 32 + 48 = 1360 bytes for `udp` over IPv6, and 1280 + 62 + 48 = 1390 bytes for `udp-obfs` over IPv6, or with a tunnel of IPv4 alone 1080 + 32 + 28 = 1140 and 1080 + 62 + 28 = 1170 bytes over IPv4. On a path that cannot, those transports do not work and the client moves on under "Transport fallback".
 - For a `veilway` inbound, validation warns when `mtu` is above the IPv6 figure of any of its datagram transports. With a `udp-obfs` transport that is 1390. The proposed default `mtu` of such an inbound is 1390, and 1420 otherwise.
-- On `udp-obfs` no packet is larger than `mtu` + 62 bytes. Padding is lowered to fit, so a full-size inner packet carries none.
-- The client takes its MTU from the signed profile. Path MTU discovery can lower it, never raise it, and never below 1280.
+- On `udp-obfs` no packet is larger than `mtu` + 62 bytes, where `mtu` is the tunnel's MTU in force: the profile's, or the lower size path MTU discovery found. Padding is lowered to fit, so a full-size inner packet carries none.
+- The client takes its MTU from the signed profile. Path MTU discovery can lower it, never raise it, and never below 1280, or 1080 on a tunnel whose addresses are all IPv4.
 
 ### Stream transports and TCP inside TCP
 

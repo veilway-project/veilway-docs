@@ -438,7 +438,7 @@ The body of a refused request is read and thrown away up to four times the limit
 
 ## TypeScript client
 
-`@veilway/sdk` (version `0.2.9-alpha`, [its page](../../sdk/typescript/)) is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
+`@veilway/sdk` (version `0.2.10-alpha`, [its page](../../sdk/typescript/)) is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
 
 ```ts
 import {Agent, fetch as undiciFetch} from "undici";

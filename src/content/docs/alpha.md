@@ -15,6 +15,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 ## New in v0.2.8-alpha
 
 - **Outbound on a network interface.** A `direct` outbound can name a network interface of the server with `interface`, such as `eth1`, so its traffic leaves through that card. It works on Linux and macOS, and `veilway doctor` says when the interface is missing. In the panel it is the **Network interface** setting of a Direct outbound. See `outbounds` in the [config reference](../reference/config/).
+- **Node address is an IP address.** Apps refuse a profile that names a host, so a host name as **Node address** made every app say the subscription could not be read. The panel now holds the profiles back and says an IP address is needed. See [First inbound and user](../guides/first-user/).
 - **Android updates install.** On Android 10 and later the app downloaded an update but never showed the installer, so it downloaded again on the next tap. The installer now opens while the app is on screen, and a failed install says why. A phone on v0.2.7 or older needs this update installed by hand once, from the release page.
 
 ## New in v0.2.7-alpha

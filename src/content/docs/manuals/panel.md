@@ -136,7 +136,7 @@ The **Users** list shows each user's exits as **All exits** or a count.
 ### Provider, refresh and new users
 
 - **Provider name** is shown next to the subscription in apps.
-- **Node address** is the public host name or IP address that devices reach this node on. Profiles are made with it.
+- **Node address** is the public IP address that devices reach this node on. Profiles are made with it. It must be an IP address, not a host name: apps connect to the address the signed profile names and make no DNS lookup for it, so a profile with a host name is refused by every app. Since v0.2.8 the panel does not publish profiles until it is an IP address. The host name stays in the endpoint, the subscription link and the TLS name of `tls` and `ws` transports.
 - **Endpoints** are set under **Endpoints**, see [Endpoints and moves](#endpoints-and-moves). Each one has an address that your web server forwards to the panel's subscription path.
 - **Apps check for changes every** sets the refresh interval, in minutes. **Documents stay valid for** sets how many days a signed document can be used.
 - **Show links once** means the panel never keeps a copy of a link. A link is shown when it is made or reset, and never again. Off is the default.

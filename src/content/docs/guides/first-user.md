@@ -25,7 +25,7 @@ The examples use `vpn.example.com`. Put your own domain wherever it appears.
 
 Open **Settings**.
 
-1. Under **Provider**, set **Node address** to `vpn.example.com`. This is the host name or IP address that devices connect to. The profiles are made with it.
+1. Under **Provider**, set **Node address** to the server's public IP address, such as `203.0.113.10`. Devices connect to it and the profiles are made with it. Use the IP address, not the domain: apps refuse a profile that names a host, and show "The provider's subscription is not one this app can read".
 2. Under **Endpoints**, choose **Add endpoint**. Set **Name** to `main` and **Address** to `https://vpn.example.com/sub/main`. This is where apps fetch the user's subscription: the web server sends `/sub/` to the panel, and the name is the last part of the path. The first endpoint becomes the **Default endpoint** by itself.
 3. Under **New users**, leave **Device address pool** at `10.66.0.0/16`. Each device gets one address from it. Change it only if your users' own networks use the same range.
 4. Choose **Save changes** in the bar at the bottom.
@@ -72,6 +72,7 @@ The user opens the link in the Veilway app, and the app connects. You can show t
 ## When it does not connect
 
 - **The app cannot fetch the subscription.** The web server must send `/sub/` to the panel. `sudo bash veilway.sh status` shows the admin pages address and the subscription path the web server has to forward.
+- **The app says "The provider's subscription is not one this app can read".** **Node address** is a host name. Set it to the server's IP address, save, publish the profiles again, and add the link in the app again.
 - **The app fetches, but the tunnel does not come up.** Check that the inbound's port is open in the firewall, for UDP when the transport is `udp-obfs`, and that **Node address** reaches this server.
 - **The app has no profile to connect with.** Publish the profiles again after any change to an inbound.
 

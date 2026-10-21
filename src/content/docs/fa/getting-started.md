@@ -3,7 +3,7 @@ title: شروع به کار
 description: نصب نود و پنل نسخهٔ آلفای Veilway با اسکریپت نصب، یا با Docker.
 ---
 
-این صفحه آلفای `v0.2.10-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
+این صفحه آلفای `v0.2.11-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
 
 ## چه چیزی لازم است
 
@@ -228,7 +228,7 @@ sudo bash veilway.sh install both --mirror https://mirror.example.org
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.10-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.11-alpha
 ```
 
 فایل‌های نود و پنل را با امضاها و اشاره‌گرها دانلود می‌کند، هر یک را پیش از ذخیره بررسی می‌کند، و `veilway.sh` را بالای پوشه می‌گذارد. اشاره‌گر جدیدتری را که از قبل آنجا باشد نگه می‌دارد. صفحهٔ `index.html` قابل مرورِ [`veilway-release-mirror`](../guides/release-mirror/) را نمی‌نویسد.

@@ -408,6 +408,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `user_restored` | `user`. |
 | `usage_reset` | `user` و `totals` (اینکه شمارنده‌های طول عمر هم صفر شدند یا نه). برای هر ریست مصرف فرستاده می‌شود. |
 | `exit_udp_changed` | `exit` و `udp` (وضعیت تازه). |
+| `exit_working_changed` | `exit` و `working`: پراکسی خروجی دیگر نود را راه نمی‌دهد، یا دوباره راه می‌دهد. دستگاه‌هایی که خروجی انتخاب نکرده‌اند در این مدت از خروجی دیگری بیرون می‌روند. |
 | `stats` | عکس لحظه‌ای `/v1/stats`، هر ثانیه. فقط وقتی ساخته می‌شود که کسی جریان را می‌خواند. |
 | `lagged` | `missed`. `id` ندارد. |
 
@@ -438,7 +439,7 @@ data: {"user":"alice","reason":"quota"}
 
 ## کلاینت TypeScript
 
-`@veilway/sdk` (نسخهٔ `0.2.10-alpha`، [صفحهٔ آن](../../sdk/typescript/)) یک کلاینت تایپ‌دار است که از سند OpenAPI ساخته می‌شود. وابستگی زمان اجرا ندارد. یک تابع `fetch` و یک آدرس پایه می‌گیرد، پس راه رسیدن به سوکت یونیکس با شماست. مثال زیر از `undici` استفاده می‌کند:
+`@veilway/sdk` (نسخهٔ `0.2.11-alpha`، [صفحهٔ آن](../../sdk/typescript/)) یک کلاینت تایپ‌دار است که از سند OpenAPI ساخته می‌شود. وابستگی زمان اجرا ندارد. یک تابع `fetch` و یک آدرس پایه می‌گیرد، پس راه رسیدن به سوکت یونیکس با شماست. مثال زیر از `undici` استفاده می‌کند:
 
 ```ts
 import {Agent, fetch as undiciFetch} from "undici";

@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.10-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.11-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.10-alpha`. It follows `v0.2.9-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.11-alpha`. It follows `v0.2.10-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.10-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.10-alpha)
+- Node and install script: [v0.2.11-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.11-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.11-alpha
+
+- **Automatic exit that switches.** When a device is on **Automatic** and its exit stops working, it leaves through one of the exits the operator lists under **Exits Automatic may switch to** (`routing.fallback`), and comes back once its own works again. Without that list nothing switches, so an entry node still never sends traffic around a link that is down. The node now finds out when an exit through a SOCKS5 proxy stops working: 3 failed connections to the proxy in a row mark it down, and the node checks it again every 30 seconds. The apps show which exit Automatic is using, such as **Automatic: Amsterdam**. It needs the node of v0.2.11. See `exits` on the [control channel page](../protocol/control-channel/).
+- **Removing a subscription frees its place.** When you remove a subscription in the app, the app first tells the provider, and the panel removes the device. Before, the device kept its place on the account until the operator removed it. It needs the app and the panel of v0.2.11.
+- **Idle devices.** The panel setting **Remove devices that have not refreshed for** removes devices whose app has not refreshed in that many days, such as an uninstalled app or a lost phone. It is off by default. See [Subscription settings](../manuals/panel/#subscription-settings).
+- **Panel SDK.** `@veilway/panel-sdk` has a method for every route an API token may call.
 
 ## New in v0.2.10-alpha
 

@@ -408,6 +408,7 @@ The address a device connects from is not part of a session. It is never put in 
 | `user_restored` | `user`. |
 | `usage_reset` | `user` and `totals` (whether the lifetime counters were zeroed too). Sent for every usage reset. |
 | `exit_udp_changed` | `exit` and `udp` (the new state). |
+| `exit_working_changed` | `exit` and `working`: the proxy of the exit stopped letting the node in, or lets it in again. Devices without a choice of exit leave through another exit meanwhile. |
 | `stats` | The snapshot of `/v1/stats`, once a second. Only made while somebody reads the stream. A snapshot counts as one event in the buffer of a slow reader, and a reader that is behind is sent the newest snapshot there is for each one it has not yet taken, not the one of that second. |
 | `lagged` | `missed`. Has no `id`. |
 
@@ -438,7 +439,7 @@ The body of a refused request is read and thrown away up to four times the limit
 
 ## TypeScript client
 
-`@veilway/sdk` (version `0.2.10-alpha`, [its page](../../sdk/typescript/)) is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
+`@veilway/sdk` (version `0.2.11-alpha`, [its page](../../sdk/typescript/)) is a typed client generated from the OpenAPI document. It has no runtime dependencies. It takes a `fetch` function and a base URL, so how to reach the unix socket is your choice. The example uses `undici`:
 
 ```ts
 import {Agent, fetch as undiciFetch} from "undici";

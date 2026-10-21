@@ -148,7 +148,7 @@ If the app says **The answer did not reach the connection**, press connect again
 
 If your provider lists exits, the **Exit** row on the **Connection** screen opens **Choose an exit**. Your traffic leaves the provider's network at the exit you pick.
 
-- **Automatic** lets the app use one that works.
+- **Automatic** uses your provider's exit for you. When your provider has set up other exits to switch to, it uses one of those while yours is down. The **Exit** row shows which one, such as **Automatic: Amsterdam**.
 - Each exit shows its country and its load: **Not busy**, **Busy**, **Very busy**, or **Load not known**. An exit that does not answer shows **Not answering right now**.
 
 If the app cannot change the exit, it says **The exit could not be changed**.
@@ -209,7 +209,7 @@ The **Subscriptions** screen lists each subscription with its provider, its logo
 - **Refresh** (the icon on the row) gets the provider's current settings. It appears only when the provider allows it.
 - **Share** gives the subscription to another device. It appears on a subscription that was added with a link. See [Share a subscription](#share-a-subscription).
 - **Backup update addresses** appear on a row when your provider has added addresses that the app can use to refresh the subscription while the main address is blocked. See [Backup update addresses](#backup-update-addresses).
-- **Remove** deletes the subscription, its connections and its keys from this computer. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first.
+- **Remove** deletes the subscription, its connections and its keys from this computer. First it tells your provider that this device left, so the device's place on your account is free again. That takes a few seconds at most, and the subscription is removed even when the provider cannot be reached. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first.
 - **Let apps reach devices on this network** (a checkbox on the row) is off by default. Off, everything goes through the tunnel, your local network included, so a printer or your router is not reachable while you are connected. On, apps can reach the devices on the networks you are connected to (a printer, your router) outside the VPN. Only the private subnets you are on go outside, not the whole private ranges, and the list is read again when you change networks. The network can see that traffic, because it does not go through the VPN. Names are still only looked up through the tunnel. On Android nothing goes outside the VPN while you are on mobile data. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops.
 
 ### Share a subscription

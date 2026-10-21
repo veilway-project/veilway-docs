@@ -3,7 +3,7 @@ title: TypeScript SDK
 description: Using the typed clients of the Veilway control API and the panel's admin API from TypeScript.
 ---
 
-`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.10-alpha`.
+`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.11-alpha`.
 
 ```
 npm install @veilway/sdk
@@ -58,9 +58,13 @@ If the registry has no version of it yet, build it from `sdk/` in the [panel rep
 
 It takes a `fetch` function, the panel's API address and a token. The address is the panel's `prefix` followed by `/api`, such as `https://panel.example.com/<prefix>/api`. Make the token under **API tokens** in the panel. Its scope decides which calls it may make, and a call outside the scope fails with `forbidden`. See [API tokens](../../manuals/panel/#api-tokens).
 
-- Users: `listUsers`, `getUser`, `createUser`, `updateUser` and `deleteUser`.
+- Users: `listUsers`, `getUser`, `createUser`, `updateUser`, `deleteUser` and `bulkUsers`.
 - Devices: `listDevices`, `createDevice` and `removeDevice`.
 - Links and usage: `getSubscription`, `resetSubscription`, `resetUsage`, `getExits`, `statsNow`, `statsUsage` and `statsHistory`.
+- Node and config: `getNode`, `syncNode`, `getUpdate`, `getSettings`, `getConfigSection`, `putConfigSection`, `validateConfig`, `diffConfig`, `derivedProfiles` and `setProfileOverride`.
+- Endpoints, links and the rest: `getEndpoints`, `moveEndpoint`, `getLinks`, `getLinkInbounds`, `getXray` and `getAudit`.
+
+Every route an API token may call has a method from v0.2.11. Updates, restarts, backups and the admin's own account need a signed-in admin and are not in it.
 
 Every failed call throws `VeilwayError` with `status`, `code` and `message`. The `code` is the panel's code, such as `forbidden` or `unauthorized`. An answer that is not JSON, or not an error document, throws `bad_response`.
 

@@ -264,7 +264,7 @@ A native fetch is one sealed exchange with the provider's gateway (see "The encr
 | `kids` | list of 1 or 2 strings | The key ids of the signing keys the client holds for this subscription. On a first import, the id of the key in the link. |
 | `device_public_key` | key | The public half of the WireGuard key the client made for this subscription |
 | `device_secret` | string, 22 base64url characters | 16 random bytes the client made together with the device key. Sent on every request. |
-| `op` | string | `"fetch"`, `"confirm"` or `"release"` |
+| `op` | string | `"fetch"`, `"confirm"`, `"release"` or `"leave"` |
 | `device_name` | display text, at most 32 characters | Only with `"confirm"`, and only what the user typed. The client never fills it from the system. Absent when the user typed nothing. A name that is empty after the filter is not sent. |
 
 A legacy fetch is a plain `GET` and carries none of this.
@@ -293,6 +293,8 @@ What each `op` does, for a valid token:
 | `"release"` | Pending, with the right secret | Frees the place and answers `"released"`. |
 | `"release"` | Enrolled | Changes nothing and answers the document. `"release"` never removes a confirmed device. |
 | `"release"` | Not known | Answers `"released"`. |
+| `"leave"` | Pending or enrolled, with the right secret | Removes the device, frees its place and answers `"released"`. |
+| `"leave"` | Not known | Answers `"released"`. |
 | any | Known, with a wrong or missing secret | `"device_mismatch"`. Nothing about the device is released. |
 
 A **signed refusal** is a document in the same envelope whose payload has `v`, `subscription_id`, `issued_at` and `refusal`. Its `v` and `critical` are checked as in any document, and every other member is ignored.
@@ -305,7 +307,7 @@ A **signed refusal** is a document in the same envelope whose payload has `v`, `
 | `"rate_limited"` | This device, or this token for new devices, has asked too often. | That it will try again later. It counts as a failed refresh with the ordinary backoff. |
 | `"device_mismatch"` | The device key is known and the secret is not the stored one. | That this device has to be enrolled again. |
 | `"key_retired"` | The client holds only a signing key the provider has retired. | That the provider has renewed its key and a new link is needed. |
-| `"released"` | A pending place was freed, or there was none. | Nothing. |
+| `"released"` | A pending place was freed, a device left, or there was none. | Nothing. |
 | `"bad_request"` | A member was missing or malformed, or the device key was all zero or of small order. | A fault in the app. |
 
 A refusal is verified like any document. On a refresh it must carry the stored `subscription_id`, or it is a failed refresh. On a first import it may carry any id, and its age is still checked. It is never stored as the last good document and changes no profile. One that is older than the limit in the table of numbers is treated as a failed refresh, so that an old refusal cannot be replayed for long. The requester has already shown a valid token, so naming the state protects nobody's secret, and the real user needs to know.
@@ -455,7 +457,7 @@ A holder of a leaked link can enroll devices of its own while places are free. T
 - Every document lists the account's devices in `devices`, pending ones included and marked, with the name the user gave each, when it was enrolled, and which one is this device. A device the user does not know is a sign that the link has leaked, and the app says so when the list grows.
 - A device that finds every place taken gets `"device_limit"`, not silence.
 - A device is removed in the provider's panel. The format has no request that removes a confirmed device, because a bare link would then let its holder remove the user's devices. A provider that resets a link should offer to remove the devices that were enrolled with it.
-- The client keeps its device key and secret where a reinstall can find them again, where the platform allows, so that reinstalling the app does not take a new place. That makes them an identifier that outlives the app's removal. Removing a subscription in the app deletes its key, secret and link, and the app has one action that deletes everything it has stored.
+- The client keeps its device key and secret where a reinstall can find them again, where the platform allows, so that reinstalling the app does not take a new place. That makes them an identifier that outlives the app's removal. Removing a subscription in the app first sends `"leave"`, so that the provider removes the device and its place is free, and then deletes its key, secret and link. `"leave"` goes to the endpoints a refresh tries, never to a static mirror, and the app waits for it 10 s at most: a provider that did not take it keeps the device until its operator or its own cleanup of idle devices removes it. A panel before v0.2.11 answers `"leave"` as a request it cannot read. The app has one action that deletes everything it has stored.
 - A name typed for a device is shown to anyone who holds the link, in the device list. The app says so where the name is typed.
 
 The cost: recovery from a filled account needs the provider.

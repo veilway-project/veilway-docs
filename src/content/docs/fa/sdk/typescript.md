@@ -3,7 +3,7 @@ title: SDK برای TypeScript
 description: استفاده از کلاینت‌های تایپ‌دار API کنترل Veilway و API مدیریتی پنل در TypeScript.
 ---
 
-`@veilway/sdk` یک کلاینت تایپ‌دار برای [API کنترل](../../reference/api/) نود Veilway است. به Node نسخهٔ 20 یا بالاتر نیاز دارد و وابستگی زمان اجرا ندارد. نسخهٔ آن `0.2.10-alpha` است.
+`@veilway/sdk` یک کلاینت تایپ‌دار برای [API کنترل](../../reference/api/) نود Veilway است. به Node نسخهٔ 20 یا بالاتر نیاز دارد و وابستگی زمان اجرا ندارد. نسخهٔ آن `0.2.11-alpha` است.
 
 ```
 npm install @veilway/sdk
@@ -58,9 +58,13 @@ npm install @veilway/panel-sdk
 
 کلاینت یک تابع `fetch`، نشانی API پنل و یک توکن می‌گیرد. نشانی، `prefix` پنل و سپس `/api` است، مثل `https://panel.example.com/<prefix>/api`. توکن را زیر **توکن‌های API** در پنل بسازید. دامنهٔ آن تعیین می‌کند چه فراخوانی‌هایی مجازند، و فراخوانی بیرون از دامنه با `forbidden` شکست می‌خورد. [توکن‌های API](../../manuals/panel/#توکنهای-api) را ببینید.
 
-- کاربران: `listUsers`، `getUser`، `createUser`، `updateUser` و `deleteUser`.
+- کاربران: `listUsers`، `getUser`، `createUser`، `updateUser`، `deleteUser` و `bulkUsers`.
 - دستگاه‌ها: `listDevices`، `createDevice` و `removeDevice`.
 - لینک و مصرف: `getSubscription`، `resetSubscription`، `resetUsage`، `getExits`، `statsNow`، `statsUsage` و `statsHistory`.
+- نود و پیکربندی: `getNode`، `syncNode`، `getUpdate`، `getSettings`، `getConfigSection`، `putConfigSection`، `validateConfig`، `diffConfig`، `derivedProfiles` و `setProfileOverride`.
+- نقطه‌های پایانی، پیوندها و بقیه: `getEndpoints`، `moveEndpoint`، `getLinks`، `getLinkInbounds`، `getXray` و `getAudit`.
+
+از v0.2.11 هر مسیری که توکن API می‌تواند صدا بزند متدی دارد. به‌روزرسانی، راه‌اندازی دوباره، پشتیبان‌گیری و حساب خود مدیر به مدیرِ واردشده نیاز دارند و در آن نیستند.
 
 هر فراخوانی ناموفق `VeilwayError` با `status`، `code` و `message` پرتاب می‌کند. `code` کد پنل است، مثل `forbidden` یا `unauthorized`. پاسخی که JSON نباشد، یا سند خطا نباشد، با `bad_response` پرتاب می‌شود.
 

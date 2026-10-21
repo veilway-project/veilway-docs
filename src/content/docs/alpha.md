@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.8-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.9-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.8-alpha`. It follows `v0.2.7-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.9-alpha`. It follows `v0.2.8-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.8-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.8-alpha)
+- Node and install script: [v0.2.9-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.9-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.9-alpha
+
+- **Restart from the panel.** **Restart node** and **Restart panel** on this node's card on **Nodes**. A node restart drops every connected device for a moment. The installer of v0.2.9 does the restart, and an update from the panel installs it. See [Updating the panel](../manuals/panel/#updating-the-panel).
+- **Update progress.** The desktop and Android apps show the bar while an update downloads. Before, only the percentage showed.
 
 ## New in v0.2.8-alpha
 

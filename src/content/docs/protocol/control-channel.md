@@ -49,7 +49,7 @@ Every range written "a to b" is inclusive at both ends, and a time drawn from a 
 | Pushed snapshot messages the client applies (`session`, `exits`, `usage`, `notices`, `hints`) | at most 1 of each kind every 5 s. A newer one replaces one that waits. Every other message is handled at once. |
 | Subscription refresh caused by the channel | at most 1 in 6 hours, through the tunnel |
 | MTU probe run | 1 per device per 60 s, token valid 30 s, at most 16 probes in each direction, 2 s wait per probe, 1 retry |
-| MTU probe sizes | The profile's `mtu`, and those of 1080, 1160, 1240, 1280, 1320, 1360, 1390, 1420 and 1440 that are below it and not below the tunnel's smallest MTU |
+| MTU probe sizes | The profile's `mtu`, and those of 1080, 1160, 1240, 1280, 1320, 1360, 1390, 1420 and 1440 that are below it and not below the tunnel's smallest MTU. From v0.2.14 the client lowers each by a random 0 to 16 bytes per run, never below that MTU, and probes them largest first; the node takes any size from the floor to its maximum |
 | Remembered MTU on the client | per network and transport, 7 days |
 | MTU re-confirmation | one probe in each direction after a time drawn uniformly from 300 to 900 s, for as long as the session lasts |
 | Wait after `bye` | see "Being cut off" |

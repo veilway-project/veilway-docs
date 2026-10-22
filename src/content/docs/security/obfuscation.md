@@ -48,13 +48,13 @@ It is not designed against someone who watches both your connection and the serv
 
 ## What exists today
 
-Five transports are built, on the node and in the client: `udp`, `udp-obfs`, `tls`, `ws` and `fronted`. All are rated Detectable. The [alpha page](../../alpha/) says how far each has been tested.
+Six transports are built, on the node and in the client: `udp`, `udp-obfs`, `tls`, `ws`, `ws-plain` and `fronted`. All are rated Detectable. The [alpha page](../../alpha/) says how far each has been tested.
 
 - `udp` is plain WireGuard. It is recognized by its first bytes and its packet sizes.
-- `udp-obfs`, `tls`, `ws` and `fronted` are the obfuscated ones. Each carries WireGuard inside Veilway's own framing, with a proof that you are a user, a replay memory, and limits per device and per source.
+- `udp-obfs`, `tls`, `ws`, `ws-plain` and `fronted` are the obfuscated ones. Each carries WireGuard inside Veilway's own framing, with a proof that you are a user, a replay memory, and limits per device and per source.
 - On a plain `wireguard` inbound, `ws` is the older format. It puts WireGuard inside a WebSocket inside TLS, and that is not obfuscation: the server answers any stranger in a way that identifies it, and WireGuard's packet sizes show through.
 
-Not built: `ws-plain`, `faketls`, `quic`, Encrypted Client Hello and built-in certificate issuance.
+Not built: the frame appearance of `ws-plain`, `faketls`, `quic`, Encrypted Client Hello and built-in certificate issuance.
 
 Designed and not built, each on a page of its own and none reviewed from outside: [HTTP/2](../../protocol/http2/) on the stream transports, [other shapes of `fronted`](../../protocol/fronted-shapes/), and [borrowed-site mode](../../protocol/borrowed-site/) (`faketls`). Borrowed-site mode ships as alpha when it is built: off by default, labeled alpha in the panel and the apps, with a warning that it is new and unreviewed. Nothing in the tables below counts them.
 

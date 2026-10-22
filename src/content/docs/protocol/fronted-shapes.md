@@ -42,7 +42,7 @@ Further rules: `up.inflight` is 1 when `down.mode` is `poll`. `up.limit` is 1,02
 
 **A transport without a shape is the classic form,** and a transport with a shape never is, also when its members equal the classic values (`POST`, `body`, `poll`). The two number their chunks differently (see "Numbering").
 
-**Why a new type.** A client ignores a member it does not know, so a `shape` on a `fronted` transport would be ignored by an older client, which would speak the classic form to a node that expects another. A transport of an unknown `type` is refused with its profile, and that is the safe failure. A provider that serves older clients puts the shaped transports in a profile of its own, as for `ws-plain`. The proof label is `"fronted-shaped"`, so no key or token of one form can be used in the other.
+**Why a new type.** A client ignores a member it does not know, so a `shape` on a `fronted` transport would be ignored by an older client, which would speak the classic form to a node that expects another. A transport of an unknown `type` is left out by a client of v0.2.14 or later, and refused with its profile by an older one, and that is the safe failure. A provider that serves older clients puts the shaped transports in a profile of its own, as for `ws-plain`. The proof label is `"fronted-shaped"`, so no key or token of one form can be used in the other.
 
 ### Presets
 

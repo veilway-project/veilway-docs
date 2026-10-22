@@ -3,7 +3,7 @@ title: TypeScript SDK
 description: Using the typed clients of the Veilway control API and the panel's admin API from TypeScript.
 ---
 
-`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.13-alpha`.
+`@veilway/sdk` is a typed client for the [control API](../../reference/api/) of a Veilway node. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.14-alpha`.
 
 ```
 npm install @veilway/sdk
@@ -48,7 +48,7 @@ The types in `src/schema.ts` are generated from `crates/veilway-api/openapi.json
 
 ## The panel SDK
 
-`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.9`.
+`@veilway/panel-sdk` is a typed client for the [admin API](../../manuals/panel/#the-admin-api) of the Veilway panel, for scripts that hold an API token. It needs Node 20 or newer and has no runtime dependencies. The version is `0.2.14`.
 
 ```
 npm install @veilway/panel-sdk
@@ -61,10 +61,10 @@ It takes a `fetch` function, the panel's API address and a token. The address is
 - Users: `listUsers`, `getUser`, `createUser`, `updateUser`, `deleteUser` and `bulkUsers`.
 - Devices: `listDevices`, `createDevice` and `removeDevice`.
 - Links and usage: `getSubscription`, `resetSubscription`, `resetUsage`, `getExits`, `statsNow`, `statsUsage` and `statsHistory`.
-- Node and config: `getNode`, `syncNode`, `getUpdate`, `getSettings`, `getConfigSection`, `putConfigSection`, `validateConfig`, `diffConfig`, `derivedProfiles` and `setProfileOverride`.
+- Node and config: `getNode`, `syncNode`, `getUpdate`, `checkUpdates`, `getSettings`, `getConfigSection`, `putConfigSection`, `validateConfig`, `diffConfig`, `derivedProfiles` and `setProfileOverride`.
 - Endpoints, links and the rest: `getEndpoints`, `moveEndpoint`, `getLinks`, `getLinkInbounds`, `getXray` and `getAudit`.
 
-Every route an API token may call has a method from v0.2.11. Updates, restarts, backups and the admin's own account need a signed-in admin and are not in it.
+Every route an API token may call has a method from v0.2.11. `checkUpdates` asks GitHub now (at most once a minute) and needs a token with full access. Applying updates, restarts, backups and the admin's own account need a signed-in admin and are not in it.
 
 Every failed call throws `VeilwayError` with `status`, `code` and `message`. The `code` is the panel's code, such as `forbidden` or `unauthorized`. An answer that is not JSON, or not an error document, throws `bad_response`.
 

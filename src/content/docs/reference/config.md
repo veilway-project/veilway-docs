@@ -136,8 +136,8 @@ An inbound is one tunnel: one key, one address pool, reached over one or more tr
 | `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the address pool for this tunnel. |
 | `mtu` | integer 1280 to 1500 | `1420`, or `1390` for a `veilway` inbound with a `udp-obfs` transport | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path, or is lost on a `veilway` inbound, which never fragments. With a `udp-obfs` transport the warning starts above 1390: a full-size packet then does not fit a 1500 byte path over IPv6. |
 | `padding` | object | see below | The upper bounds of the padding the node puts on what it sends over `udp-obfs`, `tls`, `ws` and `fronted`: `wide` from 512 to 1023 (default 1023) and `normal` from 64 to 255 (default 255), both optional. On an inbound with none of these transports the key is a warning. See `udp-obfs` below. |
-| `transport_keys` | list of 1 or 2 keys | none | Secret. The node transport keys, private halves. Required for an inbound with a `tls`, `ws` or `fronted` transport, whose devices seal their proof to one of them. `veilway genkey --transport` prints one with its public half, which is what a profile carries. Two are for rotation: removing one ends the sessions that were opened under it. No WireGuard key of the config is one, no transport secret is one, and no two inbounds share one. On an inbound without such a transport the key is a warning. See `tls` below. |
-| `upgrade_cookie` | 1 to 32 characters from `A-Z a-z 0-9 _ -` | none | The name of the cookie on the upgrade answer of a `tls` or `ws` transport. Required with one, and it has no default, so that not every node sends the same name. Choose a name your own site could use. An inbound with `fronted` alone needs none. |
+| `transport_keys` | list of 1 or 2 keys | none | Secret. The node transport keys, private halves. Required for an inbound with a `tls`, `ws` or `fronted` transport (a `ws-plain` transport has `transport_keys` of its own, see below), whose devices seal their proof to one of them. `veilway genkey --transport` prints one with its public half, which is what a profile carries. Two are for rotation: removing one ends the sessions that were opened under it. No WireGuard key of the config is one, no transport secret is one, and no two inbounds share one. On an inbound without such a transport the key is a warning. See `tls` below. |
+| `upgrade_cookie` | 1 to 32 characters from `A-Z a-z 0-9 _ -` | none | The name of the cookie on the upgrade answer of a `tls` or `ws` transport, and the name of the cookie that carries the token of a `ws-plain` transport, where the answer sets no cookie. Required with one of them, and it has no default, so that not every node sends the same name. Choose a name your own site could use. An inbound with `fronted` alone needs none. |
 | `upgrade_headers` | list of at most 16 header field names | `["Server", "Date"]` for `tls`, none for `ws` | The header fields the upgrade answer of a `tls` or `ws` transport takes from the decoy origin, in this order. Behind a web server the list is empty unless you set it, because that web server adds its own fields. See `tls` below. |
 | `transports` | list of 1 to 8 | required | See below. |
 
@@ -171,15 +171,16 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 | `udp-obfs` | `listen` (`ip:port`), optional `limits` with `sessions` (1 to 1,048,576, default 16,384) | Every WireGuard datagram inside the `udp-obfs` envelope of the [protocol](../../protocol/transports/), keyed by the device's `transport_secrets`. Only on a `veilway` inbound. See `udp-obfs` below. |
 | `tls` | `listen` (`ip:port`), `path`, `tls` with `cert` and `key`, `decoy` with `origin` and optional `proxy_protocol`, optional `limits` with `sessions`, `undecided`, `undecided_per_source` and `relayed` | The WebSocket session of the [protocol](../../protocol/transports/) inside TLS that the node ends itself. Whoever is not a user is handed to the decoy origin. Only on a `veilway` inbound. See `tls` below. |
 | `ws` with a `decoy` | `listen` (`ip:port`), `path`, `decoy`, `trusted_proxies`, optional `client_address_header`, optional `limits`. No `tls` key. | The same WebSocket session behind your own web server, which ends TLS. Only on a `veilway` inbound. See "`ws` and `fronted` behind your web server" below. |
+| `ws-plain` | the keys of `ws` with a `decoy`, and `transport_keys` | The same WebSocket session over plain HTTP, with no TLS between the app and your web server. Only on a `veilway` inbound. The weakest transport. See "`ws-plain`" below. |
 | `fronted` | the keys of `ws` with a `decoy` | Polling with HTTP requests, for a CDN that allows neither WebSocket nor long-lived connections. Only on a `veilway` inbound. See the same section. |
 | `fronted-shaped` | the keys of `fronted`, and `shape` | `fronted` with a method, a place for the data and a downstream form that you pick. See "`fronted-shaped`" below. |
 | `faketls` | `listen` (`ip:port`), `site`, `transport_key` and the limits of its section | Alpha in v0.2.0. Borrows a real site. Only on a `veilway` inbound. A profile carries it as "The `faketls` transport" of the subscription format, and a client dials it only after the user turns on `alpha_transports`. See "`faketls`" below. |
 
 `ws` is two transports under one name, and its keys say which one it is. Without `decoy`, `trusted_proxies`, `client_address_header` and `limits` it is the `ws` of a `wireguard` inbound, which carries WireGuard datagrams as they are. With any of them it is the native `ws` of a `veilway` inbound, which needs `decoy` and `trusted_proxies` and takes no `tls`. Validation refuses each on the other kind of inbound and never takes one for the other.
 
-A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws`, `fronted` and, as alpha, `faketls`. A `wireguard` inbound takes `udp` and the `ws` without a decoy: its devices have no transport secret for the others to be keyed with.
+A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws`, `ws-plain`, `fronted` and, as alpha, `faketls`. A `wireguard` inbound takes `udp` and the `ws` without a decoy: its devices have no transport secret for the others to be keyed with.
 
-`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`, except for a `fronted-shaped` transport whose data rides in the path, which is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `fronted` and `fronted-shaped` it is at least 12 bytes.
+`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`, except for a `fronted-shaped` transport whose data rides in the path, which is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `ws-plain`, `fronted` and `fronted-shaped` it is at least 12 bytes.
 
 Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped, and one source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once. This also applies to a reverse proxy in front of a plain `ws` listener, whose connections all come from one source.
 
@@ -192,6 +193,7 @@ Listen conflicts, across all inbounds:
 - The `ws` and `fronted` transports of `veilway` inbounds may share an address and port when their `path` differs and their `decoy`, `trusted_proxies`, `client_address_header` and `limits` are identical: one listener, to which the web server hands a `GET` for one path and a `POST` for another.
 - A `fronted-shaped` transport shares a listener on the same terms as `fronted`. Its `path` may not be a prefix of the `path` of another transport on the same listener, because a shape that puts the data in the path is matched by prefix. Validation refuses it.
 - A `faketls` transport never shares an address and port with another transport, and its key is never equal to the key of another transport of the node.
+- A `ws-plain` transport never shares an address and port with a transport that is not `ws-plain`: its decoy must answer like your plain site, so that a prober cannot tell its path from your other plain paths. Two `ws-plain` transports may share a listener on the same terms as `ws`.
 - A listener serves one kind of peer. A `tls` transport, a `ws` transport of a `wireguard` inbound, and the `ws` and `fronted` transports of `veilway` inbounds never share an address and port with one another.
 
 ### `udp-obfs`
@@ -409,6 +411,30 @@ What the example does, and why:
 **Limits that are fixed** are those of `tls` where they are the same thing: 2 sessions that are not yet established and 8 that are for a device, 16 accepted proofs at once and then one a second, counted across every native transport together. A `ws` session ends after 300 seconds without a chunk and a `fronted` session after 60 seconds without an accepted request. Replay and being cut off are as on `tls`: a proof is accepted once, also across restarts, and whatever cuts a device off ends its sessions within a second.
 
 **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached. Nothing is logged for a single request, and no line names a client address, a path, a token, a session id or a key. Counters are in `stream` of `/v1/stats`.
+
+### `ws-plain`
+
+Engine. Both sides are built, the node's listener and the client's, since v0.2.14-alpha. It was tested against a small web server and with nginx and HAProxy in containers, and not on a real network. The [transports page](../../protocol/transports/) is the specification.
+
+`ws-plain` is the session of the native `ws` over plain HTTP: your web server takes the connection on port 80 (or another plain port), and hands one path to the node on the loopback. Use it only where TLS to your server is blocked or slowed and plain HTTP passes. The network sees your server's name, the path and the token, and can tell that people use this app, and a later leak of the transport's key ties all of a device's plain connections together. The app asks the user for its own consent before it dials one, and the panel shows a warning when you add it.
+
+Its keys are those of `ws` with a `decoy`: `listen`, `path`, `decoy`, `trusted_proxies`, optional `client_address_header` and optional `limits`. No `tls`, `http2`, `shape`, `site` or `transport_key` key. It adds one:
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `transport_keys` | list of 1 or 2 keys | required | Secret. The private halves of this transport's own keys, not the inbound's. Two are for rotation, the new key first and the old one second. A profile carries the public half of the first. `veilway genkey --transport` prints one. |
+
+The inbound's `upgrade_cookie` is required, and the token travels in a cookie of that name. Pick a name your own site never sets.
+
+Validation refuses:
+
+- a key that is a WireGuard key of the config, a key of any other transport or inbound, or the same key twice, so that a leak of this one opens nothing else;
+- a `path` that is the `path` of a `tls`, `ws` or `fronted` transport of any inbound;
+- a `ws-plain` transport on a listener that a transport which is not `ws-plain` also uses.
+
+The node reads the whole head of every request before it decides. The token must be in exactly one `Cookie` field, in exactly one cookie of the inbound's cookie name. Other cookies in the field are allowed. A request with anything after `?` in its target is not from a user. Whoever is not a user gets the decoy's answer, and your web server must answer the path as it answers any other plain path, a redirect to HTTPS included. The upgrade answer sets no cookie.
+
+If you use the panel, it makes the keys and rotates them for you (see [Rotation](../../manuals/panel/#subscription-settings)); the node only sees the list change.
 
 ### `fronted-shaped`
 

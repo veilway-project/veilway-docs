@@ -1,16 +1,28 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.13-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.14-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.13-alpha`. It follows `v0.2.12-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.14-alpha`. It follows `v0.2.13-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.13-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.13-alpha)
+- Node and install script: [v0.2.14-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.14-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.14-alpha
+
+- **`ws-plain`.** A WebSocket over plain HTTP to your own web server, with no TLS, for networks where TLS to your server is blocked or slowed and plain HTTP passes. It is the weakest transport: the network sees the server's name and the token, so it has its own consent question in the apps, its own transport keys and its own cookie. Add it on **Inbounds**, and set **Plain HTTP host name** (a name no other transport uses) and **Plain HTTP port** on **Profiles**. The client drops a `ws-plain` transport whose host or path a covered transport of the subscription uses, and keeps the rest of the profile. An app older than v0.2.14 does not know the type and refuses a profile that lists it, so update the apps first. See [`ws-plain`](../protocol/transports/#ws-plain-websocket-without-tls) and the [config reference](../reference/config/).
+- **The panel rotates transport keys.** Every inbound's key and every `ws-plain` key is replaced after **Rotate transport keys every** days (7 to 30, 30 by default; a `ws-plain` key at most 7). The old key keeps working for one more period, and the published profiles get the new public key without you publishing. The panel never holds a private key. See [Transport keys](../manuals/panel/#transport-keys).
+- **Relays only.** A switch on each profile gives apps only relay addresses, never the node's own. A user whom no relay reaches gets no profile for that inbound. Xray links are not affected.
+- **Relay ports per inbound.** When a relay carries two inbounds with the same transport type, it has one port field for each inbound and type.
+- **Check for updates.** A button on **Nodes**, next to **Restart node** and **Restart panel**, asks GitHub now, at most once a minute. The panel SDK has `checkUpdates()`.
+- **`veilway remove`.** The command line client removes a subscription and tells the provider first, as the apps do, so the device's place is freed.
+- **A reset after an upgrade answer on plain HTTP** counts as the network's answer, not a refusal, as a Windows test showed.
+- **Apps skip a transport they do not know.** An app from this release keeps a profile that has a transport of a newer type, leaves that transport out, and says an update adds a way of connecting. Apps before v0.2.14 still drop the whole profile, so have users update before you add `ws-plain`.
+- **MTU probes vary.** Each probe of an MTU run comes down by a random 0 to 16 bytes, never below the tunnel's floor, so the sizes are not one fixed list on every device.
 
 ## New in v0.2.13-alpha
 
@@ -100,7 +112,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 - **Panel.** A web panel for users, inbounds, outbounds, exits, routing, subscriptions and traffic. It also has several admins, notices, DNS and logs, backup and restore, an update button, and a guided setup for an entry node and for a reverse tunnel, see [Set up an entry node](../guides/entry-node/). It listens on loopback only, so a web server with TLS sits in front of it. Read the [panel manual](../manuals/panel/).
 - **Subscriptions.** Requests and answers are encrypted end to end, and links carry the panel's gateway key. Named endpoints can be assigned per user and per group, and a move to another endpoint is signed. Static mirrors and relay mirrors keep a subscription reachable, and the app asks before it uses a backup update address. Plain `http://` endpoints are possible, with a warning. The [subscription format](../protocol/subscription-format/) has the details.
 - **Xray add-on.** An optional add-on that runs the official `xray` binary beside the node. VLESS and Trojan with TLS and Shadowsocks work, over TCP and UDP. It is for people who use stock Xray apps. The desktop app connects to Xray links, see [Xray profiles](../guides/xray-profiles/). See the [Xray add-on](../manuals/xray/) for the server side.
-- **Transports.** Five ways for a client to reach a node: plain WireGuard over UDP (`udp`), UDP in Veilway's own envelope (`udp-obfs`), TLS that the node ends itself (`tls`), WebSocket behind your web server (`ws`), and HTTP requests through a CDN (`fronted`). The [transports page](../protocol/transports/) has the details.
+- **Transports.** Six ways for a client to reach a node: plain WireGuard over UDP (`udp`), UDP in Veilway's own envelope (`udp-obfs`), TLS that the node ends itself (`tls`), WebSocket behind your web server (`ws`), WebSocket over plain HTTP with no TLS (`ws-plain`, the weakest), and HTTP requests through a CDN (`fronted`). The [transports page](../protocol/transports/) has the details.
 - **Client TLS.** The client's TLS hello is built on BoringSSL and set up to match a current Chrome. Certificate checks still use the pins and the chain rules described in the transports page.
 - **Desktop app.** For Linux, macOS and Windows. It shows the connection's details, shares a subscription (the link only, as text, a QR code or a sealed file locked with a password), and updates itself. The [client manual](../manuals/client/) says where each platform stands.
 - **Android app.** An arm64 APK with the same screens and its own in-app updater. Read the [Android app manual](../manuals/android/).
@@ -121,7 +133,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 - **Every transport is rated Detectable.** A censor that looks closely can tell Veilway's traffic from ordinary traffic. Nothing in the alpha makes the traffic undetectable or unblockable.
 - **Desktop on macOS and Windows is compiled and tested on CI only.** It has never connected to a node on a real Mac or PC. On Windows the tunnel setup and its cleanup passed a smoke test on a CI runner; expect bugs in the routes, the firewall and DNS on both systems.
-- **HTTP/2 and the shapes of `fronted` have not been run behind a real CDN.** `ws` and `fronted` were tested behind nginx and HAProxy in Docker. A real CDN may behave differently. On the node, `http2` is off unless you turn it on.
+- **HTTP/2 and the shapes of `fronted` have not been run behind a real CDN.** `ws`, `ws-plain` and `fronted` were tested behind nginx and HAProxy in Docker. A real CDN may behave differently. On the node, `http2` is off unless you turn it on.
 - **Borrowed-site mode is alpha.** It is off by default and labeled alpha in the panel and the apps. Only the project's own people have reviewed it, it is rated Detectable, and it has not run against real sites. Do not rely on it.
 - **Not in this release.** Xray on Android, split tunneling and store builds. They are planned for v0.3.0.
 - **Some TLS details still differ from a browser.** No TLS session is resumed, and the fetch of a pinned subscription page sends a TLS hello that no browser sends.

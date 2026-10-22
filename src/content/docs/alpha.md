@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.12-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.13-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.12-alpha`. It follows `v0.2.11-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.13-alpha`. It follows `v0.2.12-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.12-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.12-alpha)
+- Node and install script: [v0.2.13-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.13-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.13-alpha
+
+- **WebSocket connects.** The panel gave apps the node's own listener port for a `ws` or `fronted-shaped` transport, where it only reads plain HTTP from your web server, so those connections never connected. Apps now get the web server's port: 443, or **Web server port** on the profile. Publish the profiles once after updating.
+- **Restart panel** reloads the page once the panel is back, not after a fixed 8 seconds.
 
 ## New in v0.2.12-alpha
 

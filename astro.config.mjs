@@ -31,6 +31,7 @@ export default defineConfig({
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
 						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },
 						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },
+						{ label: "Use another provider as an exit", translations: { fa: "استفاده از ارائه‌دهندهٔ دیگر به‌عنوان خروجی" }, slug: "guides/upstream-provider" },
 					],
 				},
 				{
@@ -45,6 +46,7 @@ export default defineConfig({
 						{ label: "Control channel", translations: { fa: "کانال کنترل" }, slug: "protocol/control-channel" },
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
 						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },
+						{ label: "Upstream providers", translations: { fa: "ارائه‌دهندگان بالادستی" }, slug: "protocol/upstreams" },
 						{ label: "Offline bundle", translations: { fa: "بسته آفلاین" }, slug: "protocol/offline-bundle" },
 						{ label: "Xray in the desktop apps", translations: { fa: "Xray در برنامه‌های دسکتاپ" }, slug: "protocol/xray-client" },
 					],

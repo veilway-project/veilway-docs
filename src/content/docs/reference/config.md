@@ -546,6 +546,7 @@ An exit is a named way out that users are routed to.
 | `l3` | every IP protocol | `interface` (matching `[a-z][a-z0-9_-]{0,14}`, default `veilway0`, unique across exits), `masquerade` (bool, default `true`). Linux only, needs `CAP_NET_ADMIN`: on another system `run` refuses to start. `check` does not look at the system it runs on. |
 | `block` | nothing | none. Every packet is dropped silently. |
 | `chain` | every IP protocol | `links` (1 to 4 link tags, required). The traffic leaves from another node through these links, see `links` below. No key of `netstack` or `l3` is allowed. |
+| `upstream` | every IP protocol | `upstream` (the tag of an entry of `upstreams`, required). The traffic leaves through the provider's network, see `upstreams` below. No key of `netstack`, `l3` or `links` is allowed. |
 
 Engine, `l3`:
 
@@ -843,6 +844,26 @@ A list of at most 64 tunnels. A tunnel forwards one TCP or UDP port of this node
 | `max_connections` | integer 1 to 4096 | `256` | TCP connections or UDP sessions at once. One source (an IPv4 address or an IPv6 /64) holds at most 16. All tunnels together come to at most 16,384. |
 
 Engine. A tunnel's connections leave from the entry's link address with ports from the entry's translation, as users' flows do, and are decided by the far node's rules for the link. While the `chain` exit is down, connections are refused. `/v1/stats` counts each tunnel under `tunnels`.
+
+## `upstreams`
+
+A list of at most 8 other providers' Veilway subscriptions. The node holds one device on each and uses it as the way out of an exit: the exit's backend is `{"type": "upstream", "upstream": "<tag>"}`, and at most one exit names each upstream. The [upstream protocol page](../../protocol/upstreams/) says what the provider sees and can do, and the [operator guide](../../guides/upstream-provider/) walks through enrollment.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | Any tag but `preview`, which the control API uses for previews. |
+| `enabled` | bool | `true` | A disabled upstream is checked, and neither fetched nor connected. |
+| `link` | string | required | The provider's native `veilway://sub/` link. It holds the account's token, so it is a secret. |
+| `signing_key` | string | required | The provider's signing key the operator confirmed: 8 groups of 4 hex digits with spaces, or 43 characters of base64url. The link must carry this key. |
+| `private_key` | string | required | The node's device key for this provider, a 32-byte key in standard base64, as WireGuard keys are written. A secret. Not all zero, and no two upstreams share one. |
+| `device_secret` | string | required | The device secret for this provider: 16 bytes as 22 characters of base64url. A secret. |
+| `profile` | string | the first profile | The provider's profile to use. |
+| `exit` | string | the provider's default | The provider's exit to leave through. |
+| `via` | outbound tag | none | A `direct` or `socks5` outbound for the fetch and for TCP transports. A proxy on a loopback, unspecified or link-local address is refused. |
+| `allow` | list of up to 4 classes | empty | Transport classes besides `cover` that the node may use: `no_cover`, `exposed` and `plain`. |
+| `allow_private` | bool | `false` | Whether the provider may have the node dial private addresses. |
+
+Validation refuses a link that is not native, one whose key is not `signing_key`, a `preview` tag, two upstreams with one account or one device key, two exits for one upstream, and an unknown `via`. `veilway check` warns about an upstream that no exit names, one with no `exit` set, and one that an exit uses while `routing.fallback` exists, since users then fall back to it while the provider is down. The node keeps `upstreams.state` next to the usage state file. Removing an upstream through the control API is kept until the provider confirms, see the protocol page.
 
 ## `xray`
 

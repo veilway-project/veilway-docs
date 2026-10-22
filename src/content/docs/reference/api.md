@@ -90,6 +90,12 @@ No answer, event or log line of the API contains the value of a secret (`private
 | GET | `/v1/exits` | Every exit with its upstream health |
 | GET | `/v1/inbounds` | Every inbound with its public keys and the rating of each transport |
 | GET | `/v1/links` | Every enabled node link with its state and counters |
+| GET | `/v1/upstreams` | Every enabled upstream with its state, reason and counters |
+| POST | `/v1/upstreams/preview` | Fetches a provider's document for review, and keeps it for 600 seconds |
+| POST | `/v1/upstreams/preview/{id}/decline` | Gives a preview's place at the provider back |
+| POST | `/v1/upstreams/{tag}/confirm` | Confirms a move of the endpoint, new refresh hosts or both |
+| POST | `/v1/upstreams/{tag}/retry` | Asks the tunnel of an upstream to connect now |
+| DELETE | `/v1/upstreams/{tag}` | Removes the device from the provider and from the state file |
 | GET | `/v1/events` | Server-Sent Events |
 | GET | `/v1/openapi.json` | The OpenAPI 3.1 document |
 
@@ -395,6 +401,19 @@ The address a device connects from is not part of a session. It is never put in 
 | `flows` | The flows the link carries. |
 | `dropped` | Packets that came out of the link and were not carried. |
 | `traffic` | Inner packets. Up is what this node sent into the link, down what it took out of it. |
+
+## Upstreams
+
+These routes work on the `upstreams` of the running config. A tag that the running config does not name answers `404` with `upstream_not_found`. No answer holds a key, a secret or a link. The [upstream page](../../protocol/upstreams/#control-api) explains what each step does.
+
+| Route | Body | Answers with |
+|---|---|---|
+| `GET /v1/upstreams` | none | `{"upstreams": [...]}`. Each has `tag`, `state` (`fetching`, `connecting`, `up` or `down`), `reason`, `provider`, `signing_key` (the fingerprint the document in force is signed under), `profile`, the transport and exit in use, quota, notices, MTU, the last refresh, why a refresh failed, a waiting move or hosts, and counters. |
+| `POST /v1/upstreams/preview` | `link`, `private_key`, `device_secret`, and optionally `via` and `allow_private` | The review of the provider's document with its `id` and `expires_in_secs`. `409` with `previews_full` when 4 places are taken. `502` with `provider_failed` when the provider cannot be asked or its answer fails the checks. |
+| `POST /v1/upstreams/preview/{id}/decline` | none | `{"id": ...}`. `404` with `preview_not_found` when no such preview waits. |
+| `POST /v1/upstreams/{tag}/confirm` | optionally `move` and `hosts`, both `true` when left out | `{"moved": bool, "hosts": bool}`, each `false` when nothing waited for it. `500` with `state_unwritten` when the answer could not be kept. |
+| `POST /v1/upstreams/{tag}/retry` | none | `{"tag": ...}`. Connects now and starts every wait over. |
+| `DELETE /v1/upstreams/{tag}` | none | `{"tag": ..., "confirmed": bool}`. When `confirmed` is `false`, the same call tells the provider again. |
 
 ## Events
 

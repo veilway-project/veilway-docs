@@ -558,7 +558,7 @@ Engine, `l3`:
 
 ### The destination gate
 
-Every exit refuses these destinations, whatever the config says: every address inside an inbound pool (traffic between users never leaves through an exit, see below), the node's own addresses, loopback, link-local (`169.254.0.0/16`, `fe80::/10`), multicast, broadcast, unspecified, `0.0.0.0/8`, and IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused. Every IPv4-mapped IPv6 destination (`::ffff:a.b.c.d`) is refused outright.
+Every exit refuses these destinations, whatever the config says: every address inside an inbound pool (traffic between users never leaves through an exit, see below), the node's own addresses, loopback, link-local (`169.254.0.0/16`, `fe80::/10`), the cloud metadata addresses `fd00:ec2::254` and `100.100.100.200` (from v0.2.15; only these two addresses, the networks around them are left to your rules), multicast, broadcast, unspecified, `0.0.0.0/8`, and IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused. Every IPv4-mapped IPv6 destination (`::ffff:a.b.c.d`) is refused outright.
 
 Private networks are not part of that fixed list. They are ordinary destinations, and routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
 

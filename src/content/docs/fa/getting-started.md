@@ -3,7 +3,7 @@ title: شروع به کار
 description: نصب نود و پنل نسخهٔ آلفای Veilway با اسکریپت نصب، یا با Docker.
 ---
 
-این صفحه آلفای `v0.2.15-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
+این صفحه آلفای `v0.2.16-alpha` را نصب می‌کند. فایل‌های آن از [صفحهٔ انتشار هسته](https://github.com/veilway-project/veilway/releases) و [صفحهٔ انتشار پنل](https://github.com/veilway-project/veilway-panel/releases) می‌آیند. برای دیدن آنچه آلفا دارد و جاهایی که هنوز محدود است، ابتدا [نسخهٔ آلفا](../alpha/) را بخوانید.
 
 ## چه چیزی لازم است
 
@@ -160,6 +160,8 @@ sudo bash veilway.sh install panel --domain panel.example.com
 
 دستور `sudo bash veilway.sh uninstall web` همه را برمی‌گرداند: فایل سایت، خط import، سایت ساده اگر تغییر نکرده باشد، مقدار `not_found` پنل، و بسته‌هایی که اسکریپت نصب کرده. انتقال‌های جابه‌جاشدهٔ نود روی ۸۴۴۳ می‌مانند.
 
+دستور `sudo bash veilway.sh update` سایت پوششی روی `127.0.0.1:8080` را به راه‌اندازی وب‌سروری که پیش از v0.2.15 ساخته شده اضافه می‌کند، در فایلی جدا: `/etc/caddy/conf.d/veilway-decoy.caddy` با Caddy و `/etc/nginx/conf.d/veilway-decoy.conf` با nginx. `uninstall web` این فایل را هم برمی‌دارد.
+
 #### دستی
 
 مثال‌ها از `panel.example.com`، مسیر مدیریت `/3f9c0a7e21b84d65` و مسیر اشتراک `/sub` استفاده می‌کنند. از دامنه و مسیر مدیریت خودتان استفاده کنید.
@@ -230,7 +232,7 @@ sudo bash veilway.sh install both --mirror https://mirror.example.org
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.15-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.16-alpha
 ```
 
 فایل‌های نود و پنل را با امضاها و اشاره‌گرها دانلود می‌کند، هر یک را پیش از ذخیره بررسی می‌کند، و `veilway.sh` را بالای پوشه می‌گذارد. اشاره‌گر جدیدتری را که از قبل آنجا باشد نگه می‌دارد. صفحهٔ `index.html` قابل مرورِ [`veilway-release-mirror`](../guides/release-mirror/) را نمی‌نویسد.

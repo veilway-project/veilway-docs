@@ -1,16 +1,22 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.15-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.16-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.15-alpha`. It follows `v0.2.14-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.16-alpha`. It follows `v0.2.15-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.15-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.15-alpha)
+- Node and install script: [v0.2.16-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.16-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.16-alpha
+
+- **An address in every inbound.** The panel gives a device an address in every Veilway inbound beside the account pool (`pool_v4`), at the same offset in each range. A second inbound with its own address range, such as a `ws` inbound next to a `udp-obfs` one, now works for every account. Existing devices need nothing. Each profile carries the device's address in its own inbound, and a profile the device has no address for is left out of that device's subscription. An inbound with no IPv4 range gets a note on **Profiles** and is not published. Publish the profiles again after updating.
+- **A warning from `veilway check`.** It warns about a `veilway` inbound that no device has an address in and no node link uses.
+- **The decoy site for older web server setups.** `update` adds the decoy site on 127.0.0.1:8080 to a web server setup made before v0.2.15, in its own file (`/etc/caddy/conf.d/veilway-decoy.caddy` or `/etc/nginx/conf.d/veilway-decoy.conf`). `uninstall web` removes it.
 
 ## New in v0.2.15-alpha
 

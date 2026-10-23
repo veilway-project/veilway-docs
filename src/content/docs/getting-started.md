@@ -3,7 +3,7 @@ title: Getting started
 description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-This page installs the alpha, `v0.2.15-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
+This page installs the alpha, `v0.2.16-alpha`. Its files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). For what the alpha includes and where it is still limited, read [the alpha release](../alpha/) first.
 
 ## What you need
 
@@ -161,6 +161,8 @@ If a web server already runs on the server, or something else holds port 80 or 4
 
 `sudo bash veilway.sh uninstall web` takes it back: the site file, the import line, the plain site if it is unchanged, the panel's `not_found`, and the packages the script installed. The node's moved transports stay on 8443.
 
+`sudo bash veilway.sh update` adds the decoy site on `127.0.0.1:8080` to a web server setup made before v0.2.15, in its own file: `/etc/caddy/conf.d/veilway-decoy.caddy` with Caddy, `/etc/nginx/conf.d/veilway-decoy.conf` with nginx. `uninstall web` removes that file too.
+
 #### By hand
 
 The examples use `panel.example.com`, the admin path `/3f9c0a7e21b84d65` and the subscription path `/sub`. Use your own domain and your own admin path.
@@ -231,7 +233,7 @@ Do not pipe a script from a mirror straight into `bash`: check it first.
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.15-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.2.16-alpha
 ```
 
 It downloads the node's and the panel's files with their signatures and the pointers, verifies each one before it stores it, and puts `veilway.sh` at the top of the folder. It keeps a newer pointer that is already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.

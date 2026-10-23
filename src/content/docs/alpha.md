@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.16-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.17-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.16-alpha`. It follows `v0.2.15-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.17-alpha`. It follows `v0.2.16-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.16-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.16-alpha)
+- Node and install script: [v0.2.17-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.17-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.17-alpha
+
+- **Proxy inbounds.** `socks5`, `http` and `mixed` inbounds let other software use the node as a proxy, routed, counted and held to quotas like tunnel traffic. Every connection logs in with the user's proxy login, made on the account page. They are not encrypted, so listen on loopback and reach them through a tunnel or a TLS front. See [Proxy inbounds](../guides/proxy-inbound/). Two security reviews ran before release.
+- **Rules by transport.** A routing rule can match the transport a flow came in on, such as `"transport": ["ws"]`.
+- **Borrowed-site guide.** [Borrowed-site mode](../guides/borrowed-site/) now has a guide and a panel manual section.
+- The gate also refuses 168.63.129.16, and the panel puts its users into the node's config once each time it starts.
 
 ## New in v0.2.16-alpha
 

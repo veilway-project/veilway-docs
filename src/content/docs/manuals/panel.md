@@ -443,6 +443,8 @@ If the config changed since you opened the page, the review says so. Reload the 
 
 An inbound is a tunnel that devices connect to, with the transports it is reached on. The **Inbounds** page lists the node's own inbounds and those of the Xray add-on together, and **Show** filters them by type.
 
+After you add an inbound or change its transports, ports or addresses, choose **Publish profiles** on **Profiles**. Apps only learn about the change from a published profile, at their next refresh.
+
 - **Veilway** is WireGuard with the control channel. The obfuscated transports need it.
 - **Plain WireGuard** is for stock WireGuard apps. Its handshake is easy to spot.
 

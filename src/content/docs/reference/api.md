@@ -45,7 +45,7 @@ The host name in the URL is never looked up over a unix socket, so any name work
 | `message` | One plain sentence, for people. |
 | `details` | List of `{"path", "message"}`. For a refused config, every error with the path of its field. Empty when there is nothing to add. |
 
-No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `username`, `password`), only paths. A `details` entry never holds a value from the document.
+No answer, event or log line of the API contains the value of a secret (`private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `username`, `password`, `proxy_password`), only paths. A `details` entry never holds a value from the document.
 
 ### Error codes
 
@@ -181,7 +181,7 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 
 ## Editing a config without seeing secrets
 
-`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username` and `password` hold the string `"<redacted>"`, and every entry of `transport_secrets` and of an inbound's `transport_keys` holds a marker that names it, `"<redacted:1a2b3c4d>"` with eight hex digits. The digits tell the secrets of one device, or the keys of one inbound, apart and say nothing about either. They are made anew by every node process, so a document read before a restart has to be read again. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
+`GET /v1/config` never returns a secret: `private_key`, `preshared_key`, `username`, `password` and a user's `proxy_password` hold the string `"<redacted>"`, and every entry of `transport_secrets` and of an inbound's `transport_keys` holds a marker that names it, `"<redacted:1a2b3c4d>"` with eight hex digits. The digits tell the secrets of one device, or the keys of one inbound, apart and say nothing about either. They are made anew by every node process, so a document read before a restart has to be read again. A panel edits that document and sends it back to `validate`, `diff` or `PUT /v1/config` as it is. In a document sent to the node, the marker means "keep the running value of the same object":
 
 | Field | Taken from |
 |---|---|
@@ -190,6 +190,7 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | an entry of a device's `transport_secrets` | the secret that this marker names, of the running device with the same `public_key`, wherever either stands in its list. An entry that is left out is removed: to end a rotation, drop the marker of the old secret and keep the other. To begin one, write the new secret out next to the marker of the one that stays. |
 | an entry of an inbound's `transport_keys` | the key that this marker names, of the running inbound with the same `tag`, wherever either stands in its list. Rotation works as for a device's secrets: write the new key out before the marker of the old one, and drop that marker later. |
 | outbound `username` and `password` | the running `socks5` outbound with the same `tag` and the same `server` |
+| user `proxy_password` | the running user with the same `name` |
 
 A marker that finds no such object is a validation error at the path of that field. That includes an outbound whose `server` changed: the document must then spell out its username and password. It also includes a marker in `transport_secrets` that names no secret of that device, such as the plain `"<redacted>"` or the marker of another device's secret, and a marker in `transport_keys` that names no key of that inbound. A `username` or `password` that is the marker in a config file read from disk is a validation error as well.
 
@@ -286,9 +287,21 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `state_write_failures` | Writes of the usage state file that failed since start. |
 | `send_failed` | Datagrams the node made for a device and no socket took, over every transport of every inbound. A `veilway` inbound never fragments, so a packet larger than the host's interface carries is counted here and not sent, and logged at info once a minute: lower the inbound's `mtu` when this grows. |
 | `control` | What the control channel of the `veilway` inbounds did since start: `accepted` and `authenticated` connections, connections closed for `auth_failed`, `malformed`, `timed_out` (the opening took over 10 seconds) and `replaced` (a newer connection of the device took the place), requests answered `rate_limited`, `exits_selected`, `exits_refused` and `exits_dropped` (by a reload), `probe_runs`, `probes_confirmed`, `probes_sent`, `probes_refused`, `mtus_set`, `byes`, and `open`, the authenticated connections right now. All zero on a node without a `veilway` inbound. |
+| `proxies` | One entry per proxy inbound (`socks5`, `http`, `mixed`) of the running config, in its order. See below. Empty on a node without one. From v0.2.17. |
 | `udp_obfs` | What the `udp-obfs` transports did since start, and what they hold now. See below. All zero on a node without one. |
 | `stream` | What the stream listeners of the `tls` transports, and of the `ws` and `fronted` transports of `veilway` inbounds, did since start, and what they hold now. See below. All zero on a node without one. |
 | `replay` | The replay memory of the obfuscated transports. `null` on a node that has run none. See below. |
+
+`proxies`. One entry per proxy inbound, with the inbound's tag as `name`. A reload that changes an inbound starts its counters over. No counter names an address, a user or a password. The bytes of a proxy inbound are in `inbounds` as well.
+
+| Field | Meaning |
+|---|---|
+| `opened`, `open` | Connections the inbound took since start, and those open right now. |
+| `refused_logins` | Logins that were refused: no such user, a wrong password, a user the inbound does not admit. |
+| `refused_limit`, `refused_source`, `refused_busy` | Connections turned away at the inbound's `connections`, at a source's `per_source`, and at `handshakes`. |
+| `refused_blocked` | Logins refused unheard because a source had failed too many to that name. |
+| `refused_udp_source` | UDP datagrams dropped because they did not come from the address and port the client named for its association. A client behind a NAT that rewrites ports is refused for this, so a growing count with `udp_any_port` off says why its UDP does not work. |
+| `up_bytes`, `down_bytes` | Bytes the clients sent to their destinations, and got back. |
 
 `udp_obfs`. No counter names an address, a tag or a key, and a datagram that is dropped got no answer whatever its reason:
 

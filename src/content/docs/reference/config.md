@@ -147,6 +147,8 @@ Rules for `address`:
 - The gateway is a host address in the pool, never the network address and, for IPv4, never the broadcast address.
 - Pools of different inbounds do not overlap.
 
+An entry of `inbounds` with the type `socks5`, `http` or `mixed` is not a tunnel but a proxy inbound, described under [Proxy inbounds](#proxy-inbounds-socks5-http-mixed) below. Everything above is about tunnel inbounds.
+
 Who may use an inbound is decided by addresses alone: a device belongs to the inbound whose pool contains its address.
 A device may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds. `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses, once the config has any device: every connection to it would be treated as a stranger's.
 
@@ -503,6 +505,97 @@ The node holds no certificate. It borrows a real site that you choose: a client 
 
 Validation also refuses a listener with `trusted_proxies`, and a `site.address` that is the node's own listen address. The site must be one a user in your country can reach, large enough that the node's connections do not matter to its owner, and, if you can, hosted in the same network as the node. None is suggested or shipped. The candidate a profile carries has the node's address, the site's name as its server name and the transport's public key, and no pin, `self_signed`, `ech`, `host`, `path` or fronting value.
 
+## Proxy inbounds (`socks5`, `http`, `mixed`)
+
+From v0.2.17. A proxy inbound is an entry of `inbounds` whose `type` is `socks5`, `http` or `mixed`. It is a TCP listener that lets other software use the node as a plain proxy. It has no key, no address pool and no transports. Every connection logs in as one of the config's users, and from then on its traffic goes through the same destination gate, rules, exits, entitlement, quota and counters as that user's tunnel traffic.
+
+:::danger[Nothing is encrypted]
+SOCKS5 and HTTP carry the password and the traffic in the clear. Anyone on the path reads both, and anyone who finds the port can tell it is a proxy and block it. The panel rates a proxy inbound Unsafe. Listen on loopback and reach the port through a tunnel or a TLS front you run, as in [Give an account a proxy login](../../guides/proxy-inbound/). Use a public address only when you must.
+:::
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | Unique among all the inbounds of the config, tunnels included. Rules name the inbound by it. |
+| `type` | `socks5`, `http` or `mixed` | required | `socks5`: SOCKS5 with a user name and password. `http`: an HTTP proxy. `mixed`: both on one port, a first byte of `0x05` is SOCKS5 and anything else is read as HTTP. |
+| `listen` | `ip:port` | required | The TCP address clients connect to. See "Listen addresses" below. It never shares an address and port with another TCP listener of the node: another proxy inbound, a `tls`, `ws` or `fronted` listener, a tunnel, or an Xray inbound. A UDP port of the same number is no conflict. |
+| `users` | list of user names | `[]` | The users that may log in. Each name must be a user of the config. |
+| `groups` | list of group names | `[]` | The groups whose members may log in. A user in `users` or in one of these groups may. With both lists empty, every user that has a `proxy_password` may. |
+| `udp` | bool | `true` | Whether UDP ASSOCIATE is answered. An error on an `http` inbound, which has none. |
+| `udp_any_port` | bool | `false` | Lets a client behind a NAT have a UDP association on an inbound that is not on loopback. See "UDP" below. An error on an `http` inbound, and a warning where it has no effect: on loopback, or with `udp` off. |
+| `public` | bool | `false` | Says you know that a listen address strangers reach carries traffic and passwords in the clear. See "Listen addresses" below. |
+| `limits.connections` | integer 1 to 65536 | `1024` | Connections the inbound holds at once, logged in or not. |
+| `limits.per_source` | integer 1 to 65536 | `64` | How many of those one source may hold. A source is an IPv4 address or an IPv6 /64. A loopback peer is exempt, see below. |
+| `limits.handshakes` | integer 1 to 65536 | `256` | Connections that have not finished logging in. At most 8 of them for one source, and half of them for loopback peers together. |
+
+```json
+{"tag": "socks", "type": "socks5", "listen": "127.0.0.1:1080", "users": ["ana"]}
+```
+
+### Listen addresses
+
+- **Loopback** (`127.0.0.0/8`, `::1`) is taken as it is and warns about nothing. Only this host reaches it. `public: true` on loopback is a warning, since it is never needed.
+- **A private address** (RFC 1918, `100.64.0.0/10`, `fc00::/7`) is taken without `public`, with a warning. On a cloud host a private address is often NATed one to one to a public one, and a local network has other machines. The traffic and the password are not encrypted there, so anyone who reaches the port or is on the path can read them.
+- **Any other address**, the wildcard (`0.0.0.0`, `::`) and link-local ones included, is an error unless `public` is `true`. With `public: true` it is taken with a warning that the traffic and the password cross the network unencrypted, and that the listener is easy to find and block.
+
+`veilway check` reports these. `veilway doctor` also checks that each listen address can be bound.
+
+### Who may log in
+
+A client logs in with the user's `name` as the user name and the user's `proxy_password` as the password. There is no other way in: no anonymous use, no shared password.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `users[].proxy_password` | 16 to 128 printable ASCII characters, no `:` | none | Secret. The password this user logs in to a `socks5`, `http` or `mixed` inbound with. Without one the user cannot log in to any of them. One user, one password: no two accounts share a login. A `proxy_password` in a config with no proxy inbound is a warning. |
+
+- The inbound must admit the user (`users`, `groups`, or neither list for everyone with a password). A user who is disabled, expired or over quota is refused at the request, as everywhere else.
+- A wrong password, a wrong name and a user the inbound does not admit are answered alike and take the same time.
+- **Proxy-only users.** A user with a `proxy_password` may have `"devices": []`. Such a user only uses proxies: they are counted, held to a quota and cut off like any other. A user without a `proxy_password` still needs 1 to 16 devices.
+- The control API shows `proxy_password` as `"<redacted>"`, and a document sent back with that marker keeps the running password of the user with the same `name`. A marker in a config file read from disk is an error.
+- A user's connections end within a second of the user being cut off, of the password changing, or of the inbound no longer admitting the user.
+- A login that the user did not write down cannot be recovered from the node: the panel keeps its own sealed copy, see the [panel manual](../../manuals/panel/#proxy-inbounds-socks5-and-http).
+
+### SOCKS5
+
+- Only the user name and password method (RFC 1929) is offered. A client that offers no such method is answered `0xff` and closed.
+- `CONNECT` and `UDP ASSOCIATE` are taken. `BIND` and every other command are refused.
+- A destination name is resolved by the node, with the DNS servers of the user's set and through the exit the rules give the query, never by the host's resolver. A name is lower case, at most 253 bytes, of letters, digits, hyphens, underscores and dots.
+- Each destination is a flow of the user. The destination gate refuses loopback, link-local, multicast, the cloud metadata addresses, every address pool of the node and every address of this host, the inbound's own listen address included. Private networks are the rules' business, as for the tunnel.
+
+### HTTP
+
+- `CONNECT host:port` opens a tunnel to the target. The login is `Proxy-Authorization: Basic`. A request without a login is answered `407` and the connection is closed.
+- A plain `http://` request with an absolute URI is forwarded, one request to a connection. The node sends it to the origin with the request line in origin form, `Host` taken from the URI, the `Proxy-Authorization` field and the other fields of the hop removed, and `Connection: close` added. The origin never sees the login. Nothing the client writes after the request's own end (its `Content-Length`, or its chunks) is read, so a second request behind the first never reaches the origin.
+- `https://` and origin-form requests, userinfo and fragments in a URI, a request with both `Content-Length` and `Transfer-Encoding`, a `Transfer-Encoding` that does not end in `chunked`, and any version but `HTTP/1.0` and `HTTP/1.1` are refused. The head is at most 8,192 bytes and 64 fields.
+
+### UDP
+
+UDP ASSOCIATE gives a SOCKS5 client a UDP relay on the node. UDP has no login of its own: a datagram carries no proof of who sent it, so the node ties the relay to the control connection.
+
+- The relay is bound to the address the control connection reached, with a port of its own, and carries only datagrams from the IP address of the control connection. Fragments are dropped.
+- **On loopback (Linux)** a datagram is carried only from a socket whose owner, read from the kernel, is the user id that owns the control connection. On macOS and Windows the system cannot tell who owns a socket, so a loopback inbound follows the rule for other addresses.
+- **On any other address** the client has to say, in its request, the port it sends from. Only datagrams from exactly that address and port are carried, and a request with port `0` is refused (`0x02`). A client behind a NAT, which rewrites the port, gets no UDP. Validation warns about this on every such inbound with `udp` on.
+- **`udp_any_port`** is the way out for clients behind a NAT: the association binds to the first datagram from the client's address. The cost is a window before that datagram, in which a sender that shares the client's address (neighbors behind the same carrier NAT, say) can take the association and reach the destinations of the user's flows. Validation warns about it. Leave it off unless your clients are behind a NAT.
+- An association ends with its control connection, after 120 seconds without a datagram, and when the user is cut off. A user holds at most 32 associations and 256 UDP flows, and an inbound 4,096 and 16,384.
+- Datagrams dropped because they did not come from the address and port the client named count as `refused_udp_source`.
+
+### Limits and failed logins
+
+Beyond `limits`, the inbound protects the passwords:
+
+- A client that sends no byte in 3 seconds is closed, and so is a connection that has not finished its login in 10 seconds. A `mixed` inbound's first-byte look and its whole login share those 10 seconds.
+- A source that fails 10 logins to one user name in 60 seconds is refused that name, unheard, until the window ends. The count is kept for the pair of source and name, so one source does not lock out the others. One source may hold counts for 16 names, and one that tries more is refused every name until the window ends.
+- A refusal for a name that logins failed for waits 100 ms for each failure beyond the first two, up to 2 seconds, whoever asks. A login that is right never waits.
+- A loopback peer is a front you run, with every user behind one address. It is held to neither the share of a source nor the block, but the wait for a name still holds.
+- A request without a login is not a failure: a browser makes one first.
+- A user's TCP connections and UDP flows are counted once across every proxy inbound and the hop of the Xray add-on together, so spreading them over inbounds buys nothing.
+- A connection that carries nothing for the exit's `tcp_idle_secs` is ended.
+
+Counters are in `proxies` of [`GET /v1/stats`](../api/#get-v1stats), and the bytes are in `inbounds` as well. A refused login is logged at info, once in 10 seconds at most, with a count and no address, name or password.
+
+### Reloading
+
+A proxy inbound that a reload changes in any way closes its listener and every connection on it. Connections of other inbounds stay. A reload that changes a user's `proxy_password`, or removes, disables or no longer admits a user, ends that user's connections within a second. A reload that removes an inbound also closes its port.
+
 ## `outbounds`
 
 An outbound is a way for the userspace stack to open TCP and UDP flows.
@@ -628,7 +721,8 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 |---|---|---|
 | `tag` | tag | required. The rule's identity for the control API. |
 | `enabled` | bool, default `true` | Not a condition. A disabled rule is validated like any other and skipped when flows are matched. |
-| `inbound` | list of inbound tags | the inbound the packet arrived on |
+| `inbound` | list of inbound tags | the inbound the packet arrived on. A proxy inbound's tag is a tag like any other: a flow that comes in through one is decided with that inbound. |
+| `transport` | list of transport names | the kind of session the flow started on, see "Transport" below. From v0.2.17. |
 | `user` | list of user names | the sending user |
 | `group` | list of group names | any group of the sending user |
 | `link` | list of link tags | what arrives from one of these links, on a node that is the exit half of each. Not together with `user` or `group`, which a link does not have. |
@@ -638,6 +732,22 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 | `port` | list of integers 1 to 65535 or strings `"lo-hi"` with `lo <= hi` | destination port. Needs `protocol` present and limited to `tcp`, `udp` and `sctp`. |
 | `icmp_type`, `icmp_code` | lists of integers 0 to 255 | Need `protocol` to be exactly `["icmp"]` or exactly `["icmpv6"]`. `icmp_code` needs `icmp_type`. |
 | `action` | `{"exit": "<tag>"}`, `"user"`, `"block"` or `"reject"` | required |
+
+### Transport
+
+`transport` holds a flow to the kind of session it started on. The names are `udp` (plain WireGuard), `udp-obfs`, `tls`, `ws` (both the native one and the `ws` of a `wireguard` inbound), `ws-plain`, `fronted`, `fronted-shaped`, `faketls`, `socks5` and `http`. Like every condition it must hold together with the others, and the first matching rule still decides, so a rule that names a transport and a group matches only that group's flows on that transport.
+
+```json
+{"tag": "no-proxy-to-private", "inbound": ["socks"], "ip": ["geoip:private"], "action": "reject"},
+{"tag": "calls-direct", "transport": ["socks5"], "protocol": ["udp"], "action": {"exit": "direct"}}
+```
+
+- For a tunnel flow it is the transport of the device's session when the flow was created. A device that moves to another transport keeps its old flows where they began, and its new flows follow the rule. A reload that decides a flow again also keeps its transport. A device that races two sessions cannot swap it.
+- For a proxy flow it is `socks5` or `http`. A `mixed` inbound reports the one its connection spoke, and UDP ASSOCIATE is `socks5`.
+- A link this node dials runs on the transport of the candidate it dialled.
+- A DNS query of the node's resolver follows the `inbound` and `transport` rules of the flow it came in on, and a name a proxy user asks for is resolved under the same inbound and transport.
+- A flow of the Xray add-on has no transport and matches no rule that names one. It has no inbound either, so a rule with `inbound` never matches it, and validation warns about an enabled rule with `inbound` while Xray inbounds exist.
+- Validation warns about an entry that names a transport no inbound of the node has, since it never matches.
 
 A domain is lowercase ASCII (punycode for other scripts), at most 253 bytes with labels of 1 to 63, no trailing dot, not an IP address in any spelling (a last label that is all digits, or `0x` followed by hex digits, is refused). `*` may only be the whole first label and needs at least two labels after it.
 
@@ -683,7 +793,8 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 | `name` | matching `[a-z0-9][a-z0-9._-]{0,63}` | required | Unique. This is the user's identity: usage counters and rules refer to it, and renaming a user is removing one and adding another. |
 | `enabled` | bool | `true` | |
 | `groups` | list of declared group names | `[]` | |
-| `devices` | list of 1 to 16 | required | See below. |
+| `devices` | list of 1 to 16 | required | See below. Empty only for a user with a `proxy_password`, who then uses proxy inbounds alone. |
+| `proxy_password` | 16 to 128 printable ASCII characters, no `:` | none | Secret. The password for the `socks5`, `http` and `mixed` inbounds, with `name` as the user name. See [Proxy inbounds](#who-may-log-in). From v0.2.17. |
 | `exits` | `"all"` or a list of exit tags | required | Exits the user may leave through. An empty list means none: the user can connect but every flow is rejected, and validation warns. |
 | `exit` | exit tag | none | The user's own exit. Must be in `exits`. |
 | `quota_bytes` | integer 1 to 9007199254740991 | none | Bytes of inner IP traffic, both directions, per period, including traffic that was rejected or answered locally. See Usage and quota. |
@@ -911,6 +1022,7 @@ After a commit:
 - Every live flow is checked again. It is reset when its exit is gone, its exit's backend or outbound changed, its destination no longer passes the gate, its user is no longer entitled to the exit, or the rules now decide differently for it.
 - Changing an inbound's `private_key`, `address` or `mtu` restarts that tunnel and drops its sessions. Changing one transport restarts that transport only. Changing a tag is removing one object and adding another.
 - Certificates are read again on every reload.
+- A proxy inbound that changes closes its listener and its connections. See [Proxy inbounds](#reloading).
 - A device's chosen exit is kept across a reload while it is still in the user's `exits`. One that is not is dropped and logged at info, and the device leaves through the user's exit. It does not come back when the exit is given back.
 - A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. The same holds for a `udp-obfs` session: one that was opened with the removed secret ends at the reload, and an opening packet under that secret is a stranger's from then on. A session opened with the device's other secret, and a tunnel that came over `udp`, where no secret opened it, stay up. Adding a second secret disturbs nothing.
 - A `udp-obfs` transport that stays as it was keeps its sessions across a reload, also when `limits.sessions` or the inbound's `padding` change. New padding bounds apply to sessions opened afterwards. A transport whose `listen` changes, or whose tunnel restarts, loses its sessions, and its devices open new ones.

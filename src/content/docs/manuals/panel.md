@@ -121,6 +121,7 @@ When the user is saved, the panel shows the subscription link so you can copy it
 - **Usage** shows what counts toward the quota, since when, and the total sent and received. **Reset usage** starts the quota count over. A user who was cut off for going over the quota can connect again. You can also set the total back to zero.
 - **Subscription link** holds the link and its QR code. Anyone with the link can enroll a device, so send it like a password. The panel keeps the link sealed with the keys in `panel.keys`, and **Show link and QR** opens it again after you confirm your password and code. With **Show links once** on (see [Subscription settings](#subscription-settings)) the panel keeps no copy, and the link can be shown only when it is made or reset. The dialog gives the Veilway link, and a web link for apps that open a browser first. **Reset link** makes a new link and stops the old one at once. You choose whether devices enrolled with the old link are removed too. The user's Xray credentials are made new as well.
 - **Download sealed file** makes a `.vwsealed` file that holds the link, locked with a password you choose (at least 10 characters). The app asks for the password when it opens the file, and then goes on as with any link. The panel keeps no copy of the password. It asks for your password and code again, and the audit log records that a file was made, not the password or the link. Send the password by another route than the file, because anyone who has both gets the link, and the link is the account. No API token can do this. The format is in the [subscription format](../../protocol/subscription-format/).
+- **Proxy login** gives the account a name and password for the node's SOCKS5 and HTTP inbounds. See [Proxy inbounds](#proxy-inbounds-socks5-and-http).
 - **Xray links** shows the user's link for each Xray inbound, as text and as a QR code. A user gets links once they have a device and an Xray inbound exists. It asks for your password and code again. **New Xray credentials** makes new ones and the old links stop working. See [Xray inbounds](#xray-inbounds).
 - **Devices** lists each device, whether it is waiting for the app to confirm, enrolled, and when it was last seen. A device either makes its own key, which never leaves the device, or uses a key the panel made. **Remove device** stops it from connecting at once. An app of v0.2.11 or later removes its own device when its user removes the subscription, and the audit log says so.
 - **Add a device with a panel key** lets the panel make the private key and export it as a signed file. This is weaker than enrolling from the device, so use it only for a device that cannot open the link.
@@ -515,6 +516,40 @@ If the Xray add-on is installed (`sudo bash veilway.sh addon xray install`, see 
 
 An Xray inbound answers on the server's own address, next to the profiles you serve. Anyone who finds it can tell the address is a proxy server, so the panel caps the profiles on that address at Detectable in the subscriptions. The review says so before you apply. Since v0.2.4 only the profiles that share an address with an Xray inbound are capped: an inbound that listens on every address (the default) caps them all, and one that listens on a separate IP address of the server, with a host name of its own, leaves profiles on the other addresses as they are. A name the panel cannot resolve, or that resolves to the Xray address, counts as shared.
 
+### Proxy inbounds (SOCKS5 and HTTP)
+
+A proxy inbound lets other software use the node as a plain proxy: a browser, a script, or an app that takes a SOCKS5 or HTTP proxy. It is not a tunnel and has no profile. People log in with an account name and a proxy password, and what they send goes through the same rules, exits, quota and counters as that account's tunnel traffic. It needs v0.2.17 or later on the node and the panel.
+
+:::danger[Unsafe: nothing is encrypted]
+SOCKS5 and HTTP carry the password and the traffic in the clear. Anyone on the network path can read both, and a censor that finds the port can tell what it is and block it. The **Inbounds** page rates a proxy inbound **Unsafe**. The setup to use is a **Listen on** address on loopback, `127.0.0.1:1080`, that people reach through a tunnel or a TLS front you run. The [proxy guide](../../guides/proxy-inbound/) does it with an SSH tunnel.
+:::
+
+**Add an inbound.** On **Inbounds** choose **Add inbound** and pick **SOCKS5 proxy**, **HTTP proxy** or **SOCKS5 and HTTP on one port**. The last answers both kinds of client on the same port. Then fill in:
+
+- **Tag**, as for any inbound.
+- **Listen on**: the TCP address and port clients connect to, such as `127.0.0.1:1080`. Loopback is the only address outsiders cannot reach.
+- **UDP through the proxy** (SOCKS5 and mixed): lets SOCKS5 clients send UDP, for DNS, calls and games. Turn it off to carry TCP only.
+- **Allow UDP for clients behind NAT**: shown when UDP is on and the address is not loopback. A client behind a NAT does not know the port it sends from, so it asks for port 0, and without this switch it gets no UDP. With it on, the first datagram from the client's address takes the UDP association. Someone who shares the client's public address could send first and take it. Leave it off unless the clients are behind a NAT.
+- **Who may log in**: **Every account with a proxy login**, or **Only chosen accounts and groups**, where you tick **Accounts** and **Groups**. The form says **Nobody can log in yet** while no account it admits has a proxy login.
+- **Advanced: how much this inbound holds**: **Connections in all** (1024), **Connections per source** (64, a source is one IPv4 address or one IPv6 /64) and **Not yet logged in** (256). Empty fields keep the default shown in them.
+
+**Addresses.** A loopback address needs nothing more. A private address (such as `10.x`, `192.168.x`, `100.64.x`) shows **A private address is not a promise**: on a cloud host it may be forwarded to a public address, and a local network has other machines. Any other address, the wildcard `0.0.0.0` included, is **Public address**. The form shows **Anyone can reach this address** and will not go on until you tick **I understand that traffic and passwords cross the network in the clear**. A public inbound keeps a **Public address** mark in the list. An address another listener of the node uses is refused. Review and apply like any other inbound.
+
+**Who may log in.** A proxy login belongs to an account. An account logs in with its own name as the user name and its proxy password, and only if the inbound admits it. A disabled, expired or over-quota account is refused as everywhere else. An account may have a proxy login and no devices, for people who only use proxies. The tunnel profiles are not touched: a proxy inbound never appears in **Profiles**.
+
+**The account's Proxy login.** The **Proxy login** section of the account's page is separate from the subscription link and the device keys.
+
+- **Make a proxy login** makes a password of 32 letters and digits and shows it at once. It needs your password again, and your code when two-step sign-in is on. The panel keeps the password sealed with the keys in `panel.keys` and pushes it to the node.
+- **Show login** opens it again after you confirm your password. The panel lists the **User name** and **Password**, and a line to copy for every proxy inbound that admits the account, as `socks5://` and `http://` addresses with the login in them, one per inbound and kind. For a wildcard address it uses the **Node address** from **Settings**, or a placeholder until you set one. A line for a loopback inbound only works from the node itself. **Hide** closes it.
+- **Make a new password** replaces it. The old password stops working at once and the account's proxy connections are cut.
+- **Remove** takes the login away. Its connections end, and the account cannot log in to any proxy inbound until you make a new login. Removing the account does the same.
+
+No API token can make or show a proxy login. The audit log records that one was made, shown or removed, never the password.
+
+**Counters.** The inbound's row on **Inbounds** shows how many connections are open, how much it carried, and how many logins were refused, for example `3 open, 1.2 GB, 0 logins refused`. A count of UDP packets from the wrong port appears next to it when a client behind a NAT is being refused: that is the sign to turn on **Allow UDP for clients behind NAT**, or to move the client to TCP. The bytes are in **Traffic** under the inbound's tag as well.
+
+**What the node does for you.** A source that fails 10 logins to one name in a minute is refused that name for the rest of the minute, and each wrong guess makes the next refusal for that name slower. Connections that never log in are closed after 10 seconds. A change to the inbound, or to who it admits, ends the connections it no longer admits within a second. The details are in [Proxy inbounds](../../reference/config/#proxy-inbounds-socks5-http-mixed) in the config reference.
+
 ### Outbounds
 
 The **Outbounds** tab of **Exits and routing** lists how the node dials out. **Direct** dials from the node's own address. **SOCKS5 proxy** dials through a proxy you run or rent. For a SOCKS5 proxy, give its address and, if it has them, a username and password. A Direct outbound has two optional fields: **Source address**, a local IP of the server its traffic leaves from, and, since v0.2.8, **Network interface**, a network interface of the server by name, such as `eth1`. Traffic of an outbound with an interface leaves through that interface whatever the routing table says. This needs Linux or macOS. An interface that is missing when the node starts is a warning in the log, and that outbound's flows fail until it is there.
@@ -536,7 +571,9 @@ Rules are checked from the top. The first rule that matches decides. Traffic tha
 
 A fresh node keeps users apart: its first rule, `isolate-users`, refuses traffic to `tunnel:users`, the tunnel addresses of every device. No device reaches another device, even one of the same user. Remove that rule, or put a rule above it that allows `tunnel:users` for a group, only when users should reach each other, for example for games on a shared network. See [Traffic between users](../../reference/config/#traffic-between-users).
 
-Each rule has conditions, and every condition you add must hold for the rule to match. The conditions are: user, group, inbound, node link, destination network, domain, protocol, port, ICMP type and ICMP code. A domain covers its subdomains.
+Each rule has conditions, and every condition you add must hold for the rule to match. The conditions are: user, group, inbound, **Transport**, node link, destination network, domain, protocol, port, ICMP type and ICMP code. A domain covers its subdomains.
+
+**Transport** holds a rule to the kind of session a flow started on: `udp`, `udp-obfs`, `tls`, `ws`, `ws-plain`, `fronted`, `fronted-shaped`, `faketls`, `socks5` or `http`. The list offers the transports your inbounds have. **Show every transport, including those no inbound has** lists the rest, and the config check warns about such an entry since it never matches. A flow keeps the transport it began on: a device that moves to another transport keeps its old flows where they began, and its new flows follow the rule. A proxy inbound's tag is a choice under **Inbound** as well, so a rule can cover one proxy inbound alone. Traffic of the Xray add-on has no transport and no inbound, so rules with either never match it. See [Transport](../../reference/config/#transport).
 
 A rule then sends traffic to one of these:
 

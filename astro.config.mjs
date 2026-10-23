@@ -27,6 +27,7 @@ export default defineConfig({
 					translations: { fa: "آموزش‌ها" },
 					items: [
 						{ label: "First inbound and user", translations: { fa: "اولین ورودی و کاربر" }, slug: "guides/first-user" },
+						{ label: "Give an account a proxy login", translations: { fa: "ورود پراکسی برای یک حساب" }, slug: "guides/proxy-inbound" },
 						{ label: "Entry node", translations: { fa: "نود ورودی" }, slug: "guides/entry-node" },
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
 						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },

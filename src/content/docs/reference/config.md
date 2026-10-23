@@ -25,16 +25,16 @@ This page covers the node's config. Endpoints, gateway keys, mirrors, relays and
 
 ## Rules that apply everywhere
 
-- **Strict JSON.** Unknown and duplicate keys are errors at every level. So are a byte order mark, data after the document, invalid UTF-8 and a NUL inside a string. Where an integer is expected, only an integer token works (`1`, never `1.0`).
-- **Growth.** Version 1 only grows by new optional keys and new enum values. A build that meets an unknown key or value refuses the file and says the config may be newer than the build.
+- **Strict JSON.** Unknown and duplicate keys are errors at every level, as are a byte order mark, data after the document, invalid UTF-8 and a NUL inside a string. An integer must be an integer token (`1`, never `1.0`).
+- **Growth.** Version 1 only grows by new optional keys and new enum values. A build that meets an unknown key or value refuses the file and says the config may be newer.
 - **Tags.** Inbounds, outbounds, exits, routing rules, DNS sets, links, tunnels and Xray inbounds each have a `tag` matching `[a-z0-9][a-z0-9_-]{0,63}`, unique within its section. These words cannot be tags: `all`, `any`, `block`, `reject`, `drop`, `local`, `direct`, `user`.
-- **References.** Every tag, user name and group name used anywhere must exist. A dangling reference is an error.
-- **Lists.** A list never holds the same entry twice. In a routing rule, a condition that is present must not be an empty list.
+- **References.** Every tag, user name and group name used anywhere must exist.
+- **Lists.** A list never holds the same entry twice. A condition in a routing rule must not be an empty list.
 - **Canonical spelling.** Numbers inside strings (a port, a prefix length, a `lo-hi` range) have no sign and no leading zeros. A timestamp uses `T` between date and time.
-- **Addresses.** IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) and addresses with a zone (`%eth0`) are errors everywhere. A network with host bits set (`10.7.0.5/24`) is an error, except in an inbound's `address`, where the host part is the gateway. Port 0 is an error everywhere.
-- **Secrets.** These are secrets: `private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `transport_secret`, `username`, `password`, `server_key` and the `secret` of an Xray client. No error, warning, log line or API response shows a secret's value. They show only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read, unless you start it with `--allow-readable-config`. `veilway check` warns.
+- **Addresses.** IPv4-mapped IPv6 addresses (`::ffff:a.b.c.d`) and addresses with a zone (`%eth0`) are errors everywhere. So is a network with host bits set (`10.7.0.5/24`), except in an inbound's `address`, where the host part is the gateway. Port 0 is an error everywhere.
+- **Secrets.** These are secrets: `private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `transport_secret`, `username`, `password`, `server_key` and the `secret` of an Xray client. No error, warning, log line or API response shows a value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read, unless you start it with `--allow-readable-config`. `veilway check` warns.
 - **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
-- **Paths.** A file path in the config is relative to the config file's directory. Absolute paths and any `..` component are errors.
+- **Paths.** A file path is relative to the config file's directory. Absolute paths and any `..` component are errors.
 - **Limits.** File: at most 64 MiB and 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users, 16 devices per user, 4 notices, 8 public addresses, 64 links, 64 tunnels and 16 Xray inbounds.
 - **Errors and warnings.** Validation reports the path of each bad field, with at most 100 errors and 100 warnings, then a count of the rest. An error refuses the config. A warning lets it load and is logged. Warnings are advice, not part of the format.
 
@@ -47,7 +47,7 @@ Must be the integer `1`.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `level` | `error`, `warn`, `info`, `debug`, `trace` | `info` | Lowest level written. `RUST_LOG` overrides it when set. |
-| `destinations` | bool | `false` | Whether log lines at any level may hold the destinations and DNS names users reach. Off by default at every level. |
+| `destinations` | bool | `false` | Whether log lines at any level may hold the destinations and DNS names users reach. |
 
 ## `groups`
 
@@ -63,20 +63,20 @@ The node answers DNS for its tunnels at each inbound's gateway address.
 | `hijack` | bool | `true` | Answer every UDP and TCP port 53 flow from a tunnel here, whatever address it was sent to. With `false`, only queries sent to a gateway address are answered. Other port 53 traffic is routed like any flow. |
 | `sets` | list of at most 32 sets | `[]` | Other lists of servers, each for the inbounds, groups and users it names. See DNS sets below. |
 
-A server address may not be loopback, link-local, unspecified, broadcast, multicast, in `0.0.0.0/8`, or inside any inbound pool. An IPv6 address that embeds such an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) is refused too. The destination gate refuses all of these at run time, so such a server would resolve nothing.
+A server address may not be loopback, link-local, unspecified, broadcast, multicast, in `0.0.0.0/8`, or inside any inbound pool. An IPv6 address that embeds such an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) is refused too. The destination gate refuses them at run time, so such a server would resolve nothing.
 
 Engine:
 
-- A forwarded query is a flow from that user to the chosen server on port 53. The rules route it like any flow, with `domain` conditions matched against the queried name. It must pass the destination gate of the exit it leaves through. A `block`, `reject` or not-entitled result answers `REFUSED`.
-- The node remembers, per user, which names it resolved to which addresses. It keeps at most 4096 entries per user, each for the answer's TTL clamped to 60 to 3600 seconds. It records only answers its own resolver obtained, and not answers that hold pool, gateway, loopback or link-local addresses. Nothing is cached across users.
-- The node sends each upstream query under an id it picks and accepts the answer only under that id. The first server whose rules refuse the query ends it with `REFUSED`. Only a silent server moves on to the next.
-- A query name that is not a valid rule domain (for example one with an underscore label) is still forwarded. No `domain` condition matches it and it is not remembered. A memory entry is one name with one address.
-- At most 64 queries of one user wait at once. More are answered `SERVFAIL`. Over TCP a query may be 1500 bytes and a connection carries at most 128 queries.
-- With `hijack` on, rules with `port: [53]` never see tunnel DNS, and port 53 traffic that is not DNS is dropped. DNS over TLS and DNS over HTTPS pass untouched, and `domain` rules cannot see names resolved that way.
+- A forwarded query is a flow from that user to the chosen server on port 53. The rules route it like any flow, matching `domain` conditions against the queried name. It must pass the destination gate of its exit. A `block`, `reject` or not-entitled result answers `REFUSED`.
+- Per user, the node remembers which names it resolved to which addresses (one name, one address per entry): at most 4096 entries, each kept for the answer's TTL clamped to 60 to 3600 seconds. It records only answers its own resolver obtained, never answers that hold pool, gateway, loopback or link-local addresses. Nothing is cached across users.
+- Each upstream query goes out under an id the node picks, and only an answer with that id is accepted. The first server whose rules refuse the query ends it with `REFUSED`. Only a silent server moves on to the next.
+- A query name that is not a valid rule domain (for example one with an underscore label) is still forwarded, but no `domain` condition matches it and it is not remembered.
+- At most 64 queries of one user wait at once. More get `SERVFAIL`. Over TCP a query may be 1500 bytes and a connection carries at most 128 queries.
+- With `hijack` on, rules with `port: [53]` never see tunnel DNS, and port 53 traffic that is not DNS is dropped. DNS over TLS and DNS over HTTPS pass untouched, and `domain` rules cannot see those names.
 
 ### DNS sets
 
-A set is a named list of upstream servers for some of the node's users. Examples: a filtering resolver for a `family` group, an ad-blocking resolver for a few users, another resolver for one inbound. `servers` stays the list for everybody no set speaks for. A config without `sets` behaves as it always did.
+A set is a named list of upstream servers for some users, for example a filtering resolver for a `family` group, an ad blocker for a few users, or another resolver for one inbound.
 
 ```json
 "dns": {
@@ -104,25 +104,25 @@ A query goes to the first match, most specific first:
 3. otherwise the set that names the inbound the query came through;
 4. otherwise `dns.servers`.
 
-Steps 1 and 2 belong to the user. Step 3 belongs to the query. A user with devices on two inbounds, whom no set names by user or group, uses the list of whichever inbound a query comes through.
+Steps 1 and 2 belong to the user, step 3 to the query. A user with devices on two inbounds, whom no set names by user or group, uses the list of whichever inbound a query comes through.
 
-Validation gives the same answer whatever the order of the sets:
+Validation does not depend on the order of the sets:
 
 - Error: two sets name the same inbound, group or user, or one list names it twice. The error gives the path of the first entry.
-- Error: a user whom no set names is in groups that two different sets name. The error is at that user's `groups` and gives the paths of both entries. Name the user in the `users` of one set, or keep the groups in one set.
+- Error: a user whom no set names is in groups that two different sets name. The error is at that user's `groups` and gives both paths. Name the user in the `users` of one set, or keep the groups in one set.
 - Error: a name no inbound, group or user has.
-- Error: `hijack` is `false` and `sets` is not empty. With `hijack` off, a device can reach any resolver by sending queries to another address than the gateway, so a set would decide nothing.
+- Error: `hijack` is `false` and `sets` is not empty. With `hijack` off, a device can reach any resolver by querying an address other than the gateway, so a set would decide nothing.
 - Warning: a set no query goes to. It names nobody, or the groups it names have no user and every user of the inbounds it names goes by a set that names them or one of their groups.
 
-A set covers the DNS the node answers. With `hijack` on, that is every UDP and TCP port 53 flow of a tunnel. DNS over TLS and DNS over HTTPS are not covered: a device that uses them steps around its set, as it steps around `domain` rules. Where a filtering set has to hold, refuse those too. For example, add a rule that rejects TCP and UDP port 853, and rules for the addresses of the public DoH resolvers.
+A set covers the DNS the node answers: with `hijack` on, every UDP and TCP port 53 flow of a tunnel. A device that uses DNS over TLS or DNS over HTTPS steps around its set, as around `domain` rules. Where a filtering set has to hold, refuse those too, for example with a rule that rejects TCP and UDP port 853 and rules for the addresses of the public DoH resolvers.
 
 Engine:
 
-- Everything said about `dns.servers` holds for the servers of a set. A forwarded query is a flow from that user to the chosen server on port 53, routed by the rules and checked by the destination gate and by entitlement. The name memory, the limits, the ids and the TCP fallback are the same.
-- A set never falls back. When none of its servers answers, the query gets `SERVFAIL`. When the rules refuse a server, it gets `REFUSED`, as with `dns.servers`. The node never asks `dns.servers` or another set instead: a filtering resolver that could be skipped whenever it is down would filter nothing.
-- `hijack` is one setting for the whole node, not one per set. A config with sets needs it on.
-- The name memory belongs to the user, whichever list answered. See Reloading for what happens to it when the servers a user resolves through change.
-- A log line about a query that names a user also names the set the query used. The info lines about a server that stopped answering, or answers again, name the list and the server's place in it (`server 2 of 2 of dns set family`). Both lines of one server read the same. A server in two lists is counted in each by itself. No line shows a queried name or a server address unless `log.destinations` is on.
+- A set's servers follow everything said about `dns.servers`: the flow, rules, destination gate, entitlement, name memory, limits, ids and TCP fallback.
+- A set never falls back. When none of its servers answers, the query gets `SERVFAIL`. When the rules refuse a server, it gets `REFUSED`. The node never asks `dns.servers` or another set instead: a filtering resolver that could be skipped whenever it is down would filter nothing.
+- `hijack` is one setting for the whole node. A config with sets needs it on.
+- The name memory belongs to the user, whichever list answered. See Reloading for what happens to it when a user's servers change.
+- A log line about a query that names a user also names the set used. The info lines about a server that stopped answering, or answers again, name the list and the server's place in it (`server 2 of 2 of dns set family`). A server in two lists is counted in each by itself. No line shows a queried name or a server address unless `log.destinations` is on.
 
 ## `inbounds`
 
@@ -135,10 +135,10 @@ An inbound is one tunnel: one key, one address pool, reached over one or more tr
 | `enabled` | bool | `true` | `false` switches the inbound off, see "Switching an inbound or a transport off" below. |
 | `private_key` | key | required | The tunnel's static key. Secret. Unique across inbounds, compared by the public key derived from it. |
 | `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the tunnel's address pool. |
-| `mtu` | integer 1280 to 1500 | `1420`, or `1390` for a `veilway` inbound with a `udp-obfs` transport | MTU inside the tunnel. Above 1420 is a warning: the outer packet then fragments on a normal path, or is lost on a `veilway` inbound, which never fragments. With a `udp-obfs` transport the warning starts above 1390, because a full-size packet then does not fit a 1500 byte path over IPv6. |
+| `mtu` | integer 1280 to 1500 | `1420`, or `1390` for a `veilway` inbound with a `udp-obfs` transport | MTU inside the tunnel. Above 1420 is a warning: the outer packet fragments on a normal path, or is lost on a `veilway` inbound, which never fragments. With a `udp-obfs` transport the warning starts above 1390, because a full-size packet then does not fit a 1500 byte path over IPv6. |
 | `padding` | object | see below | Upper bounds of the padding the node adds to what it sends over `udp-obfs`, `tls`, `ws` and `fronted`. Both are optional: `wide` from 512 to 1023 (default 1023) and `normal` from 64 to 255 (default 255). On an inbound with none of these transports the key is a warning. See `udp-obfs` below. |
 | `transport_keys` | list of 1 or 2 keys | none | Secret. The node's transport keys, private halves. Required for an inbound with a `tls`, `ws` or `fronted` transport (a `ws-plain` transport has its own `transport_keys`, see below). Devices seal their proof to one of them. `veilway genkey --transport` prints one with its public half, which is what a profile carries. Two keys allow rotation: removing one ends the sessions opened under it. No WireGuard key of the config is one, no transport secret is one, and no two inbounds share one. On an inbound without such a transport the key is a warning. See `tls` below. |
-| `upgrade_cookie` | 1 to 32 characters from `A-Z a-z 0-9 _ -` | none | The name of the cookie on the upgrade answer of a `tls` or `ws` transport. Also the name of the cookie that carries the token of a `ws-plain` transport, where the answer sets no cookie. Required with one of them. It has no default, so that not every node sends the same name. Choose a name your own site could use. An inbound with `fronted` alone needs none. |
+| `upgrade_cookie` | 1 to 32 characters from `A-Z a-z 0-9 _ -` | none | The name of the cookie on the upgrade answer of a `tls` or `ws` transport, and of the cookie that carries the token of a `ws-plain` transport, where the answer sets no cookie. Required with one of them. It has no default, so that not every node sends the same name. Choose a name your own site could use. An inbound with `fronted` alone needs none. |
 | `upgrade_headers` | list of at most 16 header field names | `["Server", "Date"]` for `tls`, none for `ws` | The header fields the upgrade answer of a `tls` or `ws` transport copies from the decoy origin, in this order. Behind a web server the list is empty unless you set it, because that web server adds its own fields. See `tls` below. |
 | `transports` | list of 1 to 8 | required | See below. |
 
@@ -150,16 +150,15 @@ Rules for `address`:
 
 An entry of `inbounds` with the type `socks5`, `http` or `mixed` is a proxy inbound, not a tunnel. See [Proxy inbounds](#proxy-inbounds-socks5-http-mixed) below. Everything above is about tunnel inbounds.
 
-Addresses alone decide who may use an inbound: a device belongs to the inbound whose pool holds its address.
-A device may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds. This holds for `wireguard` inbounds as for `veilway` ones. From v0.2.18 the panel also gives a device an address in the range of every plain `wireguard` inbound, at the same offset as in its own pool (see the panel manual). That way a device whose keys the panel made can get a WireGuard file. `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses, once the config has any device: every connection to it would be treated as a stranger's.
+Addresses alone decide who may use an inbound: a device belongs to the inbound whose pool holds its address. It may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds, `wireguard` and `veilway` alike. From v0.2.18 the panel also gives a device an address in the range of every plain `wireguard` inbound, at the same offset as in its own pool (see the panel manual), so a device whose keys the panel made can get a WireGuard file. Once the config has any device, `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses: every connection to it would be treated as a stranger's.
 
 ### Switching an inbound or a transport off
 
-`"enabled": false` on an inbound, a transport or a proxy inbound switches it off without deleting it, as it already does on a link, a tunnel or an upstream. Leaving the key out, or writing `true`, is the same thing.
+`"enabled": false` on an inbound, a transport or a proxy inbound switches it off without deleting it, as on a link, a tunnel or an upstream. Leaving the key out means `true`.
 
-- An inbound or transport that is off is validated like any other, and its addresses stay reserved. No other listener may take its address and no other pool may overlap its pool.
+- It is validated like any other, and its addresses stay reserved: no other listener may take its address and no other pool may overlap its pool.
 - It does not listen. The node binds nothing for it, and `veilway doctor` does not try its address.
-- Sessions on it end at the reload that switches it off. The devices of an inbound that is off are let go: their sessions end, their flows are reset, and they cannot connect through that inbound until it is switched on again. A transport that is off leaves the other transports of the same inbound as they are.
+- Sessions on it end at the reload that switches it off. The devices of an inbound that is off are let go: sessions end, flows are reset, and they cannot connect through it until it is switched on again. A transport that is off leaves the inbound's other transports as they are.
 - `veilway check` skips an inbound that is off when it looks for a `veilway` inbound that no device has an address in.
 - The control API's `GET /v1/inbounds` says `enabled` for each inbound and for each of its transports.
 
@@ -167,16 +166,16 @@ Devices learn of a switch only from the next published profile. At the next publ
 
 ### The control channel
 
-Engine. On a `veilway` inbound the gateway address also answers the control channel of the [protocol](../../protocol/control-channel/): TCP port 47873, and UDP port 47873 for MTU probes. Both sides are built: the client engine speaks it inside the tunnel.
+Engine. On a `veilway` inbound the gateway address also answers the control channel of the [protocol](../../protocol/control-channel/): TCP port 47873, and UDP port 47873 for MTU probes. The client engine speaks it inside the tunnel.
 
-- **Who reaches it.** A device, from its own tunnel address, at the gateway of the inbound it is connected through. The gateway of any other inbound refuses the port, and so does every `wireguard` inbound. The node handles it before the routing rules, like gateway DNS: no rule blocks, redirects or opens it, and `dns.hijack` does not touch it. Its bytes count as usage like any others.
+- **Who reaches it.** A device, from its own tunnel address, at the gateway of the inbound it is connected through. The gateway of any other inbound refuses the port, and so does every `wireguard` inbound. The node handles it before the routing rules, like gateway DNS: no rule blocks, redirects or opens it, `dns.hijack` does not touch it, and its bytes count as usage.
 - **Who is let in.** A connection must prove one of the device's `transport_secrets` within 10 seconds, in an exchange bound to that device's and that inbound's keys. Anything else is closed with no answer. A device may have 4 connections that have not proven it and 2 that have. One more replaces the oldest.
-- **What it gives.** The device's addresses, gateway and MTU as the node holds them. The exits of its user's `exits` (tag, `name`, `country`, whether it carries every IP protocol, whether it is up). Its user's usage and quota. The `notices`. A reload sends again what it changed. Usage is sent again when it changed, at most once every 30 to 90 seconds, and never because of the channel's own traffic.
-- **Choosing an exit.** A device may choose which exit the action `"user"` means for it, among its user's `exits`. The choice belongs to that device only. It moves the flows that the rules send to `"user"` or that match no rule: they are reset and leave through the new exit from their next packet. A flow a rule sends to a named exit is not touched. A device without a choice leaves through `users[].exit`, then `routing.default`, and while that exit is not working, through the first exit of `routing.fallback` that works. A choice goes into the state file at its next regular write, not at once. A node killed within those 10 seconds forgets it, and the device chooses again.
-- **MTU.** A device may probe which packet size its path carries and set the MTU of its own tunnel, from 1280 (1080 for a device with IPv4 addresses only) to the inbound's `mtu`. The node then sends that device nothing larger. TCP the node ends itself keeps to the segment size the device announces. What else the node sends itself, it fragments. IPv4 that it forwards and that allows it is fragmented. The sender of anything else gets "fragmentation needed" or "packet too big". The value is forgotten when the device has had no session for 180 seconds. A device with addresses in two `veilway` inbounds has one MTU, one chosen exit and one set of limits for both. A probe applies on `udp` and `udp-obfs`. On Linux the node prohibits fragmentation of everything it sends from the `udp` and `udp-obfs` sockets of a `veilway` inbound. A packet that does not fit the path is lost, so a probe measures what the path carries. On another system it cannot, and says so in a warning at start: there a probe can pass a path that fragments it. Over `udp-obfs` a probe leaves with no padding around it.
+- **What it gives.** The device's addresses, gateway and MTU as the node holds them. The exits of its user's `exits` (tag, `name`, `country`, whether it carries every IP protocol, whether it is up). Its user's usage and quota. The `notices`. A reload sends again what it changed. Usage is sent again when it changed, at most once every 30 to 90 seconds, never because of the channel's own traffic.
+- **Choosing an exit.** A device may choose which of its user's `exits` the action `"user"` means for it. The choice belongs to that device only. It moves the flows that the rules send to `"user"` or that match no rule: they are reset and leave through the new exit from their next packet. A flow a rule sends to a named exit is not touched. A device without a choice leaves through `users[].exit`, then `routing.default`, and while that exit is not working, through the first exit of `routing.fallback` that works. A choice goes into the state file at its next regular write, not at once, so a node killed within those 10 seconds forgets it and the device chooses again.
+- **MTU.** A device may probe which packet size its path carries and set its own tunnel's MTU, from 1280 (1080 for a device with IPv4 addresses only) to the inbound's `mtu`. The node then sends that device nothing larger. TCP the node ends itself keeps to the segment size the device announces. What else the node sends itself, it fragments, as it does IPv4 that it forwards and that allows it. The sender of anything else gets "fragmentation needed" or "packet too big". The value is forgotten after 180 seconds without a session. A device with addresses in two `veilway` inbounds has one MTU, one chosen exit and one set of limits for both. A probe applies on `udp` and `udp-obfs`, and over `udp-obfs` it leaves with no padding. On Linux the node prohibits fragmentation of everything it sends from the `udp` and `udp-obfs` sockets of a `veilway` inbound, so a packet that does not fit the path is lost and a probe measures what the path carries. On another system it cannot, and warns at start: there a probe can pass a path that fragments it.
 - **Being cut off.** Before a device is cut off (quota, expiry, disabled or removed, or the node stops), the node writes it the reason. The cut-off does not wait for that.
-- **Limits.** 10 requests at once and then one a second for a device, 3 exit changes and then one in 5 seconds, one probe run a minute. Over a limit, a request is answered "rate limited" and does nothing.
-- **What is logged and counted.** A channel that opens or closes, an exit that is chosen or dropped and an MTU that is set are logged at info with the user and device name. At most 6 such lines at once for one device, then one in 30 seconds. The rest go to debug and the next line says how many. None of it names a destination. Counters are in `control` of `/v1/stats`. `/v1/sessions` shows each device's chosen exit, open control connections and MTU.
+- **Limits.** Per device: 10 requests at once and then one a second, 3 exit changes and then one in 5 seconds, one probe run a minute. Over a limit, a request is answered "rate limited" and does nothing.
+- **What is logged and counted.** A channel that opens or closes, an exit that is chosen or dropped and an MTU that is set are logged at info with the user and device name: at most 6 such lines at once for one device, then one in 30 seconds. The rest go to debug and the next line says how many. None names a destination. Counters are in `control` of `/v1/stats`. `/v1/sessions` shows each device's chosen exit, open control connections and MTU.
 
 ### `transports`
 
@@ -192,51 +191,53 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 | `fronted-shaped` | the keys of `fronted`, and `shape` | `fronted` with a method, a place for the data and a downstream form that you pick. See "`fronted-shaped`" below. |
 | `faketls` | `listen` (`ip:port`), `site`, `transport_key` and the limits of its section | Alpha in v0.2.0. Borrows a real site. Only on a `veilway` inbound. A profile carries it as "The `faketls` transport" of the subscription format. A client dials it only after the user turns on `alpha_transports`. See "`faketls`" below. |
 
-`ws` is two transports under one name, and its keys say which one it is. Without `decoy`, `trusted_proxies`, `client_address_header` and `limits` it is the `ws` of a `wireguard` inbound, which carries WireGuard datagrams as they are. With any of them it is the native `ws` of a `veilway` inbound, which needs `decoy` and `trusted_proxies` and takes no `tls`. Validation refuses each on the other kind of inbound and never takes one for the other.
+`ws` is two transports under one name, and its keys say which. Without `decoy`, `trusted_proxies`, `client_address_header` and `limits` it is the `ws` of a `wireguard` inbound, which carries WireGuard datagrams as they are. With any of them it is the native `ws` of a `veilway` inbound, which needs `decoy` and `trusted_proxies` and takes no `tls`. Validation refuses each on the other kind of inbound.
 
-A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws`, `ws-plain`, `fronted` and, as alpha, `faketls`. A `wireguard` inbound takes `udp` and the `ws` without a decoy, because its devices have no transport secret for the others to be keyed with.
+A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws`, `ws-plain`, `fronted` and, as alpha, `faketls`. A `wireguard` inbound takes `udp` and the `ws` without a decoy, because its devices have no transport secret for the others.
 
-`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, and has no `..` component. It is matched exactly against the request path before any `?`. The exception is a `fronted-shaped` transport whose data rides in the path: that one is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `ws-plain`, `fronted` and `fronted-shaped`, `path` is at least 12 bytes.
+`path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, and has no `..` component. It is matched exactly against the request path before any `?`, except for a `fronted-shaped` transport whose data rides in the path, which is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `ws-plain`, `fronted` and `fronted-shaped`, `path` is at least 12 bytes.
 
 Every transport takes `enabled` (bool, default `true`) next to `listen`. A transport that is not enabled is validated like any other, does not listen, and keeps its address reserved. See "Switching an inbound or a transport off" above.
 
-Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped. One source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once. This also applies to a reverse proxy in front of a plain `ws` listener, whose connections all come from one source.
+Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped. One source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once, a reverse proxy in front of a plain `ws` listener included.
 
 Listen conflicts, across all inbounds:
 
 - IPv6 sockets are always IPv6-only, so `0.0.0.0:443` and `[::]:443` do not conflict. A wildcard address conflicts with every address of its own family on the same port.
 - Two `udp` or `udp-obfs` transports never share an address and port, in any combination.
-- Two `ws` transports may share an address and port when their `path` differs and their `tls` is identical. Otherwise they conflict.
-- Two `tls` transports may share an address and port when their `path` differs and their `tls`, `decoy` and `limits` are identical: they are two paths of one listener. Otherwise they conflict.
+- Two `ws` transports may share an address and port when their `path` differs and their `tls` is identical.
+- Two `tls` transports may share an address and port when their `path` differs and their `tls`, `decoy` and `limits` are identical: two paths of one listener.
 - The `ws` and `fronted` transports of `veilway` inbounds may share an address and port when their `path` differs and their `decoy`, `trusted_proxies`, `client_address_header` and `limits` are identical. That is one listener, to which the web server hands a `GET` for one path and a `POST` for another.
 - A `fronted-shaped` transport shares a listener on the same terms as `fronted`. Its `path` may not be a prefix of another transport's `path` on the same listener, because a shape that puts the data in the path is matched by prefix. Validation refuses it.
 - A `faketls` transport never shares an address and port with another transport, and its key never equals the key of another transport of the node.
 - A `ws-plain` transport never shares an address and port with a transport that is not `ws-plain`. Its decoy must answer like your plain site, so that a prober cannot tell its path from your other plain paths. Two `ws-plain` transports may share a listener on the same terms as `ws`.
 - A listener serves one kind of peer. A `tls` transport, a `ws` transport of a `wireguard` inbound, and the `ws` and `fronted` transports of `veilway` inbounds never share an address and port with one another.
 
+Any other pair that shares an address and port conflicts.
+
 ### `udp-obfs`
 
-Engine. Both sides are built, the node's listener and the client's. The [transports page](../../protocol/transports/) is the specification. It is a draft that nobody outside the project has reviewed. `udp-obfs` hides WireGuard's fixed bytes and sizes from an observer without a subscription. It imitates nothing, and its rating is Detectable.
+Engine. Built on both sides. The [transports page](../../protocol/transports/) is the specification, an unreviewed draft. `udp-obfs` hides WireGuard's fixed bytes and sizes from an observer without a subscription. It imitates nothing, and its rating is Detectable.
 
 ```json
 {"type": "udp-obfs", "listen": "0.0.0.0:51821", "limits": {"sessions": 16384}}
 ```
 
-- **Who is let in.** A device opens a session with one opening packet that only a holder of one of its `transport_secrets` can make. The session then carries that device's WireGuard and no other device's. The node sends nothing on a session until a WireGuard packet of that device has authenticated on it.
-- **What a stranger gets.** Nothing. Whatever is not a valid packet of a device gets no answer and no log line. It is counted by reason in `udp_obfs` of `/v1/stats`.
-- **Replay.** An opening packet is accepted once, also across restarts. That needs the replay file, see `replay` below. A node does not start a config with a `udp-obfs` transport without a replay file it can write and lock. An opening packet from a device whose clock is ahead of the node's limit is kept, at most 64 of them for at most 2 seconds, until the limit is written. It is then answered at its own source. One that a limit refuses is recorded as used all the same, so that nobody who saw it can use it later.
-- **Being cut off.** Whenever the node cuts a device off (its user is disabled, expired, over quota or removed, the device is removed, or its addresses, its preshared key or its key change), every `udp-obfs` session of that device ends with its tunnel. So does a session whose transport secret was removed.
+- **Who is let in.** A device opens a session with one opening packet that only a holder of one of its `transport_secrets` can make. The session then carries that device's WireGuard and no other. The node sends nothing on a session until a WireGuard packet of that device has authenticated on it.
+- **What a stranger gets.** Nothing: no answer and no log line. It is counted by reason in `udp_obfs` of `/v1/stats`.
+- **Replay.** An opening packet is accepted once, also across restarts. That needs the replay file, see `replay` below. A node does not start a config with a `udp-obfs` transport without a replay file it can write and lock. An opening packet from a device whose clock is ahead of the node's limit is kept, at most 64 of them for at most 2 seconds, until the limit is written, and is then answered at its own source. One that a limit refuses is recorded as used all the same, so that nobody who saw it can use it later.
+- **Being cut off.** Whenever the node cuts a device off (its user is disabled, expired, over quota or removed, the device is removed, or its addresses, preshared key or key change), every `udp-obfs` session of that device ends with its tunnel. So does a session whose transport secret was removed.
 - **Packets that cannot be sent.** A `veilway` inbound never fragments. The system refuses a packet larger than the host's interface carries. It is counted in `send_failed` of `/v1/stats` and logged at info once a minute. Lower the inbound's `mtu` when that counter grows.
 - **Limits that are fixed.** A device may have 2 sessions that are not yet established and 8 that are, and 16 accepted opening packets at once and then one a second. One source address and port may have sessions of 4 devices. A session ends 10 seconds after its opening packet if WireGuard has not authenticated on it, and after 180 seconds without an authentic WireGuard packet. The idle time of the client's keepalive is well below that.
 - **`limits.sessions`.** How many established sessions the listener holds at once. When it is full, new opening packets are refused. Nothing a stranger does takes a place.
 - **`padding`.** The node pads what it sends, inside the encryption. `wide` bounds the padding of the first 16 packets of a session, of every WireGuard handshake message and of every control channel packet. `normal` bounds the rest. A full-size packet carries none: no packet is larger than `mtu` + 62 bytes. Change them so that not every node shows the same ranges.
-- **`mtu`.** `udp-obfs` adds 62 bytes around a tunnel packet, 30 more than `udp`. So the default `mtu` of a `veilway` inbound with a `udp-obfs` transport is 1390. Adding the transport to an inbound that has no `mtu` written changes its `mtu` from 1420 to 1390, which restarts the tunnel once.
+- **`mtu`.** `udp-obfs` adds 62 bytes around a tunnel packet, 30 more than `udp`, so the default `mtu` of a `veilway` inbound with a `udp-obfs` transport is 1390. Adding the transport to an inbound with no `mtu` written changes its `mtu` from 1420 to 1390, which restarts the tunnel once.
 - **The clock.** A device and the node must agree on the time within 60 seconds. A node whose clock is wrong refuses its devices. A clock that ran ahead can leave the node refusing everybody after it is put right, see `replay`. Run the node with a synchronized clock.
 - **What is logged.** At info: a listener that starts, sessions that a reload ended, a session that reached the packet limit of its keys. At warn or error: a tag table that was built late, and everything about the replay file. No line names a client address, a tag or a secret.
 
 ### `tls`
 
-Engine. Both sides are built, the node's listener and the client's. The [transports page](../../protocol/transports/) is the specification. It is a draft that nobody outside the project has reviewed.
+Engine. Built on both sides. The [transports page](../../protocol/transports/) is the specification, an unreviewed draft.
 
 A device reaches its tunnel through a WebSocket connection inside TLS, on a name and certificate of your own. Everyone else who connects goes to your own web server, the decoy origin, and gets its answer.
 
@@ -259,34 +260,34 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 |---|---|---|---|
 | `listen` | `ip:port` | required | Where the node ends TLS. |
 | `path` | 12 to 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, starting with `/`, no `..` component | required | The path a device's request names. Anyone with a subscription knows it. Choose one your site does not have. |
-| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority. Get and renew the certificate with your own tooling. On a native `tls` transport, `self_signed: true` may replace `cert` and `key`. The node then makes its own self-signed key and certificate, keeps them next to the config file with mode 600, renews the certificate with the same key, and reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. The pin hashes the key and a renewal keeps the key, so the pin survives a renewal. The panel puts this pin into the `tls` candidates of the profiles it makes, see the panel manual. `name` (optional, with `self_signed` only) is the host name in the certificate: a lowercase DNS name of at most 64 characters. Without it the node draws one. The files are `tls-<inbound tag>.key` and `.crt`. A running node never makes a new key. If the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. Node links and pairing refuse `self_signed` candidates. See the transports page of the protocol specification. |
+| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get and renew the certificate with your own tooling. On a native `tls` transport, `self_signed: true` may replace `cert` and `key`. The node then makes its own self-signed key and certificate (files `tls-<inbound tag>.key` and `.crt`, next to the config file, mode 600) and renews the certificate with the same key. It reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. A renewal keeps the key, so the pin survives it. The panel puts this pin into the `tls` candidates of the profiles it makes, see the panel manual. `name` (optional, with `self_signed` only) is the host name in the certificate: a lowercase DNS name of at most 64 characters. Without it the node draws one. A running node never makes a new key. If the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. Node links and pairing refuse `self_signed` candidates. See the transports page of the protocol specification. |
 | `decoy.origin` | `http://` URL with an address or a name and an optional port, nothing behind it | required | Your own web server. There is no default and no other kind of decoy. |
 | `decoy.proxy_protocol` | bool | `false` | Send the PROXY protocol header, version 2, at the start of every connection to the origin. |
 | `limits.sessions` | integer 1 to 1,048,576 | `16384` | Established sessions the listener holds at once. |
 | `limits.undecided` | integer 1 to 65,536 | `512` | Connections that have not sent their request line yet. |
 | `limits.undecided_per_source` | integer 1 to `undecided` | `64` | How many of those one source may have. A source is an IPv4 address or an IPv6 /64. |
 | `limits.relayed` | integer 1 to 65,536 | `1024` | Connections relayed to the origin. |
-| `http2` | `off` or `on` | `off` | Whether the node offers `h2` as well as `http/1.1`. With `on`, the node decides every stream itself and relays a stranger's streams to the origin as HTTP/1.1. The node's own HTTP/2 server then answers a prober, where the origin's would otherwise. Keep it `off` unless you need `h2`. See [HTTP/2](../../protocol/http2/). Every `tls` transport on the same listener must have the same `http2`. |
+| `http2` | `off` or `on` | `off` | Whether the node offers `h2` as well as `http/1.1`. With `on`, the node decides every stream itself and relays a stranger's streams to the origin as HTTP/1.1, so the node's own HTTP/2 server answers a prober instead of the origin's. Keep it `off` unless you need `h2`. See [HTTP/2](../../protocol/http2/). Every `tls` transport on the same listener must have the same `http2`. |
 
 **What the decoy origin must be.**
 
-- **It is your own web server**, on the same host or one you control, serving real content under your own name. Relaying strangers to somebody else's site is not an option in this version. Validation warns when the origin is not a loopback or private address, and when it is a name.
-- **It is reached over plain HTTP.** An `https://` origin is refused in this build. Put the origin on a loopback address: what strangers send travels to it as is.
-- **It must serve the site there, and not redirect to `https://`.** A stranger arrived over TLS and goes to a plain listener. A site's usual plain listener redirects everything to its `https://` address. Through the node, that redirect would come back on every request, which no web site does. The origin must be a plain listener that serves the site as its HTTPS listener does. `veilway doctor` warns when the origin redirects to `https://`.
-- **Which site it serves.** A stranger's request reaches the origin with the `Host` the stranger sent. The node's own requests, and those of `veilway doctor`, carry the host of the `decoy.origin` URL as `Host`. On a web server with several sites, make the site you mean the default of that listener, or the two may see different sites.
-- **It must not be the node.** Validation refuses an origin whose address and port the node itself listens on. A name is held to the same when it is resolved, at start and at every reload. A listener on a wildcard address refuses an origin on a loopback or wildcard address with its port, and not one on another host.
-- **It sees a connection for every user too.** For every connection it accepts, the node opens a connection to the origin before it knows who is there. It closes that one unused when a user was there. The origin's log has no request for it. With `proxy_protocol`, that connection carries the user's address.
-- **It must not hand the path back to the node**, and must serve nothing at the path. A request for the path without a valid proof must get the site's own not-found answer. If your web server also forwards something to the node, make the origin a second listener of that web server without the forwarding rule. `veilway doctor` asks the origin for the path and says what it finds.
-- **It keeps its own limits.** The node puts no limit on the size or lifetime of a relayed connection. Your site's own timeouts and limits decide, as for its direct visitors. With `proxy_protocol` the site sees each stranger's address and can limit per address. Turn it on only when the origin expects the header on that listener: an origin that does not expect it answers every relayed request with an error. The node's own requests carry the node's address.
+- **Your own web server**, on the same host or one you control, serving real content under your own name. Relaying strangers to somebody else's site is not supported in this version. Validation warns when the origin is not a loopback or private address, and when it is a name.
+- **Reached over plain HTTP.** An `https://` origin is refused in this build. Put the origin on a loopback address: what strangers send travels to it as is.
+- **Serving the site there, not redirecting to `https://`.** A stranger arrived over TLS and goes to a plain listener. A site's usual plain listener redirects everything to its `https://` address, and through the node that redirect would come back on every request, which no web site does. The origin must be a plain listener that serves the site as its HTTPS listener does. `veilway doctor` warns when the origin redirects to `https://`.
+- **Serving the right site.** A stranger's request reaches the origin with the `Host` the stranger sent. The node's own requests, and those of `veilway doctor`, carry the host of the `decoy.origin` URL. On a web server with several sites, make the site you mean the default of that listener, or the two may see different sites.
+- **Not the node.** Validation refuses an origin whose address and port the node itself listens on. A name is held to the same when it is resolved, at start and at every reload. A listener on a wildcard address refuses an origin on a loopback or wildcard address with its port, and not one on another host.
+- **Aware of an extra connection per user.** For every connection it accepts, the node opens a connection to the origin before it knows who is there, and closes it unused when a user was there. It leaves no request in the origin's log. With `proxy_protocol`, it carries the user's address.
+- **Serving nothing at the path.** A request for the path without a valid proof must get the site's own not-found answer, so the origin must not hand the path back to the node. If your web server also forwards something to the node, make the origin a second listener of that web server without the forwarding rule. `veilway doctor` asks the origin for the path and says what it finds.
+- **Using its own limits.** The node puts no limit on the size or lifetime of a relayed connection. Your site's own timeouts and limits decide, as for its direct visitors. With `proxy_protocol` the site sees each stranger's address and can limit per address. Turn it on only when the origin expects the header on that listener: an origin that does not expect it answers every relayed request with an error. The node's own requests carry the node's address.
 
 **What happens to a connection.**
 
-- **Who is let in.** A device sends a WebSocket upgrade request for `path` with a proof in its query. The proof is a token that only a holder of one of the device's `transport_secrets` can make, sealed to one of the inbound's `transport_keys`, valid once and for about a minute. The node decides at the end of the request line. An accepted proof gets the upgrade answer, and then the connection carries that device's WireGuard and no other device's. The node sends nothing more on it until a WireGuard packet of that device has authenticated.
-- **What everybody else gets.** The origin's answer, and nothing of the node's: no status line, no header field and no error page. Every byte the peer sent goes to the origin unchanged. From then on the node relays both directions blindly until either side closes. Everything the origin sends is passed on at once. When the origin closes, the peer is closed once it has been given all of it, however slowly it reads. An origin that resets the connection resets the peer's. This holds for a browser, for garbage, for a wrong path, for a wrong or used proof, and for the proof of a device that was removed or whose user is disabled, expired or over quota. All of them look like a visitor who asked for a page the site does not have.
-- **What this does not hide.** The TLS handshake is the node's, as said above. An answer through the node comes later than one from the origin, by the hop between them. The node offers `http/1.1` alone unless `http2` is `on`, and TLS 1.2 and 1.3 as its library does. A client that offers only `h2` gets a TLS alert. Plain HTTP sent to the port gets the library's alert, where a web server sends an error page. A proof under TLS 1.2 is never accepted. When the origin answers before it has read a whole upload and closes its side, the node then closes the peer's connection. A web server that lingers would take the rest of the upload first.
+- **Who is let in.** A device sends a WebSocket upgrade request for `path` with a proof in its query: a token that only a holder of one of the device's `transport_secrets` can make, sealed to one of the inbound's `transport_keys`, valid once and for about a minute. The node decides at the end of the request line. An accepted proof gets the upgrade answer, and the connection then carries that device's WireGuard and no other. The node sends nothing more on it until a WireGuard packet of that device has authenticated.
+- **What everybody else gets.** The origin's answer, and nothing of the node's: no status line, no header field and no error page. Every byte the peer sent goes to the origin unchanged, and the node relays both directions blindly until either side closes. Everything the origin sends is passed on at once. When the origin closes, the peer is closed once it has been given all of it, however slowly it reads. An origin that resets the connection resets the peer's. This holds for a browser, garbage, a wrong path, a wrong or used proof, and the proof of a device that was removed or whose user is disabled, expired or over quota. All look like a visitor who asked for a page the site does not have.
+- **What this does not hide.** The TLS handshake is the node's, as said above. An answer through the node comes later than one from the origin, by the hop between them. The node offers `http/1.1` alone unless `http2` is `on`, and TLS 1.2 and 1.3 as its library does. A client that offers only `h2` gets a TLS alert. Plain HTTP sent to the port gets the library's alert, where a web server sends an error page. A proof under TLS 1.2 is never accepted. When the origin answers before it has read a whole upload and closes its side, the node then closes the peer's connection, where a lingering web server would take the rest of the upload first.
 - **An origin that gives a connection up first.** The node watches the origin while a request line is incomplete. If the origin says something or closes in that time, as a web server does with a connection that sends nothing, the peer gets that at once, and the connection is not a user's. A complete request line is always looked at first. An origin that closes connections before a request can arrive would cost users an attempt now and then. A web server does not, and its timeout for a request head should not be shorter than a second or two.
 - **When the origin is down.** Whoever is not a user is closed with no answer, which tells the node from a web site for as long as it lasts. It is counted in `stream.decoy_down` of `/v1/stats`, logged at warn once a minute, and logged at info when the origin is back. Users are not affected.
-- **The upgrade answer.** After the status line come the fields of `upgrade_headers` in that order. `Date` carries the node's time. Every other field carries the value your origin sent for it, spelled as the origin spelled it. A field the origin did not send is left out. Then come the three fields of the upgrade and one cookie named `upgrade_cookie` with a random value of random length. The node asks the origin once for its page at start and at every reload to learn those values. Until that works, the answer carries only `Date` of the list, which is logged at warn, and the node asks again every 60 seconds. `upgrade_headers` may not name `Upgrade`, `Connection`, `Sec-WebSocket-Accept`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Content-Type`, `Content-Encoding`, `Trailer` or `Keep-Alive`, and no name twice.
+- **The upgrade answer.** After the status line come the fields of `upgrade_headers` in that order. `Date` carries the node's time. Every other field carries the value your origin sent for it, spelled as the origin spelled it, and a field the origin did not send is left out. Then come the three fields of the upgrade and one cookie named `upgrade_cookie` with a random value of random length. The node asks the origin once for its page at start and at every reload to learn those values. Until that works, the answer carries only `Date` of the list, which is logged at warn, and the node asks again every 60 seconds. `upgrade_headers` may not name `Upgrade`, `Connection`, `Sec-WebSocket-Accept`, `Set-Cookie`, `Content-Length`, `Transfer-Encoding`, `Content-Type`, `Content-Encoding`, `Trailer` or `Keep-Alive`, and no name twice.
 
 **Limits.**
 
@@ -296,18 +297,18 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 - **Being cut off.** Whenever the node cuts a device off, every `tls` session of that device ends within a second. So does a session whose transport secret was removed, and one opened under a node transport key the config no longer has. A session ends the same way for every cause: a WebSocket Close frame, then TLS and TCP in the normal order.
 - **`padding`** bounds the padding of what the node sends, as for `udp-obfs`. A stream has no packet size to keep to, so the inbound's `mtu` default stays 1420 with `tls` alone.
 - **The address.** A `tls` transport on an address that also has a `udp`, `udp-obfs` or `ws` listener marks that address for whoever watches it. Put it on an address of its own if you can.
-- **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached, a key file that group or others can read, header fields that could not be learned. Nothing is logged for a single connection, and no line names a client address, a path, a token or a key. Counters are in `stream` of `/v1/stats`.
+- **What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached, a key file that group or others can read, header fields that could not be learned. Nothing is logged for a single connection, and no line names a connection's client address, a path, a token or a key. Counters are in `stream` of `/v1/stats`.
 
 ### `ws` and `fronted` behind your web server
 
-Engine. Both sides are built, the node's listener and the client's. This was tested against a small web server and a small reverse proxy written for the tests, and with nginx in front of the node and nginx or HAProxy behind it, in containers on one machine. Neither transport has run behind a CDN, on a real network, or in front of a real site. The [transports page](../../protocol/transports/) is the specification. It is a draft that nobody outside the project has reviewed.
+Engine. Built on both sides. Tested only in containers on one machine, against small test servers and with nginx in front of the node and nginx or HAProxy behind it. Neither transport has run behind a CDN, on a real network, or in front of a real site. The [transports page](../../protocol/transports/) is the specification, an unreviewed draft.
 
-Your own web server ends TLS with your site's name and certificate. It hands two paths to the node over plain HTTP on the loopback and serves everything else as before. The node never ends TLS on these transports. A device reaches its tunnel through one of the two paths. Your site, through the node, answers every other request the web server hands to the node, exactly as it always does.
+Your own web server ends TLS with your site's name and certificate. It hands two paths to the node over plain HTTP on the loopback and serves everything else as before. The node never ends TLS on these transports. A device reaches its tunnel through one of the two paths.
 
 - **`ws`** is the WebSocket session of `tls`, with the web server's TLS in place of the node's. Use it wherever a WebSocket connection gets through, with or without a CDN in front of the web server.
-- **`fronted`** carries the tunnel in the bodies of `POST` requests and their answers. It is for a CDN that allows neither WebSocket nor long-lived connections. It is slow, makes many requests, and is the transport of last resort. Check the CDN's terms before you use it this way.
+- **`fronted`** carries the tunnel in the bodies of `POST` requests and their answers, for a CDN that allows neither WebSocket nor long-lived connections. It is slow, makes many requests, and is the transport of last resort. Check the CDN's terms before you use it this way.
 
-**Both are rated Detectable.** The handshake is your web server's, which `tls` cannot offer. The [transports page](../../protocol/transports/) states what is left: a request for one fixed path with a long random query, a long-lived connection or a steady rhythm of small requests to one host, and the sizes and times of what flows. Nothing here has been measured, and no text may claim more than Detectable for either.
+**Both are rated Detectable.** The handshake is your web server's, which `tls` cannot offer. The [transports page](../../protocol/transports/) states what is left: a request for one fixed path with a long random query, a long-lived connection or a steady rhythm of small requests to one host, and the sizes and times of what flows. Nothing here has been measured, so claim no more than Detectable for either.
 
 ```json
 {
@@ -327,20 +328,20 @@ Your own web server ends TLS with your site's name and certificate. It hands two
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `listen` | `ip:port` | required | Where the node takes plain HTTP from your web server. Use a loopback address. Anything else is a warning, because tokens, session ids and your site's pages then cross unprotected between the two. A unix socket is not built. |
+| `listen` | `ip:port` | required | Where the node takes plain HTTP from your web server. Use a loopback address. Anything else is a warning, because tokens, session ids and your site's pages then cross unprotected. A unix socket is not built. |
 | `path` | 12 to 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, starting with `/`, no `..` component | required | The path as the web server hands it to the node. If the web server rewrites the path, use the rewritten one. Choose one your site does not have. |
 | `decoy.origin`, `decoy.proxy_protocol` | as for `tls` | required, `false` | Your own web site, on a plain listener of its own. See "What the decoy origin must be" under `tls`, and below. |
-| `trusted_proxies` | list of 1 to 64 addresses or networks | required | Where your web server connects from: `["127.0.0.1"]` on one host. Only a connection from one of these can bring a user, and only from these is `client_address_header` believed. Everybody else who reaches the listener is a stranger and gets the origin's answer. A network of every address (`0.0.0.0/0`, `::/0`) is refused, and so is a list whose networks cover every address between them. An entry that is neither a loopback nor a private address is a warning: every host inside it can bring a user and is believed about where a request came from, and requests cross from it to the node as plain HTTP. |
+| `trusted_proxies` | list of 1 to 64 addresses or networks | required | Where your web server connects from: `["127.0.0.1"]` on one host. Only a connection from one of these can bring a user, and only from these is `client_address_header` believed. Everybody else is a stranger and gets the origin's answer. A network of every address (`0.0.0.0/0`, `::/0`) is refused, and so is a list whose networks cover every address between them. An entry that is neither a loopback nor a private address is a warning: every host inside it can bring a user and is believed about where a request came from, and requests cross from it to the node as plain HTTP. |
 | `client_address_header` | header field name | none | The field in which your web server names the address a request came from, such as `X-Forwarded-For`. The node takes the rightmost address in it that is not one of `trusted_proxies`. Without the key, or when a request has no such field, the request counts as the web server's own, and the limits per source become one limit for everybody. Validation warns when the key is missing. |
 | `limits.sessions` | integer 1 to 1,048,576 | `16384` | Established sessions the listener holds at once, `ws` and `fronted` together. |
-| `limits.fronted_sessions` | integer 1 to 65,536 | `1024` | How many of them may be `fronted` sessions. Each keeps its last answer, up to 65,536 bytes, and a digest of its last request. A full pool of 1,024 holds up to 64 MiB of answers. Above 4,096, which is 256 MiB, validation warns and says how much the pool you ask for holds. |
+| `limits.fronted_sessions` | integer 1 to 65,536 | `1024` | How many of them may be `fronted` sessions. Each keeps its last answer, up to 65,536 bytes, and a digest of its last request. A full pool of 1,024 holds up to 64 MiB of answers. Above 4,096, which is 256 MiB, validation warns and says how much the pool holds. |
 | `limits.proxy_connections` | integer 2 to 65,536 | twice `fronted_sessions` | Connections of your web server the listener holds at once. When all are taken, the node stops accepting and leaves new ones in the system's queue. A `ws` session takes its connection out of this count. |
 | `limits.decoy_requests_per_source` | integer 1 to 65,536 | `16` | Requests of one source that may wait for the origin at once. One more closes the connection of the oldest. All strangers together have half of `proxy_connections`. |
 | `limits.undecided`, `undecided_per_source`, `relayed` | as for `tls` | as for `tls` | The pools for peers that reach the listener from outside `trusted_proxies`. |
 
 Transports that share a listener have the same `decoy`, `trusted_proxies`, `client_address_header` and `limits`. A `limits.proxy_connections` that is not set is twice `fronted_sessions`, and three times the shaped `sse` sessions on a listener of a `fronted-shaped` transport (see below).
 
-**The web server in front.** An example for nginx, with the site and the node on one host. The first server is the site as the world sees it. The second is the same site on a plain loopback listener, without the two rules that hand a path to the node. That one is the decoy origin.
+**The web server in front.** An nginx example, with the site and the node on one host. The first server is the site as the world sees it. The second is the same site on a plain loopback listener, without the two rules that hand a path to the node. That one is the decoy origin.
 
 ```nginx
 upstream veilway {
@@ -387,52 +388,52 @@ server {
 }
 ```
 
-What the example does, and why:
+What the example does:
 
-- **`proxy_add_x_forwarded_for`** puts the address the web server took the request from at the right end of `X-Forwarded-For`, behind whatever the visitor sent in that field. The node reads from the right and skips the addresses in `trusted_proxies`, so a visitor cannot name an address for itself. Behind a CDN, add the CDN's ranges to nginx's own `set_real_ip_from` and `real_ip_header`, so that the address nginx adds is the visitor's and not the CDN's. `veilway doctor` says whether a running node has found the field in the requests it read.
-- **`access_log off`** on the two paths keeps the query, which is a token or a session id, out of the web server's log. A token that was logged and never reached the node can be used once by whoever reads the log, within about a minute.
+- **`proxy_add_x_forwarded_for`** puts the address the web server took the request from at the right end of `X-Forwarded-For`, behind whatever the visitor sent. The node reads from the right and skips the addresses in `trusted_proxies`, so a visitor cannot name an address for itself. Behind a CDN, add the CDN's ranges to nginx's own `set_real_ip_from` and `real_ip_header`, so that the address nginx adds is the visitor's and not the CDN's. `veilway doctor` says whether a running node has found the field in the requests it read.
+- **`access_log off`** on the two paths keeps the query, a token or a session id, out of the web server's log. A token that was logged and never reached the node can be used once by whoever reads the log, within about a minute.
 - **`keepalive`** and `proxy_http_version 1.1` let the web server keep its connections to the node. `fronted` needs that: it makes one request after another for as long as the tunnel is up. The node keeps a quiet connection of the web server for 300 seconds.
-- **`proxy_http_version 1.1` is not optional.** A request that reaches the node as HTTP/1.0 is never a user's. A web server that speaks HTTP/1.0 to the node, which nginx does unless told otherwise, shuts every user out and shows nothing else for it. The node counts such requests (`proxy_http10` in `/v1/stats`), and `veilway doctor` says so when a running node has seen any.
+- **`proxy_http_version 1.1` is required.** A request that reaches the node as HTTP/1.0 is never a user's, and nginx speaks HTTP/1.0 to the node unless told otherwise, which shuts every user out with no other sign. The node counts such requests (`proxy_http10` in `/v1/stats`), and `veilway doctor` says so when a running node has seen any.
 - **`proxy_read_timeout`** on the `ws` path is above the 300 seconds a session may be quiet for.
-- **Only the two paths go to the node** in this example. A request for either without a valid proof gets the origin's own not-found answer. You may hand more to the node, or everything: the origin answers whatever is not a user's, through the node. The origin must never hand a path back to the node, which is why the origin is a listener without the two rules.
+- **Only the two paths go to the node** here. A request for either without a valid proof gets the origin's own not-found answer. You may hand more to the node, or everything: the origin answers whatever is not a user's, through the node. The origin must never hand a path back to the node, which is why it is a listener without the two rules.
 
 **What the decoy origin must be** is what `tls` says, with these differences:
 
-- A visitor arrived over your web server's TLS, so the origin is the plain listener behind it. It must serve the site as the first server does, without a redirect to `https://`.
-- The node opens a connection to the origin only for a request that is not a user's. It keeps that connection for the next such request of the same web server connection. A user's request never reaches the origin and leaves no connection in its log.
+- The visitor arrived over your web server's TLS, so the origin is the plain listener behind it. It must serve the site as the first server does, without a redirect to `https://`.
+- The node opens a connection to the origin only for a request that is not a user's, and keeps it for the next such request of the same web server connection. A user's request never reaches the origin and leaves no connection in its log.
 - With `proxy_protocol`, the origin is told the address taken from `client_address_header`, with port 0, since the field names no port. A request that names no source, and one whose head the node cannot read to its end, is told with the address of the web server in front. So the origin must grant nothing to an address, its own host's and its proxy's included.
-- The node keeps one connection to the origin for each connection of the web server. The origin's keep-alive time does not decide how long the web server's connection lives: see "What the origin does between two requests" below.
+- The node keeps one origin connection for each web server connection. The origin's keep-alive time does not decide how long the web server's connection lives: see "What the origin does between two requests" below.
 
 **What happens to a request.**
 
 - **Who is let in.** The node reads the whole request head, at most 16,384 bytes within 10 seconds, takes the source from `client_address_header`, and then decides. A head above 16,384 bytes is nobody's and is handed on as the bytes it is. The node still reads it to its end, up to 65,536 bytes, for one thing only: the source its last proxy named, so that a stranger with a long head does not look like the web server itself to the origin. A `GET` for the `ws` path with a valid proof in its query becomes a WebSocket session, as on `tls`, and its connection leaves the proxy pool. A `POST` for the `fronted` path with a valid proof opens a `fronted` session. Later requests name that session and a number that goes up by one.
-- **What everybody else gets.** The origin's answer, and nothing of the node's. The node writes no byte of its own for such a request and changes none. The head goes to the origin as read, the body as far as its length or chunks say, and the answer comes back as the origin sent it, up to its last byte and no further. When the answer is complete, the next request of the web server is read. An answer that says `Connection: close` ends the web server's connection with it. So does an origin that closes or resets its connection while a request is in its hands.
-- **Bytes behind a complete answer** are never handed to the web server. They answer nothing it asked, and its next request on that connection may be a user's. When the origin writes more than one answer to a request, the web server gets the first and both connections are closed.
-- **What the origin does between two requests** is not passed on. When an origin says something on a quiet connection, as some servers do with a `408`, or closes a connection it kept, it did so to the node's connection and to nobody else's. The node drops that connection, keeps the web server's, and opens a new one to the origin for the next stranger. If a kept connection turns out closed just as a request is sent on it, the node sends the request once more on a new connection.
-- **A request the node cannot tell the end of.** The node reads lengths more strictly than a web server does: one `Content-Length` in digits, no more than 2^63 - 1, or `Transfer-Encoding: chunked` alone, CR LF line ends, no folded line, no chunk extension. It does not try to read anything else. It hands the request on as the bytes it is, with everything the web server sends behind it, until the origin's first answer is complete, then closes both connections. So the node never guesses where the next request starts. nginx refuses most such requests itself, before the node sees them.
+- **What everybody else gets.** The origin's answer, and nothing of the node's. The node writes no byte of its own for such a request and changes none. The head goes to the origin as read, the body as far as its length or chunks say, and the answer comes back as the origin sent it, to its last byte and no further. When the answer is complete, the next request of the web server is read. An answer that says `Connection: close` ends the web server's connection with it, as does an origin that closes or resets its connection while a request is in its hands.
+- **Bytes behind a complete answer** are never handed to the web server: they answer nothing it asked, and its next request on that connection may be a user's. When the origin writes more than one answer to a request, the web server gets the first and both connections are closed.
+- **What the origin does between two requests** is not passed on. When an origin says something on a quiet connection, as some servers do with a `408`, or closes a connection it kept, it did so to the node's connection only. The node drops that connection, keeps the web server's, and opens a new one to the origin for the next stranger. If a kept connection turns out closed just as a request is sent on it, the node sends the request once more on a new connection.
+- **A request the node cannot tell the end of.** The node reads lengths more strictly than a web server: one `Content-Length` in digits, no more than 2^63 - 1, or `Transfer-Encoding: chunked` alone, CR LF line ends, no folded line, no chunk extension. It reads nothing else. It hands the request on as the bytes it is, with everything the web server sends behind it, until the origin's first answer is complete, then closes both connections, so it never guesses where the next request starts. nginx refuses most such requests itself, before the node sees them.
 - **A request from outside `trusted_proxies`** is a stranger's whatever it carries, a valid proof and a forwarded-address field included. It is relayed to the origin as on `tls`.
-- **When the origin is down** the web server's connection is closed with no answer, and the web server gives the visitor its own error, as it would if the site were down. Users are not affected. The error is not always the one the web server gives for a site that is down. nginx answers 502 either way. HAProxy answers 503 for an origin that refuses connections and 502 for a connection closed with no answer. While the origin is down, that is one more way to tell the node from the site.
+- **When the origin is down** the web server's connection is closed with no answer, and the web server gives the visitor its own error, as if the site were down. Users are not affected. The error is not always the one a down site gives. nginx answers 502 either way. HAProxy answers 503 for an origin that refuses connections and 502 for a connection closed with no answer. While the origin is down, that is one more way to tell the node from the site.
 - **A visitor with more than its share of requests waiting** (`limits.decoy_requests_per_source`, and half the proxy pool for all strangers together) has the connection of its oldest waiting request closed at once, also in the middle of an answer. The web server makes its own error of that, a 502 on nginx, which a site without the node would not have given.
 - **The upgrade answer of `ws`** is the one of `tls`, with an empty `upgrade_headers` unless you set it, since the web server adds `Server` and `Date` itself.
 
 **`fronted` in particular.**
 
-- A request is decided from its head: exactly one `Content-Length` from 18 to 65,536 and no `Transfer-Encoding`. The node then reads the whole body within 10 seconds before it uses anything, and every chunk in it must open. The origin answers a request that fails any of this, and the session it named stays exactly as it was. A stranger who learns a session id cannot disturb the session.
+- A request is decided from its head: exactly one `Content-Length` from 18 to 65,536 and no `Transfer-Encoding`. The node then reads the whole body within 10 seconds before it uses anything, and every chunk in it must open. The origin answers a request that fails any of this, and the session it named stays exactly as it was, so a stranger who learns a session id cannot disturb the session.
 - One request of a session is in flight at a time. If the next one comes early, the origin answers it. A repeat of the last request with the same bytes gets the same answer again, because a CDN may send a request twice. For that, the node keeps the last answer and a SHA-256 of the last request body, not the body.
 - The node answers at once when it has something for the device, and after 250 ms when it has not. The answer is `200` with `Content-Type: application/octet-stream` and a `Content-Length`, and nothing else from the node.
 - A session with no accepted request for 60 seconds is forgotten. `fronted` has no keepalive: the requests are the sign of life.
 - A device may have 2 `fronted` sessions among its 8. A third takes the place of its oldest `fronted` session once it is established.
 - An opening request whose body brings no WireGuard packet of its device is held, since the node sends nothing before that. The origin answers it when the session ends, 10 seconds later.
 
-**HTTP/2 behind your web server.** Your web server may speak HTTP/2 to the client. It must speak HTTP/1.1 to the node: the node offers no HTTP/2 on these listeners, and the web server turns a client's HTTP/2 into HTTP/1.1 as for any site behind it. HTTP/2 or `h2c` towards the node is not supported. See [HTTP/2](../../protocol/http2/), where a client side for `ws` and `fronted` over HTTP/2 is designed and not built.
+**HTTP/2 behind your web server.** Your web server may speak HTTP/2 to the client but must speak HTTP/1.1 to the node, which offers no HTTP/2 on these listeners. HTTP/2 or `h2c` towards the node is not supported. The web server turns a client's HTTP/2 into HTTP/1.1 as for any site behind it. See [HTTP/2](../../protocol/http2/), where a client side for `ws` and `fronted` over HTTP/2 is designed and not built.
 
 **Limits that are fixed** are those of `tls` where they are the same thing: 2 sessions that are not yet established and 8 that are for a device, 16 accepted proofs at once and then one a second, counted across every native transport together. A `ws` session ends after 300 seconds without a chunk and a `fronted` session after 60 seconds without an accepted request. Replay and being cut off are as on `tls`: a proof is accepted once, also across restarts, and whatever cuts a device off ends its sessions within a second.
 
-**What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached. Nothing is logged for a single request, and no line names a client address, a path, a token, a session id or a key. Counters are in `stream` of `/v1/stats`.
+**What is logged.** At info: a listener that starts, sessions that a reload ended, an origin that is reached again. At warn: an origin that cannot be reached. Nothing is logged for a single request, and no line names a request's client address, a path, a token, a session id or a key. Counters are in `stream` of `/v1/stats`.
 
 ### `ws-plain`
 
-Engine. Both sides are built, the node's listener and the client's, since v0.2.14-alpha. It was tested against a small web server and with nginx and HAProxy in containers, and not on a real network. The [transports page](../../protocol/transports/) is the specification.
+Engine. Built on both sides since v0.2.14-alpha. Tested in containers with a small web server, nginx and HAProxy, not on a real network. The [transports page](../../protocol/transports/) is the specification.
 
 `ws-plain` is the session of the native `ws` over plain HTTP. Your web server takes the connection on port 80 (or another plain port) and hands one path to the node on the loopback. Use it only where TLS to your server is blocked or slowed and plain HTTP passes. The network sees your server's name, the path and the token, and can tell that people use this app. A later leak of the transport's key ties all of a device's plain connections together. The app asks the user for consent of its own before it dials one, and the panel shows a warning when you add it.
 
@@ -452,7 +453,7 @@ Validation refuses:
 
 The node reads the whole head of every request before it decides. The token must be in exactly one `Cookie` field, in exactly one cookie of the inbound's cookie name. Other cookies in the field are allowed. A request with anything after `?` in its target is not from a user. Whoever is not a user gets the decoy's answer. Your web server must answer the path as it answers any other plain path, a redirect to HTTPS included. The upgrade answer sets no cookie.
 
-If you use the panel, it makes and rotates the keys for you (see [Rotation](../../manuals/panel/#subscription-settings)). The node only sees the list change.
+The panel makes and rotates the keys (see [Rotation](../../manuals/panel/#subscription-settings)). The node only sees the list change.
 
 ### `fronted-shaped`
 
@@ -476,7 +477,7 @@ A `fronted` transport has one shape: a `POST` with the data in the body, answere
 - **Validation** refuses a shape that breaks the rules of the page: a method and `in` that do not go together (a `GET` with a body), a refused method or header name, a limit or range out of bounds, an `up.inflight` above 1 with `poll`, and an unknown member or value. It warns above 256 shaped sessions on a listener, and counts them among the 1,024 `fronted` sessions.
 - **The path** of a shape that puts the data in the path (`up.in` `path`) is matched as a prefix. Your web server hands the node every path under it, and the origin must serve nothing there. Validation refuses a `path` that is a prefix of another transport's path on the same listener.
 - **Limits.** The node reads a request line of up to 8,192 bytes when `up.limit` is above 4,000. A shaped session holds at most 603,136 bytes. `limits.proxy_connections` is three times the shaped `sse` sessions when not set, because a shaped client keeps up to 5 connections to the host.
-- **Your web server.** For `sse` the web server must not buffer the answer. In nginx, use `proxy_buffering off` for the path, a `proxy_read_timeout` above the longest stream (`down.life`, at most 3,600 s) and `proxy_http_version 1.1`. For `GET` the CDN must not cache the path. The prefix location is for `up.in` `path` only.
+- **Your web server.** For `sse` it must not buffer the answer. In nginx, use `proxy_buffering off` for the path, a `proxy_read_timeout` above the longest stream (`down.life`, at most 3,600 s) and `proxy_http_version 1.1`. For `GET` the CDN must not cache the path. The prefix location is for `up.in` `path` only.
 
 ```nginx
 # A fronted-shaped transport with an event stream down. Use a location with a
@@ -522,7 +523,7 @@ Validation also refuses a listener with `trusted_proxies`, and a `site.address` 
 
 ## Proxy inbounds (`socks5`, `http`, `mixed`)
 
-From v0.2.17. A proxy inbound is an entry of `inbounds` whose `type` is `socks5`, `http` or `mixed`. It is a TCP listener that lets other software use the node as a plain proxy. It has no key, no address pool and no transports. Every connection logs in as one of the config's users. Its traffic then meets the same destination gate, rules, exits, entitlement, quota and counters as that user's tunnel traffic.
+From v0.2.17. A proxy inbound is an entry of `inbounds` whose `type` is `socks5`, `http` or `mixed`: a TCP listener that lets other software use the node as a plain proxy. It has no key, no address pool and no transports. Every connection logs in as one of the config's users, and its traffic meets the same destination gate, rules, exits, entitlement, quota and counters as that user's tunnel traffic.
 
 :::danger[Nothing is encrypted]
 SOCKS5 and HTTP carry the password and the traffic in the clear. Anyone on the path reads both, and anyone who finds the port can tell it is a proxy and block it. The panel rates a proxy inbound Unsafe. Listen on loopback and reach the port through a tunnel or a TLS front you run, as in [Give an account a proxy login](../../guides/proxy-inbound/). Use a public address only when you must.
@@ -551,21 +552,21 @@ SOCKS5 and HTTP carry the password and the traffic in the clear. Anyone on the p
 
 - **Loopback** (`127.0.0.0/8`, `::1`) is taken as is and warns about nothing. Only this host reaches it. `public: true` on loopback is a warning, since it is never needed.
 - **A private address** (RFC 1918, `100.64.0.0/10`, `fc00::/7`) is taken without `public`, with a warning. On a cloud host a private address is often NATed one to one to a public one, and a local network has other machines. Nothing is encrypted there, so anyone who reaches the port or is on the path can read the traffic and the password.
-- **Any other address**, the wildcard (`0.0.0.0`, `::`) and link-local ones included, is an error unless `public` is `true`. With `public: true` it is taken with a warning. The warning says the traffic and the password cross the network unencrypted, and that the listener is easy to find and block.
+- **Any other address**, the wildcard (`0.0.0.0`, `::`) and link-local ones included, is an error unless `public` is `true`. With `public: true` it is taken with a warning that the traffic and the password cross the network unencrypted, and that the listener is easy to find and block.
 
 `veilway check` reports these. `veilway doctor` also checks that each listen address can be bound.
 
 ### Who may log in
 
-A client logs in with the user's `name` as the user name and the user's `proxy_password` as the password. There is no other way in: no anonymous use, no shared password.
+A client logs in with the user's `name` and `proxy_password`. There is no anonymous use and no shared password.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
-| `users[].proxy_password` | 16 to 128 printable ASCII characters, no `:` | none | Secret. The password this user logs in to a `socks5`, `http` or `mixed` inbound with. Without one the user cannot log in to any of them. One user, one password: no two accounts share a login. A `proxy_password` in a config with no proxy inbound is a warning. |
+| `users[].proxy_password` | 16 to 128 printable ASCII characters, no `:` | none | Secret. The password this user logs in to a `socks5`, `http` or `mixed` inbound with. Without one the user cannot log in to any of them. No two accounts share a login. A `proxy_password` in a config with no proxy inbound is a warning. |
 
 - The inbound must admit the user (`users`, `groups`, or neither list for everyone with a password). A user who is disabled, expired or over quota is refused at the request, as everywhere else.
 - A wrong password, a wrong name and a user the inbound does not admit are answered alike and take the same time.
-- **Proxy-only users.** A user with a `proxy_password` may have `"devices": []`. Such a user only uses proxies. They are counted, held to a quota and cut off like any other. A user without a `proxy_password` still needs 1 to 16 devices.
+- **Proxy-only users.** A user with a `proxy_password` may have `"devices": []`. Such a user is counted, held to a quota and cut off like any other. A user without a `proxy_password` still needs 1 to 16 devices.
 - The control API shows `proxy_password` as `"<redacted>"`. A document sent back with that marker keeps the running password of the user with the same `name`. A marker in a config file read from disk is an error.
 - A user's connections end within a second of the user being cut off, of the password changing, or of the inbound no longer admitting the user.
 - The node cannot recover a login the user did not write down. The panel keeps its own sealed copy, see the [panel manual](../../manuals/panel/#proxy-inbounds-socks5-and-http).
@@ -574,23 +575,23 @@ A client logs in with the user's `name` as the user name and the user's `proxy_p
 
 - Only the user name and password method (RFC 1929) is offered. A client that offers no such method is answered `0xff` and closed.
 - `CONNECT` and `UDP ASSOCIATE` are taken. `BIND` and every other command are refused.
-- The node resolves a destination name, never the host's resolver. It uses the DNS servers of the user's set and the exit the rules give the query. A name is lower case, at most 253 bytes, of letters, digits, hyphens, underscores and dots.
+- The node resolves a destination name itself, never through the host's resolver, using the DNS servers of the user's set and the exit the rules give the query. A name is lower case, at most 253 bytes, of letters, digits, hyphens, underscores and dots.
 - Each destination is a flow of the user. The destination gate refuses loopback, link-local, multicast, the cloud metadata addresses, every address pool of the node and every address of this host, the inbound's own listen address included. Private networks are the rules' business, as for the tunnel.
 
 ### HTTP
 
 - `CONNECT host:port` opens a tunnel to the target. The login is `Proxy-Authorization: Basic`. A request without a login is answered `407` and the connection is closed.
-- A plain `http://` request with an absolute URI is forwarded, one request to a connection. The node sends it to the origin with the request line in origin form, `Host` taken from the URI, the `Proxy-Authorization` field and the other hop fields removed, and `Connection: close` added. The origin never sees the login. The node reads nothing the client writes after the request's own end (its `Content-Length`, or its chunks), so a second request behind the first never reaches the origin.
-- These are refused: `https://` and origin-form requests, userinfo and fragments in a URI, a request with both `Content-Length` and `Transfer-Encoding`, a `Transfer-Encoding` that does not end in `chunked`, and any version but `HTTP/1.0` and `HTTP/1.1`. The head is at most 8,192 bytes and 64 fields.
+- A plain `http://` request with an absolute URI is forwarded, one request to a connection. The node sends it to the origin with the request line in origin form, `Host` taken from the URI, the `Proxy-Authorization` field and the other hop fields removed, and `Connection: close` added, so the origin never sees the login. The node reads nothing the client writes after the request's own end (its `Content-Length`, or its chunks), so a second request behind the first never reaches the origin.
+- Refused: `https://` and origin-form requests, userinfo and fragments in a URI, a request with both `Content-Length` and `Transfer-Encoding`, a `Transfer-Encoding` that does not end in `chunked`, and any version but `HTTP/1.0` and `HTTP/1.1`. The head is at most 8,192 bytes and 64 fields.
 
 ### UDP
 
-UDP ASSOCIATE gives a SOCKS5 client a UDP relay on the node. UDP has no login of its own: a datagram carries no proof of who sent it. So the node ties the relay to the control connection.
+UDP ASSOCIATE gives a SOCKS5 client a UDP relay on the node. A datagram carries no proof of who sent it, so the node ties the relay to the control connection.
 
 - The relay is bound to the address the control connection reached, with a port of its own. It carries only datagrams from the IP address of the control connection. Fragments are dropped.
 - **On loopback (Linux)** a datagram is carried only from a socket whose owner, read from the kernel, is the user id that owns the control connection. On macOS and Windows the system cannot tell who owns a socket, so a loopback inbound follows the rule for other addresses.
 - **On any other address** the client must say in its request the port it sends from. Only datagrams from exactly that address and port are carried, and a request with port `0` is refused (`0x02`). A client behind a NAT, which rewrites the port, gets no UDP. Validation warns about this on every such inbound with `udp` on.
-- **`udp_any_port`** is the way out for clients behind a NAT: the association binds to the first datagram from the client's address. The cost is a window before that datagram. In that window, a sender that shares the client's address (neighbors behind the same carrier NAT, say) can take the association and reach the destinations of the user's flows. Validation warns about it. Leave it off unless your clients are behind a NAT.
+- **`udp_any_port`** is the way out for clients behind a NAT: the association binds to the first datagram from the client's address. The cost is a window before that datagram, in which a sender that shares the client's address (neighbors behind the same carrier NAT, say) can take the association and reach the destinations of the user's flows. Validation warns about it. Leave it off unless your clients are behind a NAT.
 - An association ends with its control connection, after 120 seconds without a datagram, and when the user is cut off. A user holds at most 32 associations and 256 UDP flows, and an inbound 4,096 and 16,384.
 - Datagrams dropped because they did not come from the address and port the client named count as `refused_udp_source`.
 
@@ -628,7 +629,7 @@ An `interface` that is the interface of an `l3` exit is an error: the outbound's
 
 Engine: the system resolver resolves a `server` host name each time the node dials the proxy, never through a tunnel exit. The node uses the UDP relay address a proxy returns only if it is the address the control connection is connected to. A relay address on another host means the proxy counts as having no UDP.
 
-**`via`** (`socks5` only) sends the connection to this outbound's `server` through another `socks5` outbound, which may have a `via` of its own. A chain may have up to 8 proxies, counting this outbound. The node dials the first proxy itself. Each hop then does its own SOCKS5 handshake and authentication over the connection the hop before it made, and the flow's destination is the last CONNECT. A host name in `server` goes to the hop before it unresolved. The exception is the first proxy, which the node resolves.
+**`via`** (`socks5` only) sends the connection to this outbound's `server` through another `socks5` outbound, which may have a `via` of its own. A chain may have up to 8 proxies, counting this outbound. The node dials the first proxy itself. Each hop then does its own SOCKS5 handshake and authentication over the connection the hop before it made, and the flow's destination is the last CONNECT. A host name in `server` goes to the hop before it unresolved, except for the first proxy, which the node resolves.
 
 - `via` names a `socks5` outbound. A `direct` outbound cannot be named, and a `direct` outbound cannot have `via`.
 - Following `via` from an outbound must not come back to it. A loop is a config error.
@@ -668,7 +669,7 @@ Give either a `link`, or `protocol` and `server` with the fields of the protocol
 - `reality` over `ws` or `httpupgrade`.
 - A `?` in a `path`, and any path, host, service or authority that does not read as above.
 - A `shadowsocks` password that is too short for its cipher, or a 2022 key of the wrong length.
-- An exit on an `xray` outbound whose `unsupported.udp` is `direct` or `{"via": ...}`. An Xray outbound carries UDP itself. While it is down, the flow ends rather than leave the exit around it. Use `reject` or `drop`.
+- An exit on an `xray` outbound whose `unsupported.udp` is `direct` or `{"via": ...}`. An Xray outbound carries UDP itself, and while it is down the flow ends rather than leave the exit around it. Use `reject` or `drop`.
 - A `via` on an `xray` outbound, and an `xray` outbound as the `via` of another outbound, of a link or of an upstream. It is reached through a Unix socket and cannot carry a chain.
 - A literal server at an address the node may not dial, see "The server's address".
 
@@ -680,7 +681,7 @@ The warnings are a server written as a name (see below), and `routing.fallback` 
 - **The add-on must be installed.** `scripts/veilway.sh addon xray install` also puts the node's user in the group `veilway-xray`, which owns the folder the sockets are made in (`/run/veilway-xray-out`, mode 750, and `run --xray-dir` changes it). The script restarts a node that was running, so that it joins the group. Without the add-on, every exit through an `xray` outbound is down and says why, and nothing goes around it.
 - **A restart drops Xray users for a moment.** One Xray runs for the inbounds and the outbounds. Adding, changing or removing either restarts it after two seconds without another change. Connections of Xray inbounds and flows through Xray outbounds end and come back with the next connect. No quota, count or user is lost.
 - **Down, with a reason.** An outbound that Xray does not carry is down, and so is every exit through it. That covers a missing add-on, a host that does not answer, Xray starting again, a name that gives no usable address and a socket that is not Xray's. A flow of a down outbound ends at once and never goes to `direct`, to another exit or to the provider's default. `GET /v1/stats` gives the reason as `down_reason` of the outbound. It names no address and no credential.
-- **Xray's own egress is not restricted.** The Xray unit has the network of the host, because providers can be anywhere. The document the node writes, with one address the node checked, holds Xray to the provider. A bug in Xray is not held to it. The `interface` and `bind` of the config do not apply to this traffic. On a host with other tunnels it follows the host's routing table.
+- **Xray's own egress is not restricted.** The Xray unit has the network of the host, because providers can be anywhere. The document the node writes, with one address the node checked, holds Xray to the provider, but a bug in Xray is not held to it. The `interface` and `bind` of the config do not apply to this traffic. On a host with other tunnels it follows the host's routing table.
 
 **The server's address.** A literal address must pass the rules of every dial of the node. It must not be loopback, link-local, unspecified, multicast, a cloud metadata address or an address of an inbound's pool. It must not be private, shared or unique local unless `allow_private` is `true`. The node itself looks up a server that is a name, through `dns.servers`, never by Xray or the host's resolver. The first address that passes the rules is written into Xray's document. A name that gives none leaves the outbound down. The names are looked up again every 15 minutes, and every 30 seconds while a name has no address. The address in use stays while the lookup still gives it, and a failed lookup changes nothing, so a resolver that flaps does not restart Xray. That lookup is plain UDP DNS, so whoever can see the node's DNS traffic learns the provider's name. Write the address when the name must stay hidden. Validation warns for each name.
 
@@ -714,9 +715,9 @@ Engine, `l3`:
 
 - Only one `l3` exit can run on a node for now. A second is refused at start. The host needs `ip` (iproute2) and `nft` (nftables).
 - With `masquerade` true, the node turns on forwarding for the whole host if it is off and sets it back when it stops (it stays on if the node is killed). With `masquerade` false, the node still loads a small nftables table named `veilway_<interface>` that keeps tunnel traffic away from the host itself.
-- Return traffic is delivered only when it belongs to a live flow that left through that exit. Flows through an `l3` exit idle out after 7200 seconds for TCP and 60 for UDP.
-- An `l3` exit can go down while the node runs: its interface was removed under the node, or a reload closed the interface and could set up neither the new one nor the old one again. The node then tries to bring the interface up again with the config in force. It tries 2 seconds after it went down, then after twice the wait each time, once a minute at most, until it is up.
-- While the exit is down, traffic routed to it is answered as unreachable (a reset for TCP, host unreachable for everything else, counted under `unreachable` in the drop counters). It never leaves through another exit. The node logs a warning with the failed step when the exit goes down and for every try that fails, and an info line when it is up again. `GET /v1/exits` shows the state in `interface_up`, `interface_down_secs` and `interface_flips`.
+- Return traffic is delivered only when it belongs to a live flow that left through that exit. Flows idle out after 7200 seconds for TCP and 60 for UDP.
+- An `l3` exit can go down while the node runs: its interface was removed under the node, or a reload closed the interface and could set up neither the new one nor the old one again. The node then tries to bring the interface up with the config in force, 2 seconds after it went down, then after twice the wait each time, once a minute at most, until it is up.
+- While the exit is down, traffic routed to it is answered as unreachable (a reset for TCP, host unreachable for everything else, counted under `unreachable` in the drop counters). It never leaves through another exit. The node logs a warning with the failed step when the exit goes down and for every failed try, and an info line when it is up again. `GET /v1/exits` shows the state in `interface_up`, `interface_down_secs` and `interface_flips`.
 - A reload that leaves the `l3` exit as it is goes through while the exit is down, and makes the node try at once. A reload that changes or removes the exit ends the tries for the old one. Stopping the node ends them too and leaves no interface, route, nftables table or sysctl behind.
 
 ### The destination gate
@@ -730,13 +731,13 @@ Every exit refuses these destinations, whatever the config says:
 - IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused;
 - every IPv4-mapped IPv6 destination (`::ffff:a.b.c.d`), outright.
 
-Private networks are not on that fixed list. They are ordinary destinations that routing rules decide about, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
+Private networks are not on that list. Routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
 
 ### Traffic between users
 
-A packet whose destination lies inside an inbound pool is never sent to an exit. Routing rules still decide about it. The name `tunnel:users` in a rule's `ip` list stands for every address in every pool except the gateways:
+A packet whose destination lies inside an inbound pool is never sent to an exit, but routing rules still decide about it. The name `tunnel:users` in a rule's `ip` list stands for every address in every pool except the gateways:
 
-- If the matching rule says `block` or `reject`, the packet is refused. A config that isolates users, which is the normal case, has a rule that rejects `tunnel:users`.
+- If the matching rule says `block` or `reject`, the packet is refused. A config that isolates users, the normal case, has a rule that rejects `tunnel:users`.
 - Otherwise the node delivers the packet to the device that holds the address, on the same inbound or another one. An address no connected device holds is answered as unreachable.
 
 `tunnel:<inbound tag>`, for example `tunnel:gaming`, stands for the addresses of one inbound only. With the `inbound` condition, which says where a packet came from, a rule can be about one tunnel in either direction. An inbound cannot have the tag `users`.
@@ -748,7 +749,7 @@ A shared network for games on one tunnel, with every other tunnel isolated, is o
 {"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"}
 ```
 
-Users on `gaming` reach each other. They do not reach users of other tunnels, and users of other tunnels reach nobody.
+Users on `gaming` reach each other but not users of other tunnels, and users of other tunnels reach nobody.
 
 Three things hold whatever the rules say. A device can only send from its own addresses. A gateway address answers DNS and ping from the devices of its own inbound and nothing else, plus, on a `veilway` inbound, the control channel of that inbound. Broadcast and multicast are not carried, so games that find each other by local broadcast will not see other players. Connecting by address works.
 
@@ -770,18 +771,18 @@ Three things hold whatever the rules say. A device can only send from its own ad
 - On a `direct` outbound, setting `udp` is a warning: it never applies.
 - On an `xray` outbound, `udp` must be `reject` or `drop`. The outbound carries UDP itself, and `direct` and `via` would let the flow leave around it while it is down.
 
-Engine: `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start. The `udp` policy is decided once per flow at its first packet, and the flow never moves between the proxy and the other path. A destination sent by `direct` or `via` must pass the gate of both exits. A `via` target that cannot carry the packet rejects it. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
+Engine:
 
-More engine behavior of `unsupported`:
-
-- A flow sent by `via` needs the user to be entitled to both exits. A UDP flow the proxy has carried is never moved to `direct` or `via` later. It is refused if the proxy loses UDP.
+- `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start.
+- The `udp` policy is decided once per flow at its first packet, and the flow never moves between the proxy and the other path. A UDP flow the proxy has carried is refused if the proxy loses UDP. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
+- A destination sent by `direct` or `via` must pass the gate of both exits, and a flow sent by `via` needs the user to be entitled to both. A `via` target that cannot carry the packet rejects it.
 - `reject` answers are rate limited per device (burst 20, then 10 a second).
 - ICMP codes used: administratively prohibited for rules, the gate, entitlement and a rejected ping. Host unreachable for a tunnel address nobody holds. Port unreachable for `unsupported.udp`. Protocol unreachable on IPv4 and prohibited on IPv6 for `unsupported.other`.
 - `icmp_echo: direct` allows 16 ping identifiers per device, 32 per user and 1024 in total.
 
 ### `load`
 
-From v0.2.18. An exit with a `load` object tells every device of its users how busy it is, as one of three levels: low, medium or high. Apps show them as **Not busy**, **Busy** and **Very busy**. It is off when `load` is absent, and then apps show nothing for the exit.
+From v0.2.18. An exit with a `load` object tells every device of its users how busy it is, as one of three levels: low, medium or high. Apps show them as **Not busy**, **Busy** and **Very busy**. When `load` is absent, apps show nothing for the exit.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -795,7 +796,7 @@ From v0.2.18. An exit with a `load` object tells every device of its users how b
 
 - **The node looks every 10 seconds.** A level changes only after the new one held for two looks in a row, so a value that crosses a threshold and comes back does not flap. The first look that has a value sets the level at once. For `mbps` there is no level before the second look.
 - **A device is told a change at most once in 60 seconds**, however often the node looks. It is also told when a reload or a change of whether the exit works would have sent the list anyway. A level that was told and still holds stays as told.
-- **The levels are coarse on purpose.** A device cannot use them to watch what other users do. It learns at most that the exit got busier, a minute late, and never a number. Without `load` the node sends nothing about other users' traffic.
+- **The levels are coarse on purpose.** A device learns at most that the exit got busier, a minute late, never a number, so it cannot watch what other users do. Without `load` the node sends nothing about other users' traffic.
 - **A `block` exit has no load**, and `load` on one is an error.
 - The control API's `GET /v1/exits` shows the setting as `load` and the level apps are told as `load_level`.
 
@@ -831,7 +832,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 
 ### Transport
 
-`transport` holds a flow to the kind of session it started on. The names are `udp` (plain WireGuard), `udp-obfs`, `tls`, `ws` (both the native one and the `ws` of a `wireguard` inbound), `ws-plain`, `fronted`, `fronted-shaped`, `faketls`, `socks5` and `http`. Like every condition it must hold together with the others, and the first matching rule still decides. So a rule that names a transport and a group matches only that group's flows on that transport.
+`transport` holds a flow to the kind of session it started on. The names are `udp` (plain WireGuard), `udp-obfs`, `tls`, `ws` (both the native one and the `ws` of a `wireguard` inbound), `ws-plain`, `fronted`, `fronted-shaped`, `faketls`, `socks5` and `http`. Like every condition it must hold together with the others, and the first matching rule still decides. A rule that names a transport and a group matches only that group's flows on that transport.
 
 ```json
 {"tag": "no-proxy-to-private", "inbound": ["socks"], "ip": ["geoip:private"], "action": "reject"},
@@ -860,7 +861,7 @@ Actions: `{"exit": ...}` sends the flow to that exit. `"user"` sends it to the u
 
 ### Entitlement
 
-A flow may only leave through an exit in its user's `exits`, whatever chose it: a rule, the user's `exit`, `default`, or a `via`. Otherwise the flow is rejected. It never falls through to another rule.
+A flow may only leave through an exit in its user's `exits`, whatever chose it: a rule, the user's `exit`, `default`, or a `via`. Otherwise the flow is rejected, never passed to another rule.
 
 Validation:
 
@@ -871,7 +872,7 @@ Validation:
 - Warning: a `domain` rule with an `exit` action comes before a `block` or `reject` rule. A user who controls any name matching the pattern can point it at any address, so a `domain` rule is a routing convenience and never a security control.
 - Warning: no enabled rule isolates users for everyone, that is, no enabled rule with `block` or `reject` has `tunnel:users` in `ip` and no other condition. The warning says that users can reach each other's devices. When an `inbound` condition limits the rule, it names the inbounds where that is so.
 - Warning: no enabled rule refuses private destinations for everyone, that is, no enabled rule with `block` or `reject` has `geoip:private` in `ip` and no other condition. The warning says that private networks behind the exits are reachable.
-- Warning: an enabled `block` or `reject` rule whose only conditions are `ip`, `protocol` and `port` matches a server of `dns.servers` or of a DNS set on port 53 before any rule that would send it to an exit. The node then cannot reach its own resolver. The warning gives the path of the server, for example `dns.sets[0].servers[1]`.
+- Warning: an enabled `block` or `reject` rule whose only conditions are `ip`, `protocol` and `port` matches a server of `dns.servers` or of a DNS set on port 53 before any rule that would send it to an exit, so the node cannot reach its own resolver. The warning gives the path of the server, for example `dns.sets[0].servers[1]`.
 - Error: a rule with a `link` condition names a link that is not the exit half on this node, a link no config has, or also has a `user` or `group` condition. Sending a link to an exit that is not in that link's `exits` is an error too.
 - Warning: a rule with a `domain` condition and no `user` or `group` that could apply to a link. The exit never learns the names behind a link's traffic, so the rule never matches it, and a block by name does not cover a link.
 - Warning, best effort: a single earlier rule completely covers a rule. `check` does this within a fixed budget. A reload does not.
@@ -909,24 +910,22 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 
 Each address must lie in the pool of exactly one inbound and may not be that pool's gateway, network or IPv4 broadcast address. A device has at most one IPv4 and one IPv6 address per inbound. No address is used by two devices.
 
-Engine: when a user is disabled, expires, runs out of quota or is removed, or when a device's key or addresses change or the device is removed, then within one second the core drops the session keys, resets every flow and clears the DNS memory that belong to it, and logs it at info. A timer and the byte count drive expiry and quota, not only a check at handshake. A backward step of the node's clock does not re-enable a user. Usage is kept outside this document, see below.
+Engine: when a user is disabled, expires, runs out of quota or is removed, or when a device's key or addresses change or the device is removed, the core drops the session keys, resets every flow and clears the DNS memory that belong to it within one second, and logs it at info. A timer and the byte count drive expiry and quota, not only a check at handshake. A backward step of the node's clock does not re-enable a user. Usage is kept outside this document, see below.
 
 ### Usage and quota
 
 Engine. Usage never lives in the config document. It is kept in one state file (see `--state` under Commands) and survives reloads and restarts. Without a state file path, the node keeps usage in memory only and loses it on restart.
 
-- **Counting.** `quota_bytes` counts inner IP bytes in both directions. Traffic that is rejected or answered locally counts too.
 - **Over quota.** A user at or over quota is cut off by the same path as a disabled user, within one second, and the info log line names quota as the reason. The user cannot shake hands again until the period rolls over, a reload raises or removes the quota, or the operator resets the user's usage.
-- **Period.** Without `quota_period` the count never resets by itself. With it the count resets at 00:00 UTC (weekly on Monday, monthly on the 1st).
 - **Clock steps back.** A backward step of the clock by less than one period never resets a count and never re-enables a user, at that moment or when the clock moves forward again. The period start stays where it was.
 - **A period start far in the future.** A period start more than one whole period after the node's clock (more than 1 day for `daily`, 7 days for `weekly`, 31 days for `monthly`) is not trusted. It can come from an edited state file, a state file written while the clock was wrong, or a clock that was ahead by more than a period and was then set right. Left alone, such a count would not reset until the clock reached that time, which can be years. So the node sets the period start to the start of the period its clock is in, keeps `used_bytes`, and logs one warning that names the user. It checks this when it loads the state file and four times a second while it runs. The price: a clock that jumps back by more than a period and then forward again gives that period's quota a second time. Keep the node's clock synchronized.
 - **Without `quota_period`.** Any period start after the node's clock is set to `0` with `used_bytes` kept and one warning. Nothing resets by itself for such a user, so this costs nothing.
 - **Reset by the operator.** `veilway usage reset --user <name>`, or `POST /v1/users/{name}/usage/reset` on the control API, sets `used_bytes` to 0 and the period start to the start of the current period. A user who was over quota can connect again at once, without a reload. Lifetime totals are kept unless you give `--totals` (`"totals": true`). See Commands and the control API reference.
-- **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. They are totals. Whoever polls computes rates. Counters follow names and tags across reloads. Exit counters count inner IP packets and bytes where a packet is handed to or taken from the exit. A flow that leaves by way of another exit (`via`) is counted on the exit that carries it, not on the exit the rule chose.
+- **Counters.** Every user, inbound and exit has totals of up and down bytes and packets, which the control API serves. Whoever polls computes rates. Counters follow names and tags across reloads. Exit counters count inner IP packets and bytes where a packet is handed to or taken from the exit. A flow that leaves by way of another exit (`via`) is counted on the exit that carries it, not on the exit the rule chose.
 - **State file.** Versioned JSON keyed by user name. Per user it holds the bytes used in the current quota period, the start of that period, and lifetime totals (up and down, bytes and packets). Next to the users it holds `devices`: for each device that chose an exit on the control channel, its public key and that exit's tag. The version stays 1, because an older build passes that key over and still reads every user's count. The file keeps the choices of at most 65,536 devices, and no more than fit in the 16 MiB a state file may have next to its users (with 65,536 users that is about 1,500). After a restart, a device whose choice is not kept has chosen no exit, and the node warns when that happens.
-- **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename. It is written at most once every 10 seconds and only when something changed. It is also written once more on shutdown, right after a user is cut off for quota, and right after a usage reset. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
-- **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended and logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not valid is skipped, and only that user starts from zero, or only that device has chosen no exit. The node reads no more than 65,536 users and 65,536 devices from a file, whatever it holds. An exit in the file is held against the config like one a device asks for: when it is not in the user's `exits` it is dropped at start and logged at info. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
-- **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it, and so is the entry of a device. Renaming a user is removing one and adding another, so it starts from zero.
+- **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename, at most once every 10 seconds and only when something changed. It is also written on shutdown, right after a user is cut off for quota, and right after a usage reset. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
+- **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended and logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not valid is skipped, and only that user starts from zero, or only that device has chosen no exit. The node reads no more than 65,536 users and 65,536 devices from a file. An exit in the file is held against the config like one a device asks for: when it is not in the user's `exits` it is dropped at start and logged at info. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
+- **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it, and so is the entry of a device. A renamed user starts from zero.
 
 ## `notices`
 
@@ -943,7 +942,7 @@ A list of at most 4 notices that the control channel of every `veilway` inbound 
 
 Notices on a node with no `veilway` inbound are a warning.
 
-These notices reach only connected devices. A panel can also put notices into every signed subscription document. Apps keep those from their last refresh and show them even when they cannot connect. Those are a panel setting, not part of this config, see the [panel manual](../../manuals/panel/#notices).
+These notices reach only connected devices. A panel can also put notices into every signed subscription document. Apps keep those from their last refresh and show them even when they cannot connect. That is a panel setting, not part of this config, see the [panel manual](../../manuals/panel/#notices).
 
 ## `public_addresses`
 
@@ -980,13 +979,13 @@ The memory is kept in a file of its own: `veilway-replay` next to the state file
 
 Three things undo replay protection:
 
-- **Never restore the replay file from a backup or a machine snapshot.** An older file reopens replay for everything accepted since it was taken. If in doubt, delete it: that costs 60 seconds of refusals.
+- **Restoring the replay file from a backup or a machine snapshot.** An older file reopens replay for everything accepted since it was taken. If in doubt, delete it: that costs 60 seconds of refusals.
 - A reset (below) after the node's clock ran ahead.
 - A lost file on a node whose clock is behind where it has been. Do not start the node before its clock is synchronized.
 
 ### When the floor is ahead of the clock
 
-A node whose clock ran ahead and was then put right can be left refusing every device. Its floor, the time up to which proofs are refused, lies in the future. This outage lasts as long as the clock was wrong by. Waiting is the only thing that ends it by itself.
+A node whose clock ran ahead and was then put right can be left refusing every device: its floor, the time up to which proofs are refused, lies in the future. The outage lasts as long as the clock was wrong by, and waiting is the only thing that ends it by itself.
 
 It is not the same as what a start costs. After a start or a reset, the floor is up to 80 seconds ahead of the clock, as the list above says. That passes by itself, is logged once at start with the time left, and is shown as `replay.refusing_secs` of `/v1/stats`. Do not reset for it: a reset costs another 60 seconds.
 
@@ -1077,7 +1076,7 @@ Validation refuses a link that is not native, one whose key is not `signing_key`
 
 ## `xray`
 
-The Xray add-on: inbounds that the official `xray` binary serves, with users that are users of this node. It is off when the key is absent, and nothing runs until the add-on is installed, see the [Xray manual](../../manuals/xray/). The traffic of Xray's users goes only to the node, so the gate, the rules, the exits, the quotas and the counters apply to its users as they do to a tunnel's. (Xray itself is not kept from the network by its unit, since `xray` outbounds need it to reach their providers.) An Xray user's traffic leaves through `netstack` exits only: `l3` and `chain` exits are not built for it.
+The Xray add-on: inbounds that the official `xray` binary serves, with users that are users of this node. It is off when the key is absent, and nothing runs until the add-on is installed, see the [Xray manual](../../manuals/xray/). The traffic of Xray's users goes only to the node, so the gate, rules, exits, quotas and counters apply to them as to a tunnel's users. (The unit does not keep Xray itself from the network, since `xray` outbounds need it to reach their providers.) An Xray user's traffic leaves through `netstack` exits only: `l3` and `chain` exits are not built for it.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -1122,9 +1121,9 @@ After a commit:
 - Certificates are read again on every reload.
 - A proxy inbound that changes closes its listener and its connections. See [Proxy inbounds](#reloading).
 - A device's chosen exit is kept across a reload while it is still in the user's `exits`. One that is not is dropped and logged at info, and the device leaves through the user's exit. It does not come back when the exit is given back.
-- A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. The same holds for a `udp-obfs` session: one opened with the removed secret ends at the reload, and an opening packet under that secret is a stranger's from then on. A session opened with the device's other secret stays up, and so does a tunnel that came over `udp`, where no secret opened it. Adding a second secret disturbs nothing.
+- A control connection proved one transport secret. When a reload removes that secret from the device, the connection is closed within a second and the secret opens no new one. A `udp-obfs` session opened with the removed secret ends at the reload, and an opening packet under that secret is a stranger's from then on. A session opened with the device's other secret stays up, and so does a tunnel that came over `udp`, where no secret opened it. Adding a second secret disturbs nothing.
 - A `udp-obfs` transport that stays as it was keeps its sessions across a reload, also when `limits.sessions` or the inbound's `padding` change. New padding bounds apply to sessions opened afterwards. A transport whose `listen` changes, or whose tunnel restarts, loses its sessions, and its devices open new ones.
-- A `tls` transport whose `listen` and `path` stay as they were keeps its sessions across a reload. That holds also when its `limits`, its `decoy`, its certificate files, or the inbound's `upgrade_cookie`, `upgrade_headers` or `padding` change. The certificate and key files are read again at every reload, also at a `SIGHUP` on an unchanged config file, and connections made afterwards get the new certificate. A file that cannot be used refuses the reload and the certificate that runs stays. A new `path` ends the sessions that came in by the old one, which is the origin's from then on. Removing the transport closes its listener with every connection on it. Connections being relayed to the origin stay with the origin they are connected to.
+- A `tls` transport whose `listen` and `path` stay as they were keeps its sessions across a reload, also when its `limits`, its `decoy`, its certificate files, or the inbound's `upgrade_cookie`, `upgrade_headers` or `padding` change. The certificate and key files are read again at every reload, also at a `SIGHUP` on an unchanged config file, and connections made afterwards get the new certificate. A file that cannot be used refuses the reload and the certificate that runs stays. A new `path` ends the sessions that came in by the old one, which is the origin's from then on. Removing the transport closes its listener with every connection on it, except connections being relayed to the origin, which stay with it.
 - A session opened with a `tls` proof ends at the reload that removes the transport secret it was opened with, like a `udp-obfs` session. Adding a key to `transport_keys` ends no session. Removing one ends, within a second, every session opened under it, and a token sealed to it opens nothing from then on. The keys of a session's chunks come from the key its proof was sealed to, so removing a key is the answer to one that leaked. Keep the old key in the list until every profile carries the new one, then remove and destroy it. Devices still connected under it connect again under the new one.
 - A `ws` or `fronted` transport behind your web server whose `listen` and `path` stay as they were keeps its sessions across a reload. A session ends with its transport secret or its transport key, like a `tls` one. A new `path` ends the sessions that came in by the old one, which is the origin's from then on. A proxy taken out of `trusted_proxies` is a stranger from its next connection on. Removing the transport ends its sessions. Removing the last one on a listener closes the listener with every connection on it.
 - The name of a `decoy.origin` is resolved at start and at every reload, and the header fields of the upgrade answer are asked for again.
@@ -1257,7 +1256,7 @@ Each `doctor` check prints one line: its status, the kind of check, what it look
 6. The proxy path of every `ws` and `fronted` listener: whether anybody but this host can reach it, whether the web server in front speaks HTTP/1.1 to the node, and, from a running node, whether the requests it has read named their source in `client_address_header`. For a `fronted-shaped` transport the line also prints the shape the transport uses, so that you can compare it with the profile.
 7. Every link that is enabled, without dialing anything: a clock that is set, whether an exit with a `chain` backend names each entry half, whether its `mtu` is below that of an inbound with users, and, from a running node, each link's state.
 8. Every DNS server of the config, those of `dns.servers` and then those of every DNS set: one query over UDP and the same query over TCP from the node itself, with the answer time. The line of a server of a set names the set, as in `set family, servers[0], udp`. A server that stands in two lists is asked once for each. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
-9. Every outbound. An `xray` one is not tried, since its socket exists only while the node runs: its line says so, and the `xray` line described below says whether the add-on is installed. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds. When the config has sets, a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where a set's queries leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
+9. Every outbound. An `xray` one is not tried, since its socket exists only while the node runs: its line says so, and the `xray` line described below says whether the add-on is installed. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay, so a proxy without UDP shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. These DNS servers are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds. When the config has sets, a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where a set's queries leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
 10. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free. When a running node has the exit and its interface is not there, a warning says the exit is down and being retried.
 11. ICMP ping sockets, when a policy uses `icmp_echo: direct`.
 12. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses.
@@ -1279,7 +1278,7 @@ The exit status is 0 when nothing failed, 1 when a check failed (a config that r
 | `name` | none | The name the panel lists the mirror under in `trusted_mirrors`: 1 to 32 characters from `a-z`, `0-9`, `-` and `_`. |
 | `listen` | none | The address the mirror listens on, plain HTTP. Use a loopback address and put your web server in front: another address is a warning. |
 | `path` | none | The public path it serves, such as `/sub`: the path of the link's endpoint on the mirror's own domain. 2 to 128 characters from letters, digits and `- _ . ~ /`, with a leading slash and no trailing slash. Only a `POST` to exactly this path is forwarded. |
-| `upstream` | none | The panel's subscription endpoint, an `https` URL with a path. The path names the endpoint. The panel tells its endpoints apart by path and never by the `Host` header, so the path is the panel's `sub_path`, a slash and the endpoint's name. The chain of its certificate is always validated against the Mozilla roots. A query, a fragment, a user name and a host under `.invalid` (the template's placeholder) are refused. |
+| `upstream` | none | The panel's subscription endpoint, an `https` URL with a path. The path names the endpoint: the panel tells its endpoints apart by path and never by the `Host` header, so it is the panel's `sub_path`, a slash and the endpoint's name. The chain of its certificate is always validated against the Mozilla roots. A query, a fragment, a user name and a host under `.invalid` (the template's placeholder) are refused. |
 | `upstream_pins` | `[]` | Up to 4 SHA-256 hashes, in base64, of the SubjectPublicKeyInfo of the upstream's certificate. When given, the certificate must match one of them as well as validate. Empty is a warning. |
 | `trusted_proxies` | `[]` | Up to 16 addresses and networks of your web server, none of them every address. Only they may connect, and only they are believed about the visitor's address. Empty is for a test with no web server: the mirror then answers requests it will not take with a 404 of its own. |
 | `client_address_header` | `X-Forwarded-For` | The header the visitor's address is read from, as for the `ws` transport's `client_address_header`: 1 to 64 characters from `A-Z a-z 0-9 -`. |

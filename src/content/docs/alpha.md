@@ -3,7 +3,7 @@ title: The alpha release
 description: What Veilway v0.2.17-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.17-alpha`. It follows `v0.2.16-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.17-alpha`, after `v0.2.16-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
@@ -21,7 +21,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 ## New in v0.2.16-alpha
 
-- **An address in every inbound.** The panel gives a device an address in every Veilway inbound beside the account pool (`pool_v4`), at the same offset in each range. A second inbound with its own address range, such as a `ws` inbound next to a `udp-obfs` one, now works for every account. Existing devices need nothing. Each profile carries the device's address in its own inbound. A profile the device has no address for is left out of that device's subscription. An inbound with no IPv4 range gets a note on **Profiles** and is not published. Publish the profiles again after updating.
+- **An address in every inbound.** The panel gives a device an address in every Veilway inbound beside the account pool (`pool_v4`), at the same offset in each range. A second inbound with its own address range, such as a `ws` inbound next to a `udp-obfs` one, now works for every account. Existing devices need nothing. Each profile carries the device's address in its own inbound, and a profile the device has no address for is left out of its subscription. An inbound with no IPv4 range gets a note on **Profiles** and is not published. Publish the profiles again after updating.
 - **A warning from `veilway check`.** It warns about a `veilway` inbound that no device has an address in and no node link uses.
 - **The decoy site for older web server setups.** For a web server setup made before v0.2.15, `update` adds the decoy site on 127.0.0.1:8080 in its own file (`/etc/caddy/conf.d/veilway-decoy.caddy` or `/etc/nginx/conf.d/veilway-decoy.conf`). `uninstall web` removes it.
 
@@ -35,19 +35,19 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 ## New in v0.2.14-alpha
 
-- **`ws-plain`.** A WebSocket over plain HTTP to your own web server, with no TLS. Use it where TLS to your server is blocked or slowed and plain HTTP passes. It is the weakest transport: the network sees the server's name and the token. It has its own consent question in the apps, its own transport keys and its own cookie. Add it on **Inbounds**, and set **Plain HTTP host name** (a name no other transport uses) and **Plain HTTP port** on **Profiles**. The client drops a `ws-plain` transport whose host or path a covered transport of the subscription uses, and keeps the rest of the profile. An app older than v0.2.14 does not know the type and refuses a profile that lists it, so update the apps first. See [`ws-plain`](../protocol/transports/#ws-plain-websocket-without-tls) and the [config reference](../reference/config/).
-- **The panel rotates transport keys.** The panel replaces every inbound's key and every `ws-plain` key after **Rotate transport keys every** days (7 to 30, 30 by default; a `ws-plain` key at most 7). The old key keeps working for one more period. The published profiles get the new public key without you publishing. The panel never holds a private key. See [Transport keys](../manuals/panel/#transport-keys).
+- **`ws-plain`.** A WebSocket over plain HTTP to your own web server, with no TLS. Use it where TLS to your server is blocked or slowed and plain HTTP passes. It is the weakest transport: the network sees the server's name and the token. It has its own consent question in the apps, transport keys and cookie. Add it on **Inbounds**, and set **Plain HTTP host name** (a name no other transport uses) and **Plain HTTP port** on **Profiles**. The client drops a `ws-plain` transport whose host or path a covered transport of the subscription uses, and keeps the rest of the profile. An app older than v0.2.14 refuses a profile that lists the type, so update the apps first. See [`ws-plain`](../protocol/transports/#ws-plain-websocket-without-tls) and the [config reference](../reference/config/).
+- **The panel rotates transport keys.** After **Rotate transport keys every** days (7 to 30, 30 by default; a `ws-plain` key at most 7), the panel replaces every inbound's key and every `ws-plain` key. The old key works for one more period. Published profiles get the new public key without you publishing. The panel never holds a private key. See [Transport keys](../manuals/panel/#transport-keys).
 - **Relays only.** A switch on each profile gives apps only relay addresses, never the node's own. A user whom no relay reaches gets no profile for that inbound. Xray links are not affected.
 - **Relay ports per inbound.** When a relay carries two inbounds with the same transport type, it has one port field for each inbound and type.
 - **Check for updates.** A button on **Nodes**, next to **Restart node** and **Restart panel**, asks GitHub now, at most once a minute. The panel SDK has `checkUpdates()`.
 - **`veilway remove`.** The command line client removes a subscription and tells the provider first, as the apps do, so the device's place is freed.
 - **A reset after an upgrade answer on plain HTTP** counts as the network's answer, not a refusal, as a Windows test showed.
-- **Apps skip a transport they do not know.** An app from this release keeps a profile that has a transport of a newer type, leaves that transport out, and says an update adds a way of connecting. Apps before v0.2.14 still drop the whole profile, so have users update before you add `ws-plain`.
-- **MTU probes vary.** Each probe of an MTU run is smaller by a random 0 to 16 bytes, never below the tunnel's floor. The sizes are no longer one fixed list on every device.
+- **Apps skip a transport they do not know.** An app from this release keeps a profile with a transport of a newer type, leaves that transport out, and says an update adds a way of connecting. Apps before v0.2.14 drop the whole profile, so have users update before you add `ws-plain`.
+- **MTU probes vary.** Each probe of an MTU run is smaller by a random 0 to 16 bytes, never below the tunnel's floor, so sizes are no longer one fixed list on every device.
 
 ## New in v0.2.13-alpha
 
-- **WebSocket connects.** For a `ws` or `fronted-shaped` transport, the panel gave apps the node's own listener port. That port reads only plain HTTP from your web server, so those connections never connected. Apps now get the web server's port: 443, or **Web server port** on the profile. Publish the profiles once after updating.
+- **WebSocket connects.** For a `ws` or `fronted-shaped` transport, the panel gave apps the node's own listener port, which reads only plain HTTP from your web server, so those connections never connected. Apps now get the web server's port: 443, or **Web server port** on the profile. Publish the profiles once after updating.
 - **Restart panel** reloads the page once the panel is back, not after a fixed 8 seconds.
 
 ## New in v0.2.12-alpha
@@ -56,32 +56,32 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 ## New in v0.2.11-alpha
 
-- **Automatic exit that switches.** When a device is on **Automatic** and its exit stops working, it leaves through one of the exits the operator lists under **Exits Automatic may switch to** (`routing.fallback`). It comes back once its own exit works again. Without that list nothing switches, so an entry node still never sends traffic around a link that is down. The node now detects when an exit through a SOCKS5 proxy stops working: 3 failed connections to the proxy in a row mark it down, and the node checks it again every 30 seconds. The apps show which exit Automatic is using, such as **Automatic: Amsterdam**. It needs the node of v0.2.11. See `exits` on the [control channel page](../protocol/control-channel/).
-- **Removing a subscription frees its place.** When you remove a subscription in the app, the app first tells the provider, and the panel removes the device. Before, the device kept its place on the account until the operator removed it. It needs the app and the panel of v0.2.11.
+- **Automatic exit that switches.** When a device is on **Automatic** and its exit stops working, it leaves through one of the exits listed under **Exits Automatic may switch to** (`routing.fallback`), and returns once its own exit works again. Without that list nothing switches, so an entry node never sends traffic around a down link. The node now detects a dead exit through a SOCKS5 proxy: 3 failed connections in a row mark it down, and it checks again every 30 seconds. Apps show which exit Automatic is using, such as **Automatic: Amsterdam**. It needs the v0.2.11 node. See `exits` on the [control channel page](../protocol/control-channel/).
+- **Removing a subscription frees its place.** When you remove a subscription in the app, the app tells the provider first, and the panel removes the device. Before, the device kept its place until the operator removed it. It needs the app and panel of v0.2.11.
 - **Idle devices.** The panel setting **Remove devices that have not refreshed for** removes devices whose app has not refreshed in that many days, such as an uninstalled app or a lost phone. It is off by default. See [Subscription settings](../manuals/panel/#subscription-settings).
 - **Panel SDK.** `@veilway/panel-sdk` has a method for every route an API token may call.
 
 ## New in v0.2.10-alpha
 
-- **`udp-obfs` on networks with small packets.** On some mobile and home networks, packets above about 1370 bytes are lost. There `udp-obfs` failed: small requests worked, HTTPS sites did not load, and the app kept reconnecting. When the tunnel has IPv4 addresses only (true for every device the panel adds), the app now tests packet sizes down to 1080 and keeps the largest that works. It needs the node and the app of v0.2.10. With an older node the app stops at 1280 as before.
-- **Padding.** The app no longer pads `udp-obfs` packets above the size the test found, and its test packets carry no padding, as the node's already did. Before, padding could make packets too large for the network right after the size was lowered.
+- **`udp-obfs` on networks with small packets.** On some mobile and home networks, packets above about 1370 bytes are lost. There `udp-obfs` failed: small requests worked, HTTPS sites did not load, and the app kept reconnecting. When the tunnel has IPv4 addresses only (true for every device the panel adds), the app now tests packet sizes down to 1080 and keeps the largest that works. It needs the node and app of v0.2.10. With an older node the app stops at 1280 as before.
+- **Padding.** The app no longer pads `udp-obfs` packets above the size the test found, and its test packets carry no padding, as the node's already did. Before, padding could make packets too large right after the size was lowered.
 
 ## New in v0.2.9-alpha
 
-- **Restart from the panel.** **Restart node** and **Restart panel** are on this node's card on **Nodes**. A node restart drops every connected device for a moment. The installer of v0.2.9 does the restart, and an update from the panel installs it. See [Updating the panel](../manuals/panel/#updating-the-panel).
-- **Update progress.** The desktop and Android apps show the bar while an update downloads. Before, only the percentage showed.
+- **Restart from the panel.** **Restart node** and **Restart panel** are on this node's card on **Nodes**. A node restart drops every connected device for a moment. The v0.2.9 installer does the restart, and an update from the panel installs it. See [Updating the panel](../manuals/panel/#updating-the-panel).
+- **Update progress.** The desktop and Android apps show the bar while an update downloads, not only the percentage.
 
 ## New in v0.2.8-alpha
 
-- **Outbound on a network interface.** A `direct` outbound can name a network interface of the server with `interface`, such as `eth1`, so its traffic leaves through that card. It works on Linux and macOS. `veilway doctor` says when the interface is missing. In the panel it is the **Network interface** setting of a Direct outbound. See `outbounds` in the [config reference](../reference/config/).
-- **Host names for the node and relays.** **Node address** and a relay's address can be a host name, such as the node's domain or a content delivery network's. The panel looks it up each time it makes a user's subscription and puts the current IP addresses into the profiles, so apps still never look a name up themselves. Hand-written profiles take host names too. Before, a host name as **Node address** made every app say the subscription could not be read.
+- **Outbound on a network interface.** A `direct` outbound can name a server network interface with `interface`, such as `eth1`, so its traffic leaves through that card. It works on Linux and macOS. `veilway doctor` says when the interface is missing. In the panel it is the **Network interface** setting of a Direct outbound. See `outbounds` in the [config reference](../reference/config/).
+- **Host names for the node and relays.** **Node address** and a relay's address can be a host name, such as the node's domain or a content delivery network's. Each time the panel makes a user's subscription, it looks the name up and puts the current IP addresses into the profiles, so apps never look a name up themselves. Hand-written profiles take host names too. Before, a host name as **Node address** made every app say the subscription could not be read.
 - **Addresses per inbound.** Each profile on **Profiles** has **Addresses**: the IP addresses or host names apps use to reach that inbound. An inbound that listens on a public IP address is reached there by default. See [Profiles](../manuals/panel/#profiles).
-- **Keys from the panel.** The private key and transport key fields of an inbound have **Generate**, so the first setup needs no `veilway genkey` on the server. The panel puts the transport key's public half in the profile by itself, like the inbound key's.
+- **Keys from the panel.** The private key and transport key fields of an inbound have **Generate**, so first setup needs no `veilway genkey` on the server. The panel puts the transport key's public half in the profile by itself, like the inbound key's.
 - **Android updates install.** On Android 10 and later, the app downloaded an update but never showed the installer, so it downloaded again on the next tap. The installer now opens while the app is on screen, and a failed install says why. A phone on v0.2.7 or older needs this update installed by hand once, from the release page.
 
 ## New in v0.2.7-alpha
 
-- **Easier first setup.** The first endpoint becomes the default by itself, and a missing default now says where to pick one. The panel makes each inbound's public key from the private key it applies, so a profile is ready to publish without pasting the key. The new guide [First inbound and user](../guides/first-user/) goes from the first sign-in to a user's link.
+- **Easier first setup.** The first endpoint becomes the default by itself, and a missing default says where to pick one. The panel makes each inbound's public key from the private key it applies, so a profile is ready to publish without pasting the key. The new guide [First inbound and user](../guides/first-user/) goes from the first sign-in to a user's link.
 - **Security.** `rustls-webpki` 0.103.16 and `webpki-roots` and `webpki-root-certs` 1.0.10, for advisories about distrusted certificate intermediates (RUSTSEC-2026-0381, 0382 and 0383), in the node, the panel and the apps.
 
 ## New in v0.2.6-alpha
@@ -105,12 +105,12 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 - **Update the node from the panel.** The panel checks for a newer node release next to its own. It has **Update node**, **Update panel** and **Update both**. See [Updating the panel](../manuals/panel/#updating-the-panel). Updating the node restarts it, which drops every live tunnel for a moment.
 - **The installer updates itself.** Every `veilway.sh update` also replaces the saved installer with the signed one of the same release, never an older one. Servers installed before v0.2.2 need one update with the command in [Getting started](../getting-started/) to get this.
-- **Installer.** The interactive install asks for the HTTPS port. An empty domain name now skips the web server instead of stopping the install.
+- **Installer.** The interactive install asks for the HTTPS port. An empty domain name skips the web server instead of stopping the install.
 
 ## New in v0.2.1-alpha
 
 - **The panel is released again.** v0.2.0 shipped without a new panel release, so installs got the v0.1.0 panel. v0.2.1 ships the panel with all the v0.2.0 panel work: the borrowed-site transport, relays per user and per group, tunnels, bulk link reset, fronted-shaped presets and the HTTP/2 switch.
-- **Profile editor.** The panel's hand-written profile editor has fronted-shaped and borrowed-site. Relays can carry fronted-shaped.
+- **Profile editor.** The hand-written profile editor has fronted-shaped and borrowed-site. Relays can carry fronted-shaped.
 - **TLS names in profiles.** Profiles for `tls`, `ws` and fronted-shaped with a decoy take their TLS name from the certificate, the decoy or the node's DNS name. A transport with no name is left out and named on the Profiles page, instead of being published broken.
 - **Installer.** `--https-port` with `--domain` puts the panel's web server on a port other than 443. See [Getting started](../getting-started/).
 
@@ -131,12 +131,12 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 - **Node.** The `veilway` binary, with routing rules, users and quotas, per-user counters, and a control API on a unix socket. Install it with the [install script](../getting-started/) or the [Docker images](../getting-started/#install-with-docker).
 - **Panel.** A web panel for users, inbounds, outbounds, exits, routing, subscriptions and traffic. It also has several admins, notices, DNS and logs, backup and restore, an update button, and a guided setup for an entry node and for a reverse tunnel (see [Set up an entry node](../guides/entry-node/)). It listens on loopback only, so put a web server with TLS in front of it. Read the [panel manual](../manuals/panel/).
-- **Subscriptions.** Requests and answers are encrypted end to end, and links carry the panel's gateway key. You can assign named endpoints per user and per group, and a move to another endpoint is signed. Static mirrors and relay mirrors keep a subscription reachable, and the app asks before it uses a backup update address. Plain `http://` endpoints work, with a warning. The [subscription format](../protocol/subscription-format/) has the details.
-- **Xray add-on.** An optional add-on that runs the official `xray` binary beside the node. VLESS and Trojan with TLS and Shadowsocks work, over TCP and UDP. It is for people who use stock Xray apps. The desktop app connects to Xray links (see [Xray profiles](../guides/xray-profiles/)). See the [Xray add-on](../manuals/xray/) for the server side.
-- **Transports.** Six ways for a client to reach a node: plain WireGuard over UDP (`udp`), UDP in Veilway's own envelope (`udp-obfs`), TLS that the node ends itself (`tls`), WebSocket behind your web server (`ws`), WebSocket over plain HTTP with no TLS (`ws-plain`, the weakest), and HTTP requests through a CDN (`fronted`). The [transports page](../protocol/transports/) has the details.
-- **Client TLS.** The client's TLS hello is built on BoringSSL and set up to match a current Chrome. Certificate checks still use the pins and the chain rules described in the transports page.
+- **Subscriptions.** Requests and answers are encrypted end to end, and links carry the panel's gateway key. You can assign named endpoints per user and per group, and a move to another endpoint is signed. Static mirrors and relay mirrors keep a subscription reachable, and the app asks before it uses a backup update address. Plain `http://` endpoints work, with a warning. See the [subscription format](../protocol/subscription-format/).
+- **Xray add-on.** An optional add-on that runs the official `xray` binary beside the node, for people who use stock Xray apps. VLESS and Trojan with TLS and Shadowsocks work, over TCP and UDP. The desktop app connects to Xray links (see [Xray profiles](../guides/xray-profiles/)). See the [Xray add-on](../manuals/xray/) for the server side.
+- **Transports.** Six ways for a client to reach a node: plain WireGuard over UDP (`udp`), UDP in Veilway's own envelope (`udp-obfs`), TLS that the node ends itself (`tls`), WebSocket behind your web server (`ws`), WebSocket over plain HTTP with no TLS (`ws-plain`, the weakest), and HTTP requests through a CDN (`fronted`). See the [transports page](../protocol/transports/).
+- **Client TLS.** The client's TLS hello is built on BoringSSL and set up to match a current Chrome. Certificate checks still use the pins and chain rules described on the transports page.
 - **Desktop app.** For Linux, macOS and Windows. It shows the connection's details, shares a subscription (the link only, as text, a QR code or a sealed file locked with a password), and updates itself. The [client manual](../manuals/client/) says where each platform stands.
-- **Android app.** An arm64 APK with the same screens and its own in-app updater. Read the [Android app manual](../manuals/android/).
+- **Android app.** An arm64 APK with the same screens and its own in-app updater. See the [Android app manual](../manuals/android/).
 
 ## Where each part stands
 
@@ -152,8 +152,8 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 ## Known limits
 
-- **Every transport is rated Detectable.** A censor that looks closely can tell Veilway's traffic from ordinary traffic. Nothing in the alpha makes the traffic undetectable or unblockable.
-- **Desktop on macOS and Windows is compiled and tested on CI only.** It has never connected to a node on a real Mac or PC. On Windows the tunnel setup and its cleanup passed a smoke test on a CI runner. Expect bugs in the routes, the firewall and DNS on both systems.
+- **Every transport is rated Detectable.** A censor that looks closely can tell Veilway's traffic from ordinary traffic. Nothing in the alpha makes it undetectable or unblockable.
+- **Desktop on macOS and Windows is compiled and tested on CI only.** It has never connected to a node on a real Mac or PC. On Windows the tunnel setup and cleanup passed a smoke test on a CI runner. Expect bugs in the routes, the firewall and DNS on both.
 - **HTTP/2 and the shapes of `fronted` have not been run behind a real CDN.** `ws`, `ws-plain` and `fronted` were tested behind nginx and HAProxy in Docker. A real CDN may behave differently. On the node, `http2` is off unless you turn it on.
 - **Borrowed-site mode is alpha.** It is off by default and labeled alpha in the panel and the apps. Only the project's own people have reviewed it, it is rated Detectable, and it has not run against real sites. Do not rely on it.
 - **Not in this release.** Xray on Android, split tunneling and store builds. They are planned for v0.3.0.

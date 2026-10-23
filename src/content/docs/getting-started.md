@@ -99,7 +99,7 @@ Environment:
 
 Every download comes with a minisign signature. The script checks it against a public key built into the script and stops if it fails. The signature's trusted comment must read `veilway <tag> <asset>` for the node and `veilway-panel <tag> <asset>` for the panel, so one file's signature cannot vouch for another. Nothing installs without the check.
 
-If your package manager has no `minisign`, install it from [minisign.org](https://jedisct1.github.io/minisign/) and run the script again.
+If your package manager has no `minisign` (Ubuntu 22.04, Debian 11), the script installs the author's minisign 0.11 release to `/usr/local/bin` and checks it against a SHA-256 pinned in the script first.
 
 ## Set up the node
 

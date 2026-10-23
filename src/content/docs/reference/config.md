@@ -483,8 +483,8 @@ location = /assets/feed-5a1e9c30.js {
 
 ### `faketls`
 
-:::caution[Alpha, not in profiles yet]
-The node builds this transport and the config accepts it. It is new, and nobody outside the project has reviewed it. It is off unless you add it, it is labeled alpha, and the panel and the apps do not write or connect to it yet. It is rated Detectable. The design is on the [Borrowed-site mode](../../protocol/borrowed-site/) page, and the keys are the ones in the schema.
+:::caution[Alpha]
+The node builds this transport and the config accepts it. It is new, and nobody outside the project has reviewed it. It is off unless you add it, and it is labeled alpha. The panel sets it up and writes a profile of its own for it, and the apps dial it only after the user turns on Alpha transports. It is rated Detectable. For the steps, see the [Borrowed-site mode guide](../../guides/borrowed-site/). The design is on the [Borrowed-site mode](../../protocol/borrowed-site/) page, and the keys are the ones in the schema.
 :::
 
 The node holds no certificate. It borrows a real site that you choose: a client proves itself inside its ClientHello and gets the tunnel, and every other connection is relayed byte for byte to the site, so a prober sees the site's own certificate. The node must be reached directly: no CDN, no TLS-ending proxy and no `trusted_proxies`. The site is a third party that has not agreed to any of this. Read "The third party" on the page before you set it.
@@ -501,7 +501,7 @@ The node holds no certificate. It borrows a real site that you choose: a client 
 | `limits.relayed` | integer | `256` | Strangers relayed to the site at once. |
 | `limits.site_rate` | integer | `16` | New connections to the site a second. When it is spent, users are still served and only a stranger that needs a connection is closed. |
 
-Validation also refuses a listener with `trusted_proxies`, and a `site.address` that is the node's own listen address. The site must be one a user in your country can reach, large enough that the node's connections do not matter to its owner, and, if you can, hosted in the same network as the node. None is suggested or shipped. Profiles do not carry this transport yet, so no client connects to it. The candidate a profile would carry has the node's address, the site's name as its server name and the transport's public key, and no pin, `self_signed`, `ech`, `host`, `path` or fronting value.
+Validation also refuses a listener with `trusted_proxies`, and a `site.address` that is the node's own listen address. The site must be one a user in your country can reach, large enough that the node's connections do not matter to its owner, and, if you can, hosted in the same network as the node. None is suggested or shipped. The candidate a profile carries has the node's address, the site's name as its server name and the transport's public key, and no pin, `self_signed`, `ech`, `host`, `path` or fronting value.
 
 ## `outbounds`
 

@@ -24,7 +24,7 @@ Read [Transports](../transports/) first. This page uses its terms, its replay ru
 | Behind a CDN or a TLS-ending proxy | Yes (`ws`) | No. The node must be reached directly. |
 | What carries the tunnel | WebSocket frames | Length-prefixed chunk plaintext in TLS 1.3 application data |
 | Third party involved | None. The decoy is the operator's own. | The real site, which has not agreed |
-| Status | Built | Built as alpha, not in profiles yet |
+| Status | Built | Built as alpha. The panel writes a profile for it, and apps dial it only after Alpha transports is turned on |
 
 What this mode claims: a prober that has no device secret gets the real site's bytes on every path, except that a copy of a user's hello gets a flight the node makes with the sizes and times the site showed for that same hello, and an observer who sees one connection sees a TLS 1.3 handshake to a real site's name whose flight has the sizes that site's flights have. What it does not claim is in "What remains detectable". The first item there is that the node's address is not the site's address.
 

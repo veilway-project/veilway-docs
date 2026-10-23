@@ -460,12 +460,54 @@ The transports are:
 | WebSocket behind your web server (`ws`) | A WebSocket that your web server forwards to the node |
 | HTTP requests through a CDN (`fronted`) | HTTP requests that a CDN forwards to the node |
 | WebSocket over plain HTTP (`ws-plain`) | A WebSocket over plain HTTP that your web server forwards to the node, with no TLS. The weakest transport. |
+| A real site's handshake, borrowed (alpha) (`faketls`) | The node holds no certificate and relays everything that is not a user to a real site you name. Alpha. See [Borrowed-site mode](#borrowed-site-mode-alpha). |
 
 **`ws-plain`** is for networks where TLS to your server is blocked or slowed and plain HTTP passes. The form shows a warning when you pick it: the network can see this server's name and can tell that people use this app, and when and how much, but not what they send. It has a key and a cookie of its own. **Generate** makes the key, and the panel puts its public half in the profile and rotates the key every 7 days at most (see [Transport keys](#transport-keys)). The token travels in the cookie named under the inbound's transport key section, so pick a name your own site never sets. Its path may not be the path of a `tls`, `ws` or `fronted` transport of any inbound, and it may not share a listener with a transport that is not `ws-plain`. The panel refuses both. For the host name and port apps use, see [Profiles](#profiles).
 
 The `tls`, `ws` and `fronted` transports need more than the form holds: their certificate, decoy origin, trusted proxies and transport keys. Set those in the JSON view.
 
 **Web server lines.** A `ws`, `fronted` or `fronted-shaped` transport of a Veilway inbound sits behind your web server, which has to send the transport's path to the node's listener. Once the path and the listen address are valid, the transport shows **Web server lines**: the Caddy block (`handle <path>*` with `reverse_proxy` to the listener, never `handle_path`) and the nginx `location` block (plain HTTP to the listener, the `Upgrade` and `Connection` headers, `X-Forwarded-For`, and for `fronted` no buffering), each with a copy button. Paste one into the site file the installer wrote, `/etc/caddy/conf.d/veilway-panel.caddy` inside the site block or `/etc/nginx/conf.d/veilway-panel.conf` inside the server block, and reload the web server. The box warns when the listen address is not loopback (the listener should not be reachable from the internet) and when the trusted proxies lack a loopback address, since the web server connects from `127.0.0.1`. The installer also serves its plain site on `127.0.0.1:8080`, which is the default decoy origin.
+
+### Borrowed-site mode (alpha)
+
+:::danger[Alpha, rated Detectable]
+Borrowed-site mode (`faketls`) is new. Only the project has reviewed it, nobody outside has, and it has not run against real sites. The node holds no certificate. It relays every connection that is not one of your users to a real site that you name, from the node's address, and that site has not agreed to it. Do not rely on it. For the steps from nothing to a working connection, see the [Borrowed-site mode guide](../../guides/borrowed-site/). The design is on the [protocol page](../../protocol/borrowed-site/).
+:::
+
+It is a transport of a **Veilway** inbound, on the **Inbounds** page. Set a transport's type to **A real site's handshake, borrowed (alpha)** and the form shows a warning, **Alpha, unreviewed, rated Detectable**, and these fields:
+
+- **Listens on**: the address and port the node takes connections on. It needs an address and port of its own, shared with no other transport, and it cannot sit behind a web server, a CDN or `trusted_proxies`. The panel refuses a shared address.
+- **Site name**: the real site to borrow, as a lowercase DNS name such as `www.example.com`. Apps send it as the server name, and the node uses it when it connects to the site.
+- **Extra names**: up to 4 more names that apps may send. Leave it empty when the site name is enough.
+- **Site port**: the site's port. Empty means 443.
+- **Site address**: an address and port to connect to instead of looking the name up, such as `192.0.2.10:443`. Empty looks the name up at every start and reload. The panel refuses an address this node listens on, since every stranger's connection would come back to the node.
+- **Transport key, private half**: **Pick one** makes a key, or paste one of 44 characters. It must be a key of this transport alone, different from every other transport key of the node. The panel keeps its public half when you apply, and the key is not shown again. Edit the transport later and the field shows a marker, which keeps the current key.
+- **I know the site has not agreed to this, and I answer for using its name**: required. The node does not run the transport without it.
+- **Strangers sent to the site at once** (256) and **New connections to the site a second** (16): limits that keep the node from loading the site. When the second one is spent, users are still served and only a stranger that needs a connection is closed.
+
+Choose **Review changes**, then **Apply to the node**, and open the listener's TCP port in the server's firewall.
+
+**Choosing a site.** None is suggested, and the project keeps no list, because a list of sites that work is a list of sites to watch. A good site:
+
+- speaks TLS 1.3 and is reachable from the node's address without a challenge, a block or a rate limit,
+- is reachable from your users' networks and is not blocked there,
+- is popular and stable, so visits from an odd address are not remarkable and the site does not change its handshake often,
+- is hosted in the same network as the node, or as near as you can get, since the node's address is not the site's,
+- is not your own domain. For a site you own, `tls` or `ws` is the better choice.
+
+The panel only checks that names, ports and addresses are well formed. It does not connect to the site. Check from the node yourself, for example with `openssl s_client -connect www.example.com:443 -tls1_3 -servername www.example.com`. At start the node probes the site 8 times, then once every 6 hours, and logs what it finds.
+
+**The profile.** The transport gets a profile of its own on **Profiles**, named like `main (borrowed site, alpha)` with an **Alpha** mark, because an app that does not know the transport refuses the whole profile that holds it. It is never mixed with the profile of the other transports. It is ready when it has:
+
+- the inbound's public key, as for any profile,
+- the transport's public key, which the panel holds only if it saw the key in full. If the profile says it has none, pick a new key in the transport's form and apply,
+- an address apps can dial: the **Node address** under **Settings**, the profile's **Addresses**, or a listener bound to a public IP address. Each takes the listener's port. More addresses, such as a forwarder's, go in the override `faketls_addresses`, a list of IP addresses.
+
+A transport the panel cannot emit is listed under **Left out of this profile**, with the reason. A profile with no transport ready is not published. A relay never carries `faketls`, and **Relays only** leaves it out. Choose **Publish profiles** when it shows **Ready**, and again after you change the site.
+
+**What users must do.** Apps dial this transport only after the user turns on **Alpha transports** in the app's settings (on the command line, `veilway connect --alpha`). The app shows a warning each time the user turns it on, and the user has to accept it. Until then the app shows that the connection can only be made in a way that is switched off. See the [guide](../../guides/borrowed-site/#5-what-users-do).
+
+**What the network can still see.** Alpha, rated Detectable, no outside review. The node's address is not one of the site's, and one lookup of the name shows that. The round-trip time and the TCP behavior are the node's, not the site's. The site can change its handshake at any time. The site sees short connections from the node's address for every stranger and every user. A connection that carries the tunnel is one long connection with traffic in both directions. A person who holds a subscription knows the address, the name and the key. The full list is under "What remains detectable" on the [protocol page](../../protocol/borrowed-site/).
 
 ### Xray inbounds
 

@@ -32,6 +32,7 @@ export default defineConfig({
 						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },
 						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },
 						{ label: "Use another provider as an exit", translations: { fa: "استفاده از ارائه‌دهندهٔ دیگر به‌عنوان خروجی" }, slug: "guides/upstream-provider" },
+						{ label: "Borrowed-site mode (alpha)", translations: { fa: "حالت سایت قرضی (آلفا)" }, slug: "guides/borrowed-site" },
 					],
 				},
 				{

@@ -3,40 +3,40 @@ title: Borrowed-site mode
 description: Set up the alpha borrowed-site transport (faketls) from the panel's Inbounds page to a device that connects, with the limits first and the problems you are likely to meet.
 ---
 
-This guide adds one borrowed-site transport to a node and ends with a device connected through it. It takes about 15 minutes once you have a site in mind. The [panel manual](../../manuals/panel/#borrowed-site-mode-alpha) lists every field, and the [protocol page](../../protocol/borrowed-site/) explains the design.
+This guide adds one borrowed-site transport to a node and ends with a device connected through it. It takes about 15 minutes once you have a site in mind. The [panel manual](../../manuals/panel/#borrowed-site-mode-alpha) lists every field. The [protocol page](../../protocol/borrowed-site/) explains the design.
 
 ## Limits first
 
 :::danger[Alpha, rated Detectable, no outside review]
-- It is alpha. Only the project has reviewed it, nobody outside has, and it has not run against real sites. Do not rely on it.
+- It is alpha. Only the project has reviewed it, and it has not run against real sites. Do not rely on it.
 - It is rated Detectable, like every other transport of this release.
-- The site you borrow has not agreed to this. The node relays every stranger's connection to it, and connects to it for users too, from the node's address. You answer for using its name.
-- The network can still see that the node's address is not the site's address, that the node's round-trip time and TCP behavior are not the site's, and one long connection that carries traffic both ways. The site can change its handshake at any time. Someone who holds a subscription knows the address, the name and the key. See "What remains detectable" on the [protocol page](../../protocol/borrowed-site/).
-- It is off unless you add it, and an app uses it only after the user turns on **Alpha transports**.
+- The site you borrow has not agreed to this. The node relays every stranger's connection to the site, and also connects to it for users, from the node's address. You answer for using its name.
+- The network can still see that the node's address is not the site's address, that the node's round-trip time and TCP behavior differ from the site's, and that one long connection carries traffic both ways. The site can change its handshake at any time. Anyone with a subscription knows the address, the name and the key. See "What remains detectable" on the [protocol page](../../protocol/borrowed-site/).
+- It is off unless you add it. An app uses it only after the user turns on **Alpha transports**.
 :::
 
-If you own a domain, `tls` or `ws` with your own certificate is the better choice. This mode is for a node on a bare address with no name.
+If you own a domain, `tls` or `ws` with your own certificate is the better choice. Use this mode for a node on a bare address with no name.
 
 ## Before you start
 
-- A node and panel on the current release, with a working **Veilway** inbound. If you have none, do [First inbound and user](../first-user/) first.
+- A node and panel on the current release, with a working **Veilway** inbound. If you have none, start with [First inbound and user](../first-user/) first.
 - The **Node address** set under **Settings**, as a host name or an IP address that apps can dial.
 - A site, from step 1.
 
 ## 1. Pick a site
 
-The panel does not connect to the site, so check these yourself. The project suggests no site and keeps no list.
+The panel does not connect to the site, so check the points below yourself. The project suggests no site and keeps no list.
 
 - It speaks TLS 1.3. From the node, `openssl s_client -connect www.example.com:443 -tls1_3 -servername www.example.com` should print a TLS 1.3 connection.
-- The node's address can reach it without a challenge, a block or a rate limit. Run the command from the node, not from your laptop.
-- Your users' networks can reach it, and it is not blocked in their country.
-- It is popular and stable. A big site does not notice the node's connections, and a stable one does not change its handshake often.
+- The node's address reaches it with no challenge, block or rate limit. Run the check from the node, not from your laptop.
+- Your users' networks reach it, and their country does not block it.
+- It is popular and stable. A big site does not notice the node's connections. A stable site rarely changes its handshake.
 - It is hosted in the same network as the node, or as near as you can get.
 - It is not your own domain.
 
 ## 2. Choose the port
 
-The transport needs an address and port of its own. It cannot share them with another transport. The web server in front of the panel usually holds port 443 on every address, so then the transport needs another port, or the web server has to be bound to one address only. The panel refuses a shared address when you review the change.
+The transport needs its own address and port. It cannot share them with another transport. The web server in front of the panel usually holds port 443 on every address. Then the transport needs another port, or the web server must bind to one address only. The panel refuses a shared address when you review the change.
 
 ## 3. Add the transport
 
@@ -48,26 +48,26 @@ The transport needs an address and port of its own. It cannot share them with an
 6. Tick **I know the site has not agreed to this, and I answer for using its name**. The node does not run the transport without it.
 7. Choose **Review changes**, then **Apply to the node**.
 
-Open the port in the server's firewall, for example with `sudo ufw allow 8443/tcp`. Look in the node's log (`sudo bash /usr/local/sbin/veilway.sh logs node`) for a line that says `probed the site`. The node probes the site 8 times at start and then once every 6 hours.
+Open the port in the server's firewall, for example with `sudo ufw allow 8443/tcp`. Look in the node's log (`sudo bash /usr/local/sbin/veilway.sh logs node`) for a line that says `probed the site`. The node probes the site 8 times at start, then once every 6 hours.
 
 ## 4. Publish the profile
 
 Open **Profiles**. The transport has a profile of its own, `<tag> (borrowed site, alpha)`, with an **Alpha** mark. When it shows **Ready**, choose **Publish profiles**. If it does not, see "Left out of this profile" and "Still needed" on that page, and the problems below.
 
-Users who already have a link get the new profile at their next refresh. A profile of another transport is not touched.
+Users who already have a link get the new profile at their next refresh. Profiles of other transports do not change.
 
 ## 5. What users do
 
 1. Update the app if it says "This subscription offers a way of connecting this app does not know".
-2. Open **Settings**, turn on **Alpha transports**, read the warning and choose **Turn on**. The app asks every time it is turned on. On the command line, run `veilway connect --alpha`, which asks the same way. `--no-alpha` turns it off.
+2. Open **Settings**, turn on **Alpha transports**, read the warning and choose **Turn on**. The app asks every time you turn it on. On the command line, run `veilway connect --alpha`, which asks the same way. `--no-alpha` turns it off.
 3. Connect. The app lists the transport it used in the connection details.
 
 ## Problems you are likely to meet
 
-- **The panel says the address is shared.** Another transport uses that address and port, see step 2.
-- **The log says the site cannot be reached.** Users are not affected, but whoever is not a user is closed with no answer, which shows the node. Check from the node that the name resolves and that port 443 of the site answers, that the node's firewall lets it out, and that the site is not blocking the node's address. **Site address** sets an address to use in place of a lookup.
-- **The log says a probe of the site failed, or no probe has succeeded for 24 hours.** After 24 hours without a successful probe the node stops accepting proofs and relays everything, so users cannot connect until a probe succeeds. Fix the route to the site, or pick another site.
+- **The panel says the address is shared.** Another transport uses that address and port. See step 2.
+- **The log says the site cannot be reached.** Users are not affected, but the node closes non-users' connections with no answer, which exposes the node. Check from the node that the name resolves and port 443 of the site answers, that the node's firewall lets the traffic out, and that the site does not block the node's address. **Site address** sets an address to use instead of a lookup.
+- **The log says a probe of the site failed, or no probe has succeeded for 24 hours.** After 24 hours without a successful probe, the node stops accepting proofs and relays everything, so users cannot connect until a probe succeeds. Fix the route to the site, or pick another site.
 - **The app does not offer it.** **Alpha transports** is off. The app says "This connection can only be made in a way that is still being tested, and that is switched off". Turn it on in **Settings**, then connect again.
-- **The profile says something is left out.** The reasons are the ones the page lists: the site is not acknowledged, the listener sits behind trusted proxies or a CDN, the key is the same as another transport's, the panel never saw the key in full (pick a new key and apply), the site name or listen address does not read, or **Node address** is not set to something apps can dial.
+- **The profile says something is left out.** The page lists the reasons: the site is not acknowledged, the listener sits behind trusted proxies or a CDN, the key is the same as another transport's, the panel never saw the key in full (pick a new key and apply), the site name or listen address does not parse, or **Node address** is not something apps can dial.
 - **No user is served through a relay.** A relay never carries this transport, and **Relays only** leaves it out.
-- **You changed the site.** Publish the profiles again, because apps take the site name from the profile.
+- **You changed the site.** Publish the profiles again. Apps take the site name from the profile.

@@ -15,15 +15,15 @@ This manual covers the Veilway desktop app for Linux, Windows and macOS. The app
 
 The Linux builds are a `.deb` package for Debian and Ubuntu, and an `.rpm` package for Fedora and other RPM systems. Install it with your package manager, for example `sudo apt install ./<file>.deb`.
 
-The app asks for administrator rights through polkit, so polkit must be present (the `pkexec` program). The kill switch uses `nft`, from nftables. If either is missing, install it first.
+The app asks for administrator rights through polkit, so polkit must be present (the `pkexec` program). The kill switch uses `nft`, from nftables. Install either one first if it is missing.
 
 ### Windows
 
-The Windows installer is per machine. It installs the app for every user of the computer, and it needs an administrator to run. The installer puts `wintun.dll` next to the program. The tunnel uses it to create its network adapter.
+The Windows installer is per machine. It installs the app for every user of the computer and needs an administrator to run. It puts `wintun.dll` next to the program. The tunnel uses it to create its network adapter.
 
 ### macOS
 
-The alpha has no macOS desktop app yet; it comes in a later update, after it has run on a real Mac. On macOS, use the command-line client from the release page (`veilway connect`, run as root).
+The alpha has no macOS desktop app yet. It comes in a later update, after it has run on a real Mac. On macOS, use the command-line client from the release page (`veilway connect`, run as root).
 
 ## Administrator rights
 
@@ -42,20 +42,20 @@ Closing the window hides Veilway in the system tray. The tunnel stays up. Click 
 The tray menu has two items:
 
 - **Open Veilway** shows the window.
-- **Quit** disconnects first, so the tunnel comes down, the routes and DNS are restored, and the kill switch is lifted. Then the app and the helper close.
+- **Quit** disconnects first. The tunnel comes down, the routes and DNS are restored, and the kill switch is lifted. Then the app and the helper close.
 
 If the app is killed instead, the helper and the tunnel keep running. The helper exits on its own only when no window has connected for two minutes and no tunnel is running.
 
 ## Add a subscription
 
-Your provider gives you a subscription in one of three ways: a link, a file, or a QR picture. A subscription holds one or more connections, and the provider's own messages about them.
+Your provider gives you a subscription as a link, a file, or a QR picture. A subscription holds one or more connections, and the provider's own messages about them.
 
 To add one, use one of these:
 
 - Paste the link into **Subscription link** and press **Continue**.
-- Press **Open a file** and choose the file from your provider. A file locked with a password (a sealed file, ending in `.vwsealed`) first asks for the password. The password only protects the file on its way to you, and nothing is added until you agree on the next screen.
+- Press **Open a file** and choose the file from your provider. A password-locked file (a sealed file, ending in `.vwsealed`) asks for the password first. The password only protects the file on its way to you. Nothing is added until you agree on the next screen.
 - Press **Open a QR picture** and choose the picture (PNG, JPEG, GIF, BMP or WebP). You can also copy the picture and paste it with Ctrl+V.
-- Press **Scan with the camera** (from v0.2.18) and hold the QR code in front of the camera. A window shows the camera and closes by itself when it reads a code, and the code goes on as a pasted link does. The camera is on only while that window is open. The app reads the picture on this computer, and nothing is saved or sent. Windows and macOS ask for permission the first time you use it. If it is blocked, the app says so: allow the camera for Veilway in the system settings and try again. There is no such button on Linux, where the app cannot turn the camera on: use a picture of the code.
+- Press **Scan with the camera** (from v0.2.18) and hold the QR code in front of the camera. A window shows the camera and closes by itself when it reads a code. The code goes on as a pasted link does. The camera is on only while that window is open. The app reads the picture on this computer. Nothing is saved or sent. Windows and macOS ask for permission the first time. If it is blocked, the app says so. Allow the camera for Veilway in the system settings and try again. Linux has no such button, because the app cannot turn the camera on there. Use a picture of the code.
 
 Nothing is sent anywhere until you agree. **Cancel** stops at any step and adds nothing.
 
@@ -64,9 +64,9 @@ Nothing is sent anywhere until you agree. **Cancel** stops at any step and adds 
 The app asks one of two questions:
 
 - **"Contact {host}?"** The connections are fetched from that server. The server sees this computer's address. Nothing has been sent yet. The button says **Contact {host}**.
-- **"Read this subscription?"** The connections are inside the link or the file, so nothing is fetched from anywhere. The button says **Read it**.
+- **"Read this subscription?"** The connections are inside the link or the file, so nothing is fetched. The button says **Read it**.
 
-If the link names the server's certificate, the screen says so. A stand-in server is then refused. If the link does not use TLS, the screen warns you: the request stays sealed, but the network can tell that you use this app, now and later in its records.
+If the link names the server's certificate, the screen says so. A stand-in server is then refused. If the link does not use TLS, the screen warns you. The request stays sealed, but the network can tell that you use this app, now and later in its records.
 
 ### Step 2: keep it or not
 
@@ -83,7 +83,7 @@ Press **Keep subscription** to save it. The app confirms with a short message.
 
 ## Connect
 
-The **Connection** screen has one large switch. Press it to connect, and press it again to disconnect. If you have more than one connection and you are not connected, a **Connection** list lets you pick one. The app remembers your pick.
+The **Connection** screen has one large switch. Press it to connect, and again to disconnect. If you have more than one connection and are not connected, a **Connection** list lets you pick one. The app remembers your pick.
 
 The heading shows the state:
 
@@ -122,11 +122,11 @@ Under the heading, the app may show a reason. This table explains each one.
 | This connection's settings are out of date | The provider changed the settings. | Refresh the subscription. |
 | This computer's clock and the server's are drifting apart | The two clocks disagree. | Check the date and time. |
 
-Where the screen says **Trying again at {time}**, the app tries again at that time. Where it says the app will not try again by itself, press **Disconnect**, then connect when you are ready.
+Where the screen says **Trying again at {time}**, the app tries again then. Where it says the app will not try again by itself, press **Disconnect**, then connect when you are ready.
 
 ### Connection details
 
-While the app is trying a server and while you are connected, the **Connection** screen has a **Connection details** section you can open. It shows the **Server**, **Host name**, **Transport**, **Front** and **TLS server name** of the connection in use, how its **Certificate** is checked (**Public certificate**, **Public certificate and pin**, or **Pinned self-signed**), the **Tunnel MTU**, and how long the session has been up. Rows that do not apply are left out. **Copy details** copies them as text, in English, for a report to your provider.
+While the app is trying a server and while you are connected, the **Connection** screen has a **Connection details** section you can open. It shows the **Server**, **Host name**, **Transport**, **Front** and **TLS server name** of the connection in use. It shows how its **Certificate** is checked (**Public certificate**, **Public certificate and pin**, or **Pinned self-signed**), the **Tunnel MTU**, and how long the session has been up. Rows that do not apply are left out. **Copy details** copies them as English text, for a report to your provider.
 
 ## Questions the app asks
 
@@ -134,13 +134,13 @@ Some connections need your answer before the first connect. Your answer applies 
 
 | Question | What it means |
 |---|---|
-| Connect to a private address? | The connection goes to an address that is not on the internet, which can be a device on the network you are on right now. That is normal for a server on your own network. The app asks once for each connection, and without your yes it does not connect to such an address. Your yes covers only a private address. An address that looks like the internet is never dialled because the network you are on says it is local. |
-| Connect without checking the server? | The connection does not check who it is talking to. Anyone on the network can read and change what you send. The button is red. |
+| Connect to a private address? | The connection goes to an address that is not on the internet. It can be a device on your current network. That is normal for a server on your own network. The app asks once for each connection, and without your yes it does not connect to such an address. Your yes covers only a private address. An address that looks like the internet is never dialled because your network says it is local. |
+| Connect without checking the server? | The connection does not check who it talks to. Anyone on the network can read and change what you send. The button is red. |
 | This subscription expired over 30 days ago | The addresses and keys in it may no longer belong to your provider. Refresh it first if you can. The button is red. |
-| Use the connection that looks like ordinary web traffic? | This is the way the provider set up to blend in with normal browsing. |
+| Use the connection that looks like ordinary web traffic? | The provider set this way up to blend in with normal browsing. |
 | Allow a way that does not look like web traffic? | On some networks this may be the only way through. Someone watching the network can tell that something unusual is going on, but not what. |
-| Allow a connection the network can see? | The provider offers `ws-plain`, a WebSocket over plain HTTP with no TLS. On some networks it may be the only way through. The network can see this server's name and can tell that you use this app, and when and how much, now and later in its records. It cannot see what you send. If this transport's key ever leaks, it ties all of your device's plain connections together. The app asks again when the provider's plain host name changes. |
-| Allow a plain VPN tunnel? | On some networks this may be the only way through. It is easy to recognize, and someone watching the network can tell that you use a VPN. |
+| Allow a connection the network can see? | The provider offers `ws-plain`, a WebSocket over plain HTTP with no TLS. On some networks it may be the only way through. The network can see this server's name. It can tell that you use this app, and when and how much, now and later in its records. It cannot see what you send. If this transport's key ever leaks, it ties all of your device's plain connections together. The app asks again when the provider's plain host name changes. |
+| Allow a plain VPN tunnel? | On some networks this may be the only way through. It is easy to recognize. Someone watching the network can tell that you use a VPN. |
 | The connection needs your answer | Any other question. The app shows the engine's own words, and the button says **Yes, continue**. |
 
 If the app says **The answer did not reach the connection**, press connect again.
@@ -149,8 +149,8 @@ If the app says **The answer did not reach the connection**, press connect again
 
 If your provider lists exits, the **Exit** row on the **Connection** screen opens **Choose an exit**. Your traffic leaves the provider's network at the exit you pick.
 
-- **Automatic** uses your provider's exit for you. When your provider has set up other exits to switch to, it uses one of those while yours is down. The **Exit** row shows which one, such as **Automatic: Amsterdam**.
-- Each exit shows its country and, when your provider reports it, its load: **Not busy**, **Busy** or **Very busy**. An exit with no load known shows only its country. The level is coarse and changes at most once a minute. An exit that does not answer shows **Not answering right now**.
+- **Automatic** uses your provider's exit for you. If your provider set up other exits to switch to, it uses one of those while yours is down. The **Exit** row shows which one, such as **Automatic: Amsterdam**.
+- Each exit shows its country and, when your provider reports it, its load: **Not busy**, **Busy** or **Very busy**. An exit with no known load shows only its country. The level is coarse and changes at most once a minute. An exit that does not answer shows **Not answering right now**.
 
 If the app cannot change the exit, it says **The exit could not be changed**.
 
@@ -163,11 +163,11 @@ The **Usage** screen shows:
 
 When you are not connected, the screen says **Connect to see live speed and how much data this session used**.
 
-The **Connection** screen shows download and upload speed, and the same allowance bar, while connected. The allowance and the plan date come from your provider's server.
+While connected, the **Connection** screen shows download and upload speed and the same allowance bar. The allowance and the plan date come from your provider's server.
 
 ## The provider card
 
-Below the connection, the app can show a card with what the provider posts: notices, numbers such as a stat or a progress bar, links, and support links. The card says **Your provider wrote this, not the app.** The app shows it as it was received, and does not check or change it.
+Below the connection, the app can show a card with what the provider posts: notices, numbers such as a stat or a progress bar, links, and support links. The card says **Your provider wrote this, not the app.** The app shows it as received and does not check or change it.
 
 - Notices from the provider also appear as banners titled **From {provider}**.
 - A link asks first: **Open {domain}?** Then it opens that site in your browser.
@@ -175,13 +175,13 @@ Below the connection, the app can show a card with what the provider posts: noti
 
 ## Kill switch
 
-The kill switch is on by default. Its setting says: it blocks all traffic if the connection drops, so nothing leaves outside the tunnel. The change takes effect the next time you connect.
+The kill switch is on by default. If the connection drops, it blocks all traffic, so nothing leaves outside the tunnel. A change takes effect the next time you connect.
 
-If a connection ends on its own while the kill switch is on, the **Connection** screen says **The connection ended**, and then **The kill switch still blocks all traffic. Disconnect to lift it.** A **Disconnect** button appears.
+If a connection ends on its own while the kill switch is on, the **Connection** screen says **The connection ended**, then **The kill switch still blocks all traffic. Disconnect to lift it.** A **Disconnect** button appears.
 
-"Still blocking" means that traffic outside the tunnel is blocked, so the internet may look down. To lift the block, press **Disconnect**. Closing the app does not lift it. **Quit** does, because it disconnects first.
+"Still blocking" means traffic outside the tunnel is blocked, so the internet may look down. Press **Disconnect** to lift the block. Closing the app does not lift it. **Quit** does, because it disconnects first.
 
-Turning the kill switch off means that when the connection drops, traffic can leave outside the tunnel.
+With the kill switch off, traffic can leave outside the tunnel when the connection drops.
 
 ## Start at login
 
@@ -197,7 +197,7 @@ Under **Theme**, pick **System**, **Dark** or **Light**. System follows your com
 
 **Check for updates when the app opens** is on by default. Press **Check for updates** at any time. The screen then shows **This is the newest version**, or **Version {version} is ready** with an **Install and restart** button.
 
-Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it is installed. On Windows the update installs without asking questions. On Linux the app does not update itself: install the newer `.deb` or `.rpm` from the release page the same way as the first one.
+Updates come from the project's GitHub releases. Each update is checked against the project's signing key before it installs. On Windows the update installs without asking questions. On Linux the app does not update itself. Install the newer `.deb` or `.rpm` from the release page the same way as the first one.
 
 ## Log
 
@@ -209,9 +209,9 @@ The **Subscriptions** screen lists each subscription with its provider, its logo
 
 - **Refresh** (the icon on the row) gets the provider's current settings. It appears only when the provider allows it.
 - **Share** gives the subscription to another device. It appears on a subscription that was added with a link. See [Share a subscription](#share-a-subscription).
-- **Backup update addresses** appear on a row when your provider has added addresses that the app can use to refresh the subscription while the main address is blocked. See [Backup update addresses](#backup-update-addresses).
-- **Remove** deletes the subscription, its connections and its keys from this computer. First it tells your provider that this device left, so the device's place on your account is free again. That takes a few seconds at most, and the subscription is removed even when the provider cannot be reached. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first. On the command line, `veilway remove` does the same: it tells the provider first, then removes the subscription, also when the provider cannot be reached. With one subscription held it needs no argument. With several, name one with `--subscription` (the start of its id, which the error message lists). `--data-dir` sets where the client keeps its data, as for `connect`. It refuses while a connection runs.
-- **Let apps reach devices on this network** (a checkbox on the row) is off by default. Off, everything goes through the tunnel, your local network included, so a printer or your router is not reachable while you are connected. On, apps can reach the devices on the networks you are connected to (a printer, your router) outside the VPN. Only the private subnets you are on go outside, not the whole private ranges, and the list is read again when you change networks. The network can see that traffic, because it does not go through the VPN. Names are still only looked up through the tunnel. On Android nothing goes outside the VPN while you are on mobile data. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops.
+- **Backup update addresses** appear on a row when your provider has added addresses the app can use to refresh the subscription while the main address is blocked. See [Backup update addresses](#backup-update-addresses).
+- **Remove** deletes the subscription, its connections and its keys from this computer. First it tells your provider that this device left, so the device's place on your account is free again. That takes a few seconds at most. The subscription is removed even when the provider cannot be reached. To use it again, you need the link from your provider. You cannot remove a subscription while it is in use, so disconnect first. On the command line, `veilway remove` does the same. It tells the provider first, then removes the subscription, also when the provider cannot be reached. With one subscription held it needs no argument. With several, name one with `--subscription` (the start of its id, which the error message lists). `--data-dir` sets where the client keeps its data, as for `connect`. It refuses while a connection runs.
+- **Let apps reach devices on this network** (a checkbox on the row) is off by default. Off, everything goes through the tunnel, local network included, so a printer or your router is not reachable while you are connected. On, apps can reach the devices on the networks you are connected to (a printer, your router) outside the VPN. Only the private subnets you are on go outside, not the whole private ranges. The list is read again when you change networks. The network can see that traffic, because it does not go through the VPN. Names are still only looked up through the tunnel. On Android nothing goes outside the VPN while you are on mobile data. The choice is kept for each subscription and applies from the next connect. Everything else still goes through the tunnel and stays blocked when the connection drops.
 
 ### Share a subscription
 
@@ -221,7 +221,7 @@ The **Subscriptions** screen lists each subscription with its provider, its logo
 - **QR code** shows the link as a QR code.
 - **Sealed file** saves the link as a file named `veilway-subscription.vwsealed`, locked with a password you choose (at least 10 characters, typed twice). Send the password by a different way than the file, for example by voice. Anyone who has the file and guesses the password can use the link, so a long password is the only protection.
 
-Only the subscription link is shared, never this device's keys. The other device joins as a new device and counts against your device limit. A subscription that was added from a file has no link, so it has no **Share**.
+Only the subscription link is shared, never this device's keys. The other device joins as a new device and counts against your device limit. A subscription added from a file has no link, so it has no **Share**.
 
 ### Backup update addresses
 

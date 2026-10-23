@@ -1,16 +1,24 @@
 ---
 title: The alpha release
-description: What the Veilway alpha, v0.2.14-alpha, includes, where each part stands, and its known limits.
+description: What the Veilway alpha, v0.2.15-alpha, includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.14-alpha`. It follows `v0.2.13-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.15-alpha`. It follows `v0.2.14-alpha`. Veilway is a node for a server, a web panel for the node's operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.14-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.14-alpha)
+- Node and install script: [v0.2.15-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.15-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.15-alpha
+
+- **Another provider as an exit.** A node can carry an exit through another provider's Veilway subscription. On **Exits and routing**, tab **Other providers**, paste the link and check the key fingerprint, let the node fetch it and read what the provider offers, then add it with your password and code again. The provider sees the node's address and one device, not your users. Nothing it sends reaches users unasked or changes the node's routes, DNS or other exits, and the exit goes down rather than falling back when the provider refuses. Tell your users: it adds a second provider in their path. See [Another provider as an exit](../guides/upstream-provider/) and [Upstreams](../protocol/upstreams/).
+- **Web server lines.** A transport behind your web server shows the Caddy and nginx lines that send its path to the node, and warns when its listener is public.
+- **A decoy that answers.** The installer's web server also serves its plain site on 127.0.0.1:8080, the default decoy origin.
+- **More metadata addresses refused.** 100.100.100.200 and fd00:ec2::254 are refused like 169.254.169.254.
+- **MTU probe waits vary.** The wait after a lost probe is 1.5 to 2 seconds, picked per probe.
 
 ## New in v0.2.14-alpha
 

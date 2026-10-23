@@ -656,6 +656,8 @@ The **Nodes** page lists the node's links. A node link joins this node to anothe
 3. The first operator chooses **Paste the answer**, and takes it.
 4. Both operators call each other and **compare fingerprints**. Each reads their own eight groups aloud and types the other side's groups. If a code changed on the way, the groups will not match. Confirm the pairing only when they match.
 
+In the offer, each transport of the inbound's profile has a checkbox with its port, path and TLS name and a short note on how it looks to the network (from v0.2.19). Uncheck the ones the link should not use, and keep at least one. A link can use `udp`, `udp-obfs`, `tls` and `ws`, but not Encrypted Client Hello or a self-signed certificate, so those show why they cannot be picked. Between countries, `tls` is usually the safest choice: UDP is often throttled or dropped. **Edit as JSON** changes the list by hand.
+
 The two directions are:
 
 - **Users there leave here.** This node is the exit, and the other node dials in.

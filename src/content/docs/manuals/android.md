@@ -14,7 +14,9 @@ The Android app is part of the [alpha](../../alpha/). It is an arm64 build, so i
 
 Your operator gives you a subscription link, a subscription file, or a QR picture. Open the app and go to the import screen. Paste the link, or choose the file or the picture, and follow the app's steps to add it. A file locked with a password (a sealed file, ending in `.vwsealed`) asks for the password first. The [client manual](../client/#add-a-subscription) describes the steps.
 
-Scanning a QR code with the camera is not in the Android app yet. Choose a picture or a screenshot of the code instead. Neither does the app open a link from another app, so paste the link.
+To scan a QR code, press **Scan with the camera** (from v0.2.18). The app asks for permission to use the camera the first time, then opens the phone's own scanner. The camera is on only while the scanner is open, and nothing is saved or sent. The code goes on as a pasted link does. If the permission is blocked, the app says so: allow the camera for Veilway in the phone's settings and try again. A phone without a camera can still install the app and use a link, a file or a picture. You can also choose a picture or a screenshot of the code instead.
+
+The app does not open a link from another app yet, so paste the link.
 
 To give a subscription to another device, press **Share** on its row. The app can show the link, show it as a QR code, or save a sealed file. It shares the link only, never this phone's keys. The **Send** button hands the link to another app.
 

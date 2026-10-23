@@ -203,7 +203,7 @@ An `exits` entry:
 | Name | 2 + its length | The exit's display name, shown cut to 64 characters. One string, the default. See "Languages". |
 | Country | 2 | Two uppercase ASCII letters, or two zero bytes for none |
 | Flags | 1 | Bit 0: carries every IP protocol. Bit 1: this device's selection. Bit 2: the user's configured exit. Bit 3: working. Other bits zero. |
-| Load | 1 | 0 unknown, 1 low, 2 medium, 3 high. It is 0 until something on the node measures load. |
+| Load | 1 | 0 unknown, 1 low, 2 medium, 3 high. It is 0 for an exit with no `load` setting in the config, and until the node has looked twice (every 10 seconds). A level changes only after the new one held for two looks, and a device is sent a change at most once in 60 seconds. |
 
 "The user's configured exit" is the exit a device without a selection leaves through now: the user's `exit`, or `routing.default` when the user has none, and while that is not working the first exit of `routing.fallback` that works and that the user may use. "Working" is set for a `netstack` exit while its proxy lets the node in (always, for one without a proxy), for an `l3` exit while its interface is up and for a chain exit while one of its links is up, and never for a `block` exit. The bit moves to the fallback exit while the user's own exit is not working, and back once it works, so a client shows the exit a device leaves through by reading it. Without `routing.fallback` nothing switches: nothing goes round a node link that is down. A node before v0.2.11 always sets "working" for a `netstack` exit and never switches.
 
@@ -436,7 +436,7 @@ Each is listed with the default this draft takes.
 | Is re-confirming the MTU on a timer worth two large packets every few minutes on a datagram transport? | Yes. Without it a shrinking path breaks the tunnel until the next reconnect. |
 | Is probing right after connecting worth its pattern? | Yes when no result is remembered for the network, because a wrong MTU breaks the tunnel in ways users cannot diagnose. |
 | The credential is per connection, not a MAC on every message | Per connection, for the reason given under "The credential". |
-| Should the catalog carry load and whether an exit works, as an earlier design listed? | Yes, coarsely: one bit and four levels. "Working" is defined for each backend with the `exits` message under "Messages". Nothing measures load yet. |
+| Should the catalog carry load and whether an exit works, as an earlier design listed? | Yes, coarsely: one bit and four levels. "Working" is defined for each backend with the `exits` message under "Messages". The node measures load only for an exit whose operator set `load`, see "`load`" in the config reference. |
 | May a hint name an address that is not in the signed profile? (threat model Q6) | No. |
 | Is `bye` worth what it tells a device about its account? | Yes. The device learns only what its own user could ask the provider. |
 | Where notices come from | The top-level `notices` key in the config. A notice's `text`, and an exit's `name`, may be a string or a map of language tags to strings with a `default`. The node sends the default, and the panel puts the whole map in the subscription. |

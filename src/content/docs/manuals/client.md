@@ -55,6 +55,7 @@ To add one, use one of these:
 - Paste the link into **Subscription link** and press **Continue**.
 - Press **Open a file** and choose the file from your provider. A file locked with a password (a sealed file, ending in `.vwsealed`) first asks for the password. The password only protects the file on its way to you, and nothing is added until you agree on the next screen.
 - Press **Open a QR picture** and choose the picture (PNG, JPEG, GIF, BMP or WebP). You can also copy the picture and paste it with Ctrl+V.
+- Press **Scan with the camera** (from v0.2.18) and hold the QR code in front of the camera. A window shows the camera and closes by itself when it reads a code, and the code goes on as a pasted link does. The camera is on only while that window is open. The app reads the picture on this computer, and nothing is saved or sent. Windows and macOS ask for permission the first time you use it. If it is blocked, the app says so: allow the camera for Veilway in the system settings and try again. There is no such button on Linux, where the app cannot turn the camera on: use a picture of the code.
 
 Nothing is sent anywhere until you agree. **Cancel** stops at any step and adds nothing.
 
@@ -149,7 +150,7 @@ If the app says **The answer did not reach the connection**, press connect again
 If your provider lists exits, the **Exit** row on the **Connection** screen opens **Choose an exit**. Your traffic leaves the provider's network at the exit you pick.
 
 - **Automatic** uses your provider's exit for you. When your provider has set up other exits to switch to, it uses one of those while yours is down. The **Exit** row shows which one, such as **Automatic: Amsterdam**.
-- Each exit shows its country and its load: **Not busy**, **Busy**, **Very busy**, or **Load not known**. An exit that does not answer shows **Not answering right now**.
+- Each exit shows its country and, when your provider reports it, its load: **Not busy**, **Busy** or **Very busy**. An exit with no load known shows only its country. The level is coarse and changes at most once a minute. An exit that does not answer shows **Not answering right now**.
 
 If the app cannot change the exit, it says **The exit could not be changed**.
 

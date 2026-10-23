@@ -279,7 +279,7 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 |---|---|
 | `window_secs` | Seconds the rates were taken over: 5 once the node has run that long, 0 before its second sample. |
 | `users`, `inbounds`, `exits` | Lists of `{"name", "traffic", "up_bytes_per_sec", "down_bytes_per_sec"}`. `name` is the user name or the tag. A name that is new in the window has rate 0. |
-| `outbounds` | One entry per outbound of the running config, in its order: the same four fields as an exit, with `name` the tag of the outbound, and `udp`, `udp_down_secs`, `udp_flips`, `latency_ms` and `measured_at`. `traffic` and the two rates are the sums over the exits whose backend names the outbound. An outbound no exit uses is listed with zeros, and an exit with an `l3`, `block` or `chain` backend has no outbound and is counted under none. The node keeps no counter per outbound, so the sum holds everything those exits count, including traffic that an exit's `unsupported` policy sent around the proxy with `"direct"`. The node learns whether a proxy relays UDP once for each exit, from the flows of that exit, so the three UDP fields say what the exits of the outbound know together: `udp` is `false` while any of them was last refused and `null` for an outbound that is no SOCKS5 proxy, `udp_down_secs` counts from the latest refusal, and `udp_flips` adds up the flips of the exits, so one change of the proxy that two exits notice counts twice. `/v1/exits` has the state of each exit. `latency_ms` is how long the proxy took to answer the greeting of the last flow that dialed it, in milliseconds, and `measured_at` is when, in Unix seconds. Both are `null` for a direct outbound and until a flow has used the proxy. A reload starts them over. |
+| `outbounds` | One entry per outbound of the running config, in its order: the same four fields as an exit, with `name` the tag of the outbound, and `udp`, `udp_down_secs`, `udp_flips`, `latency_ms` and `measured_at`. `traffic` and the two rates are the sums over the exits whose backend names the outbound. An outbound no exit uses is listed with zeros, and an exit with an `l3`, `block` or `chain` backend has no outbound and is counted under none. The node keeps no counter per outbound, so the sum holds everything those exits count, including traffic that an exit's `unsupported` policy sent around the proxy with `"direct"`. The node learns whether a proxy relays UDP once for each exit, from the flows of that exit, so the three UDP fields say what the exits of the outbound know together: `udp` is `false` while any of them was last refused and `null` for an outbound that is no SOCKS5 proxy, `udp_down_secs` counts from the latest refusal, and `udp_flips` adds up the flips of the exits, so one change of the proxy that two exits notice counts twice. `/v1/exits` has the state of each exit. `latency_ms` is how long the proxy took to answer the greeting of the last flow that dialed it, in milliseconds, and `measured_at` is when, in Unix seconds. Both are `null` for a direct outbound and until a flow has used the proxy. `down_reason` is, for an `xray` outbound that cannot carry a flow now, why, in words: the add-on is not installed or not running, Xray ended and starts again, or the name of the server does not give an address the node may dial. Every exit through it is down with the same reason. It is `null` while the outbound carries, and for any outbound that is not `xray`. A reload starts them over. |
 | `drops` | Packets that were not carried since start, by reason name. |
 | `dns` | `answered`, `refused`, `failed`, `malformed`, `throttled`. |
 | `flows` | Flows in the flow table right now. |
@@ -381,6 +381,8 @@ The address a device connects from is not part of a session. It is never put in 
 | `links` | The tags of the node links of a `chain` backend, which `/v1/links` reports on. Empty for every other backend. |
 | `link_up` | Whether one of those links is up. While none is, traffic routed to the exit is answered as unreachable and has no other way out. `null` for every other backend. |
 | `latency_ms`, `measured_at` | As for an outbound in `/v1/stats`, for the outbound of a `netstack` backend. `null` otherwise. |
+| `load` | The `load` setting of the exit in the config, as `{"by", "busy", "very_busy"}`. `null` when the exit reports no load to apps. |
+| `load_level` | The level apps are told: `"low"`, `"medium"` or `"high"`. `null` while the exit has no `load` setting, and until the node has looked twice, which it does every 10 seconds. |
 | `traffic` | Counters, as for a user. |
 
 ### `GET /v1/inbounds`
@@ -391,9 +393,10 @@ The address a device connects from is not part of a session. It is never put in 
 |---|---|
 | `tag` | The inbound's tag. |
 | `kind` | `wireguard` or `veilway`, the inbound's `type`. |
+| `enabled` | `false` for an inbound the config switched off: it does not listen and takes no device. |
 | `public_key` | The inbound's WireGuard public key. |
 | `transport_public_key` | The public half of the node transport key that a profile carries. `null` for an inbound with no `transport_keys`. |
-| `transports` | One `{"transport", "rating"}` for each transport, in the config's order. `transport` is `udp`, `ws`, `udp-obfs`, `tls` or `fronted`. `rating` is what a censor can see of a profile's connection: `protected`, `detectable` or `unsafe`. Every transport is rated `detectable` in this version. |
+| `transports` | One `{"transport", "enabled", "rating"}` for each transport, in the config's order. `enabled` is `false` for a transport the config switched off. `transport` is `udp`, `ws`, `udp-obfs`, `tls` or `fronted`. `rating` is what a censor can see of a profile's connection: `protected`, `detectable` or `unsafe`. Every transport is rated `detectable` in this version. |
 
 ### `GET /v1/links`
 

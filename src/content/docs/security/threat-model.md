@@ -47,6 +47,23 @@ A node may serve `socks5`, `http` and `mixed` proxy inbounds, which let other so
 
 What is not defended: everything above that says "not encrypted"; a censor that finds the port can block it and learn what it is; whoever learns a user's proxy password is that user on every proxy inbound that admits them until it changes; and the operator sees what users do through the node. The model has not been reviewed by anyone outside the project.
 
+## Xray outbounds
+
+A node may carry an exit through a VLESS, VMess, Trojan or Shadowsocks server of another party (v0.2.18 and later). The full model is section 5.17 of `THREAT_MODEL.md`, risks X1 to X8. What it means for an operator:
+
+- **The provider sees the exit.** Its owner sees the node's address, every destination and every byte the destination does not protect, for all users sent through it. It does not see users, their tunnel addresses or keys. There is no anonymity from it.
+- **The provider's server cannot lead back into the node.** A literal address must pass the node's dial rules, and a name is looked up by the node itself, never by Xray or the host's resolver. That lookup is plain UDP DNS, so the provider's name can be seen by whoever sees the node's DNS. Use the address to hide it.
+- **Nothing goes around a down outbound.** The flow ends with a reason. It never goes to `direct`, to another exit or to the provider's default, and `unsupported.udp` of such an exit may not be `direct` or `via`.
+- **A share link is read by the same reader as the desktop app**, and what passes becomes typed fields. The link is never kept, shown or logged, and certificates are always checked.
+- **The sockets are Xray's.** Each outbound is a Unix socket in a folder only the node's user and Xray's can enter, with a password made new at each start. The node checks that the socket belongs to Xray's user before it sends a byte.
+- **A change restarts Xray**, which drops Xray inbound users for a moment.
+
+What is not defended: Xray's own egress, which its unit does not restrict, so a bug in Xray is not held to the provider's address; a hostile provider's bytes, which Xray parses, so a flaw in Xray-core would give an attacker the outbound credentials and every Xray user's flows; and availability, since the provider can cut the exit. Only Linux nodes run it. The model has not been reviewed by anyone outside the project.
+
+## Exit load
+
+An exit with a `load` setting tells devices a level of low, medium or high, never a number. The level changes only after it held for two looks 10 seconds apart, and a device is told a change at most once a minute. So a peer learns at most that the exit got busier, a minute late, and not when one other user starts or stops. Without the setting the node sends nothing about other users' traffic.
+
 ## What it does not protect against
 
 - **Detection.** No transport is claimed to be undetectable or unblockable. Every transport is rated Detectable.

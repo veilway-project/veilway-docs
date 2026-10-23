@@ -95,11 +95,24 @@ On the user's page, **New Xray credentials** makes new credentials for the user 
 - Xray keeps no access log, and the addresses it writes are masked. The test checks that no client address reaches the journal.
 - The host's service has a memory limit of 1 GB.
 - Each user's traffic leaves Xray through a local SOCKS hop on `127.0.0.1`. The node serves the hop. It checks every connection and every UDP destination against the user's entitlement, quota, rules, exits and counters, the same as a tunnel.
+- The unit does not stop Xray from connecting to the network, since the servers of [Xray outbounds](#xray-outbounds) can be anywhere. What keeps the traffic of your users on the node's rules is the hop, and a bug in Xray would not be held by the unit to the address of a provider. See "Xray outbounds" in the threat model.
+
+## Xray outbounds
+
+The same add-on also works the other way. From v0.2.18, a node can send an exit's traffic out through a VLESS, VMess, Trojan or Shadowsocks server of another provider, so that a server you rent becomes an exit. Add it as an **Xray server** on the **Outbounds** tab, see the [panel manual](../panel/#xray-servers) and the [guide](../../guides/xray-outbound/).
+
+- **Linux nodes only.** The add-on host runs on Linux.
+- **The same install.** `sudo bash veilway.sh addon xray install` also puts the node's user in the group `veilway-xray`, so it can use the sockets Xray makes for the outbounds, and restarts a node that was running. `sudo bash veilway.sh update` does the same for a node that has the add-on. A node installed before v0.2.18 needs one update or install run.
+- **Without the add-on** every exit through an Xray outbound is down and says why, and nothing goes around it.
+- **A change restarts Xray briefly.** Users of Xray inbounds drop for a moment, as for any change to them, and connect again.
+- **The provider's name is looked up in clear.** The node looks it up through `dns.servers`, in plain UDP. Use the provider's IP address in **Proxy address** to hide the name.
+
+`veilway doctor` checks the add-on and the folder of the sockets for a config that has an Xray outbound.
 
 ## Known limits
 
 - **UDP is carried for all three protocols**, but a UDP flow ends when the exit has no UDP and its policy says so. Names that a UDP datagram asks for are resolved by the node, like those of TCP connections.
-- **No VMess and no Reality.**
+- **No VMess and no Reality** on Xray inbounds. Xray outbounds speak both.
 - **No `l3` or `chain` exits for Xray users.** Xray traffic uses the user's `netstack` exits.
 - **Any change restarts Xray briefly.**
 - **The Veilway apps do not connect to Xray links yet.**

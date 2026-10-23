@@ -132,6 +132,7 @@ An inbound is one tunnel: one key, one address pool, reached over one or more tr
 |---|---|---|---|
 | `tag` | tag | required | |
 | `type` | `wireguard` or `veilway` | required | `wireguard`: stock WireGuard peers. `veilway`: the same tunnel, with the control channel at its gateway address, see "The control channel" below. Changing the type restarts nothing. |
+| `enabled` | bool | `true` | `false` switches the inbound off, see "Switching an inbound or a transport off" below. |
 | `private_key` | key | required | The tunnel's static key. Secret. Unique across inbounds, compared by the public key derived from it. |
 | `address` | list of 1 or 2 networks | required | The gateway address with its prefix, at most one IPv4 and one IPv6, for example `["10.7.0.1/24", "fd7a:115c:a1e0::1/64"]`. The network is the address pool for this tunnel. |
 | `mtu` | integer 1280 to 1500 | `1420`, or `1390` for a `veilway` inbound with a `udp-obfs` transport | MTU inside the tunnel. Above 1420 is a warning, since the outer packet then fragments on a normal path, or is lost on a `veilway` inbound, which never fragments. With a `udp-obfs` transport the warning starts above 1390: a full-size packet then does not fit a 1500 byte path over IPv6. |
@@ -150,7 +151,19 @@ Rules for `address`:
 An entry of `inbounds` with the type `socks5`, `http` or `mixed` is not a tunnel but a proxy inbound, described under [Proxy inbounds](#proxy-inbounds-socks5-http-mixed) below. Everything above is about tunnel inbounds.
 
 Who may use an inbound is decided by addresses alone: a device belongs to the inbound whose pool contains its address.
-A device may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds. `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses, once the config has any device: every connection to it would be treated as a stranger's.
+A device may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds. This holds for `wireguard` inbounds as much as for `veilway` ones: from v0.2.18 the panel gives a device an address in the range of every plain `wireguard` inbound too, at the same offset as in its own pool (see the panel manual), so that a device whose keys the panel made can be given a WireGuard file. `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses, once the config has any device: every connection to it would be treated as a stranger's.
+
+### Switching an inbound or a transport off
+
+`"enabled": false` on an inbound, a transport or a proxy inbound switches it off without deleting it, as it already does on a link, a tunnel or an upstream. Leaving the key out, or writing `true`, is the same thing.
+
+- An inbound or transport that is off is validated like any other, and its addresses stay reserved. No other listener may take its address and no other pool may overlap its pool.
+- It does not listen. The node binds nothing for it, and `veilway doctor` does not try its address.
+- Sessions on it end at the reload that switches it off. The devices of an inbound that is off are let go: their sessions end, their flows are reset, and they cannot connect through that inbound until it is switched on again. A transport that is off leaves the other transports of the same inbound as they are.
+- An inbound that is off is left out when `veilway check` looks for a `veilway` inbound that no device has an address in.
+- The control API's `GET /v1/inbounds` says `enabled` for each inbound and for each of its transports.
+
+Devices only learn of a switch from the next published profile. The panel leaves an inbound that is off out of the profiles at the next publish, and a transport that is off out of its inbound's profile.
 
 ### The control channel
 
@@ -184,6 +197,8 @@ Engine. On a `veilway` inbound the gateway address also answers the control chan
 A `veilway` inbound takes `udp`, `udp-obfs`, `tls`, the native `ws`, `ws-plain`, `fronted` and, as alpha, `faketls`. A `wireguard` inbound takes `udp` and the `ws` without a decoy: its devices have no transport secret for the others to be keyed with.
 
 `path` starts with `/`, is at most 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, has no `..` component, and is matched exactly against the request path before any `?`, except for a `fronted-shaped` transport whose data rides in the path, which is matched as a prefix (see "`fronted-shaped`" below). On `tls`, the native `ws`, `ws-plain`, `fronted` and `fronted-shaped` it is at least 12 bytes.
+
+Every transport takes `enabled` (bool, default `true`) next to `listen`. A transport that is not enabled is validated like any other, does not listen, and keeps its address reserved. See "Switching an inbound or a transport off" above.
 
 Engine: a `ws` connection that does not finish the WebSocket upgrade within 10 seconds is dropped, and one source (an IPv4 address or an IPv6 /64) may have 64 unfinished upgrades at once. This also applies to a reverse proxy in front of a plain `ws` listener, whose connections all come from one source.
 
@@ -244,7 +259,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 |---|---|---|---|
 | `listen` | `ip:port` | required | Where the node ends TLS. |
 | `path` | 12 to 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, starting with `/`, no `..` component | required | The path a device's request names. It is known to whoever holds a subscription. Choose one your site does not have. |
-| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get the certificate with your own tooling, and renew it the same way. On a native `tls` transport `self_signed: true` may stand instead of `cert` and `key`: the node then makes its own self-signed key and certificate, keeps them next to the config file with mode 600, renews the certificate with the same key, and reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. `name` (optional, with `self_signed` only) is the host name the certificate carries, a lowercase DNS name of at most 64 characters; without it the node draws one. The files are `tls-<inbound tag>.key` and `.crt`. A node that runs never makes a new key: if the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. Node links and pairing refuse `self_signed` candidates. See the transports page of the protocol specification. |
+| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get the certificate with your own tooling, and renew it the same way. On a native `tls` transport `self_signed: true` may stand instead of `cert` and `key`: the node then makes its own self-signed key and certificate, keeps them next to the config file with mode 600, renews the certificate with the same key, and reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. The pin is the hash of the key and a renewal keeps the key, so the pin stays the same through a renewal. The panel puts this pin into the `tls` candidates of the profiles it makes, see the panel manual. `name` (optional, with `self_signed` only) is the host name the certificate carries, a lowercase DNS name of at most 64 characters; without it the node draws one. The files are `tls-<inbound tag>.key` and `.crt`. A node that runs never makes a new key: if the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. Node links and pairing refuse `self_signed` candidates. See the transports page of the protocol specification. |
 | `decoy.origin` | `http://` URL with an address or a name and an optional port, nothing behind it | required | Your own web server. There is no default and no other kind of decoy. |
 | `decoy.proxy_protocol` | bool | `false` | Send the PROXY protocol header, version 2, at the start of every connection to the origin. |
 | `limits.sessions` | integer 1 to 1,048,576 | `16384` | Established sessions the listener holds at once. |
@@ -523,6 +538,7 @@ SOCKS5 and HTTP carry the password and the traffic in the clear. Anyone on the p
 | `udp` | bool | `true` | Whether UDP ASSOCIATE is answered. An error on an `http` inbound, which has none. |
 | `udp_any_port` | bool | `false` | Lets a client behind a NAT have a UDP association on an inbound that is not on loopback. See "UDP" below. An error on an `http` inbound, and a warning where it has no effect: on loopback, or with `udp` off. |
 | `public` | bool | `false` | Says you know that a listen address strangers reach carries traffic and passwords in the clear. See "Listen addresses" below. |
+| `enabled` | bool | `true` | `false` keeps the inbound in the config, validated, with its address reserved, and does not listen. Its connections end at the reload. |
 | `limits.connections` | integer 1 to 65536 | `1024` | Connections the inbound holds at once, logged in or not. |
 | `limits.per_source` | integer 1 to 65536 | `64` | How many of those one source may hold. A source is an IPv4 address or an IPv6 /64. A loopback peer is exempt, see below. |
 | `limits.handshakes` | integer 1 to 65536 | `256` | Connections that have not finished logging in. At most 8 of them for one source, and half of them for loopback peers together. |
@@ -605,6 +621,8 @@ An outbound is a way for the userspace stack to open TCP and UDP flows.
 | `direct` | optional `bind` (a local IP, not a wildcard), optional `interface` (a network interface of the host by name, 1 to 15 characters of letters, digits, `_`, `-` and `.`, starting with a letter or digit; since v0.2.8) | Connects from the node itself. With `bind`, flows of the other address family are rejected. With `interface`, every socket of the outbound is tied to that interface (`SO_BINDTODEVICE` on Linux, `IP_BOUND_IF` on macOS), so its traffic leaves there whatever the routing table says. |
 | `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes), optional `via` (the tag of another `socks5` outbound) | Connects through a SOCKS5 proxy, or through a chain of them when `via` is set. UDP uses UDP ASSOCIATE when the proxy offers it. |
 
+| `xray` | `server` (`host:port`) and `protocol`, or a `link`; the fields of the protocol | Connects through a VLESS, VMess, Trojan or Shadowsocks server of another party, run by the Xray add-on. Linux nodes only. See "`xray` outbounds" below. |
+
 Every outbound also has a `tag`.
 
 An `interface` that is the interface of an `l3` exit is an error: the outbound's traffic would go back into the tunnel. A `socks5` outbound takes no `interface`. Engine: on a system other than Linux and macOS, `run` refuses a config whose exits use an outbound with `interface`. An interface the host does not have when the config comes into force is logged as a warning, and the outbound's flows fail until it is there. `veilway doctor` names a missing interface.
@@ -621,6 +639,56 @@ Engine: a `server` host name is resolved by the system resolver each time the no
 - A chain that cannot be dialled makes its flows fail. Nothing goes around it.
 - **Plain text.** SOCKS5 is not encrypted. Each proxy of a chain sees the user name and password of the proxies after it, the CONNECT targets and the bytes of the flows. Put a chain only through proxies whose operators may see that, or run TLS inside every flow yourself.
 
+### `xray` outbounds
+
+From v0.2.18. An `xray` outbound sends flows through a server of another party that speaks VLESS, VMess, Trojan or Shadowsocks, with the Xray add-on doing the talking. Use it behind a `netstack` exit. The [guide](../../guides/xray-outbound/) shows the steps in the panel. The server, its name and its credential are your secrets, and whoever runs the server sees what the exit carries, as any provider of an exit does.
+
+Give either a `link`, or `protocol` and `server` with the fields of the protocol. A node takes at most 16 outbounds of this type.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `link` | string of at most 4,096 bytes | none | Input only. One share link of the kinds `vless://`, `vmess://`, `trojan://` and `ss://`, on one line. The node reads it with the same reader and the same table as the desktop app, so it accepts what the app accepts and refuses with the same codes. What it holds becomes the typed fields below and the link itself is dropped: a document read back from the node never has a `link`. Any other key next to a `link` is refused. A link the table refuses is an error that names the code and never the link. |
+| `protocol` | `vless`, `vmess`, `trojan` or `shadowsocks` | required without `link` | |
+| `server` | `host:port` | required without `link` | The server. IPv6 literals go in brackets. Xray never looks a name up, see "The server's address" below. |
+| `allow_private` | bool | `false` | Lets `server` be a private, shared (CGNAT) or unique local address. Loopback, link-local, the node's own addresses and its inbounds' pools are refused whatever this says. |
+| `id` | UUID | none | Secret. Required for `vless` and `vmess`, and refused for the other two. |
+| `password` | 1 to 255 bytes, no control characters | none | Secret. Required for `trojan` and `shadowsocks`, and refused for the other two. For a `shadowsocks` 2022 cipher it is the key as standard base64: 16 bytes for `2022-blake3-aes-128-gcm`, 32 for the other two. For the older ciphers it must have at least 16 characters, since the key comes from the password alone and a short one is guessed offline. |
+| `cipher` | string | `auto` for `vmess` | `vmess`: `auto`, `aes-128-gcm` or `chacha20-poly1305`. `shadowsocks`: required, one of `aes-128-gcm`, `aes-256-gcm`, `chacha20-ietf-poly1305`, `2022-blake3-aes-128-gcm`, `2022-blake3-aes-256-gcm` and `2022-blake3-chacha20-poly1305`. Refused for `vless` and `trojan`. |
+| `flow` | `xtls-rprx-vision` | none | `vless` only, and only over `tcp` with `tls` or `reality`. |
+| `transport` | object with `type` | `{"type": "tcp"}` | The stream: `tcp`; `ws` and `httpupgrade` with optional `path` and `host`; `grpc` with optional `service` and `authority`; `xhttp` with optional `path`, `host` and `mode` (`auto`, `packet-up`, `stream-up` or `stream-one`). A `path` starts with `/`, has at most 256 bytes and no `?`, since a query can carry early data, which the node does not use. `host` and `authority` are lowercase host names or addresses. `service` is 1 to 128 characters from letters, digits and `-._/`. A path that is left out is `/`. |
+| `security` | object with `type` | `{"type": "none"}` | `none`; `tls` with optional `server_name`, `alpn` (`h2` and `http/1.1`, each at most once) and `fingerprint` (default `chrome`); `reality` with `server_name` and `public_key` (43 characters of base64url), and optional `short_id` (up to 16 lowercase hex digits, an even number of them) and `fingerprint`. The `server_name` of `tls` defaults to the server's name and is required when `server` is an address. Certificates are always checked against the system roots. No key turns that off or pins a certificate. |
+
+```json
+{"tag": "rented", "type": "xray", "protocol": "vless", "server": "198.51.100.7:443", "id": "3f2b8c1e-5d4a-4e7b-9a6c-1d2e3f4a5b6c", "security": {"type": "tls", "server_name": "example.org"}}
+```
+
+**What validation refuses.**
+
+- `vless` and `trojan` without `tls` or `reality`: they are never spoken in the clear.
+- A `flow` that is not Vision over `tcp` with `tls` or `reality`, and a `flow` on any protocol but `vless`.
+- `reality` over `ws` or `httpupgrade`.
+- A `?` in a `path`, and any path, host, service or authority that does not read as above.
+- A `shadowsocks` password that is too short for its cipher, or a 2022 key of the wrong length.
+- An exit on an `xray` outbound whose `unsupported.udp` is `direct` or `{"via": ...}`. An Xray outbound carries UDP itself and, while it is down, the flow ends rather than leave the exit around it. Use `reject` or `drop`.
+- A `via` on an `xray` outbound, and an `xray` outbound as the `via` of another outbound, of a link or of an upstream. It is reached through a Unix socket and cannot carry a chain.
+- A literal server at an address the node may not dial, see "The server's address".
+
+The warnings are a server written as a name (see below), and `routing.fallback` next to an exit on an `xray` outbound, because users routed there fall back to the other exit while the outbound is down. `proxy_only` of such an exit defaults to `true`.
+
+**How it runs.** The add-on's one Xray process gets a `trojan` inbound for each `xray` outbound, listening on a Unix socket and routed to that outbound alone. The node dials that socket and speaks Trojan to it: CONNECT for TCP and one framed stream for each UDP flow. So the exit, the gate, the rules, the quotas and the counters are those every flow meets, and Xray only does the talking to the provider. Every request carries a password made new at each start, and before it sends a byte the node checks that the socket belongs to Xray's user.
+
+- **Linux nodes only.** The add-on host runs on Linux. On macOS and Windows nodes the outbound is down and says so.
+- **The add-on must be installed.** `scripts/veilway.sh addon xray install` also puts the node's user in the group `veilway-xray`, which owns the folder the sockets are made in (`/run/veilway-xray-out`, mode 750, and `run --xray-dir` changes it). A node that was running is restarted by the script, so that it joins the group. Without the add-on, every exit through an `xray` outbound is down and says why, and nothing goes around it.
+- **A restart drops Xray users for a moment.** One Xray runs for the inbounds and the outbounds. Adding, changing or removing either restarts it after two seconds without another change. Connections of Xray inbounds and flows through Xray outbounds end and come back with the next connect. No quota, count or user is lost.
+- **Down, with a reason.** An outbound that Xray does not carry is down, and so is every exit through it. That covers a missing add-on, a host that does not answer, Xray starting again, a name that gives no usable address and a socket that is not Xray's. A flow of a down outbound ends at once and never goes to `direct`, to another exit or to the provider's default. `GET /v1/stats` gives the reason as `down_reason` of the outbound. It names no address and no credential.
+- **Xray's own egress is not restricted.** The Xray unit has the network of the host, because providers can be anywhere. What holds Xray to the provider is the document the node writes, with one address the node checked, and a bug in Xray is not held to it. The `interface` and `bind` of the config do not apply to this traffic. On a host with other tunnels it follows the host's routing table.
+
+**The server's address.** A literal address must pass the rules of every dial of the node: not loopback, link-local, unspecified, multicast, a cloud metadata address or an address of an inbound's pool, and not private, shared or unique local unless `allow_private` is `true`. A server that is a name is looked up by the node itself through `dns.servers`, never by Xray or the host's resolver. The first address that passes the rules is written into Xray's document, and a name that gives none leaves the outbound down. The names are looked up again every 15 minutes, and every 30 seconds while a name has no address. The address in use stays while the lookup still gives it, and a lookup that fails changes nothing, so a resolver that flaps does not restart Xray. That lookup is plain UDP DNS, so whoever can see the node's DNS traffic learns the provider's name. Write the address when the name must stay hidden. Validation warns for each name.
+
+**Secrets.** `id` and `password` are secrets. The control API shows the marker in their place and takes it back for the running outbound with the same tag, server, protocol and kind of security. Change any of those and the secret has to be written out again.
+
+`veilway doctor` checks the add-on and the socket folder when the config has an `xray` outbound, see "Commands".
+
 ## `exits`
 
 An exit is a named way out that users are routed to.
@@ -631,6 +699,7 @@ An exit is a named way out that users are routed to.
 | `name` | string, 1 to 64 characters, no control, bidirectional formatting, zero-width, line separator or other invisible characters | the tag | Display name. |
 | `country` | two uppercase letters | none | ISO 3166-1 alpha-2 code shown in clients. Not checked against the ISO list. |
 | `backend` | object | required | See below. |
+| `load` | object | none | Tells apps how busy this exit is. Off when absent. See "`load`" below. An error on a `block` exit. |
 
 ### `backend`
 
@@ -679,7 +748,7 @@ Three things hold whatever the rules say. A device can only send from its own ad
 
 ### `proxy_only` and `unsupported`
 
-`proxy_only` (bool) says that traffic through this exit leaves only through its SOCKS5 proxy. It defaults to `true` when the outbound is `socks5` and must be absent or `false` when the outbound is `direct`.
+`proxy_only` (bool) says that traffic through this exit leaves only through its SOCKS5 proxy. It defaults to `true` when the outbound is `socks5` or `xray` and must be absent or `false` when the outbound is `direct`.
 
 `unsupported` says what a `netstack` exit does with traffic its outbound cannot carry:
 
@@ -693,6 +762,7 @@ Three things hold whatever the rules say. A device can only send from its own ad
 - `direct` sends from the node's own address around the proxy, and `via` hands the traffic to another exit. Either one is an error unless the exit sets `"proxy_only": false`, and validation still warns for each use.
 - A `via` target must exist, must not be the exit itself, must be an `l3` exit for `icmp_echo` and `other`, and must carry UDP for `udp`. The target's own `unsupported` policy is never consulted, so chains and loops cannot form.
 - On a `direct` outbound, setting `udp` is a warning: it never applies.
+- On an `xray` outbound, `udp` must be `reject` or `drop`. The outbound carries UDP itself, and `direct` and `via` would let the flow leave around it while it is down.
 
 Engine: `direct` for `icmp_echo` uses unprivileged ping sockets and is checked at start. The `udp` policy is decided once per flow at its first packet and the flow never moves between the proxy and the other path. A destination sent by `direct` or `via` must pass the gate of both exits. A `via` target that cannot carry the packet rejects it. Every switch of an upstream between "has UDP" and "has no UDP" is logged at info and counted.
 
@@ -702,6 +772,26 @@ More engine behavior of `unsupported`:
 - `reject` answers are rate limited per device (burst 20, then 10 a second).
 - ICMP codes used: administratively prohibited for rules, the gate, entitlement and a rejected ping; host unreachable for a tunnel address nobody holds; port unreachable for `unsupported.udp`; protocol unreachable on IPv4 and prohibited on IPv6 for `unsupported.other`.
 - `icmp_echo: direct` allows 16 ping identifiers per device, 32 per user and 1024 in total.
+
+### `load`
+
+From v0.2.18. An exit with a `load` object tells every device of its users how busy it is, as one of three levels: low, medium or high. Apps show them as **Not busy**, **Busy** and **Very busy**. It is off when `load` is absent, and then apps show nothing for the exit.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `by` | `flows` or `mbps` | required | `flows`: the flows open on the exit, all users together. `mbps`: the exit's traffic, up and down added together, in megabits per second, averaged over the last 30 seconds. |
+| `busy` | integer 1 to 1,000,000 | required | The level is medium from this value. Below it, low. |
+| `very_busy` | integer 2 to 1,000,000 | required | The level is high from this value. Must be greater than `busy`. |
+
+```json
+"load": {"by": "flows", "busy": 50, "very_busy": 200}
+```
+
+- **The node looks every 10 seconds.** A level changes only after the new one held for two looks in a row, so a value that crosses a threshold and comes back does not flap. The first look that has a value sets the level at once. For `mbps` there is no level before the second look.
+- **A device is told a change at most once in 60 seconds**, however often the node looks, and also when a reload or a change of whether the exit works would have sent the list anyway. A level that was told and still holds stays as it was told.
+- **The levels are coarse on purpose.** A device cannot use them to watch what other users do: it learns at most that the exit got busier, a minute late, and never a number. Without `load` the node sends nothing about other users' traffic.
+- **A `block` exit has no load**, and `load` on one is an error.
+- The control API's `GET /v1/exits` shows the setting as `load` and the level apps are told as `load_level`.
 
 ## `routing`
 
@@ -847,6 +937,8 @@ A list of at most 4 notices that the control channel of every `veilway` inbound 
 
 Notices on a node with no `veilway` inbound are a warning.
 
+These notices reach only devices that are connected. A panel can also put notices into every signed subscription document, which apps keep from their last refresh and show even when they cannot connect. Those are a setting of the panel and not of this config, see the [panel manual](../../manuals/panel/#notices).
+
 ## `public_addresses`
 
 A list of at most 8 host names or IP addresses, with no port and none twice. They are the addresses a profile of this node is given, each with the port of the listener of one of its transports. The control API shows them in `GET /v1/status` and `GET /v1/inbounds`. A host name is lowercase ASCII, written as for a rule's `domain` without `*`. An IPv4-mapped IPv6 address and an address with a zone are errors, as everywhere.
@@ -979,7 +1071,7 @@ Validation refuses a link that is not native, one whose key is not `signing_key`
 
 ## `xray`
 
-The Xray add-on: inbounds that the official `xray` binary serves, with users that are users of this node. It is off when the key is absent, and nothing runs until the add-on is installed, see the [Xray manual](../../manuals/xray/). Xray reaches the network only through the node, so the gate, the rules, the exits, the quotas and the counters apply to its users as they do to a tunnel's. An Xray user's traffic leaves through `netstack` exits only: `l3` and `chain` exits are not built for it.
+The Xray add-on: inbounds that the official `xray` binary serves, with users that are users of this node. It is off when the key is absent, and nothing runs until the add-on is installed, see the [Xray manual](../../manuals/xray/). The traffic of Xray's users goes only to the node, so the gate, the rules, the exits, the quotas and the counters apply to its users as they do to a tunnel's. (Xray itself is not kept from the network by its unit, since `xray` outbounds need it to reach their providers.) An Xray user's traffic leaves through `netstack` exits only: `l3` and `chain` exits are not built for it.
 
 | Key | Type | Default | Meaning |
 |---|---|---|---|
@@ -1033,7 +1125,7 @@ After a commit:
 - `replay.per_source` changes at once. `replay.cache` changes at the next start.
 - An inbound whose `type` changes from `veilway` to `wireguard` loses its control channel: its connections are closed and the port is refused. The other way round the port starts to answer. Sessions stay.
 - Changed `notices` are sent to every open control connection.
-- A link that keeps its `id` and its key keeps its state across a reload. A changed `xray` section starts Xray again, see `xray`.
+- A link that keeps its `id` and its key keeps its state across a reload. A changed `xray` section, or a changed `xray` outbound, starts Xray again, see `xray` and "`xray` outbounds".
 - DNS sets change without touching a tunnel or a session: a set can be added, removed, given other servers or given to other inbounds, groups and users. The next query of every user goes to the list the new config gives them.
 - A user whose queries go to other servers than before loses the names the node remembered for them, so that no `domain` rule keeps matching by the word of a resolver that is no longer theirs. This is logged at info. What counts is the servers of the list the user's queries go to, looked at for each inbound their devices are on: moving a user, a group or an inbound into, out of or between sets clears the memory, and so does changing the `servers` of the set they are on. The same holds for `dns.servers`: changing it clears the memory of every user who resolves through it, which earlier builds did not do. The same servers in another order, and another set with the same servers, are no change. `domain` rules match for that user again as their names are resolved again; open flows are checked like after any reload.
 - A query that is waiting for a server when the reload happens is answered by that server. Its answer is not remembered when the servers its user resolves through changed in the meantime.
@@ -1064,9 +1156,9 @@ veilway mirror --config mirror.json
 veilway mirror --config mirror.json --check
 ```
 
-`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --replay <file>` sets the path of the replay file, `veilway-replay` next to the state file by default; only a config with an obfuscated transport uses it, see `replay`. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `run --addons <folder>` is the folder the Xray add-on is installed in (`/usr/local/lib/veilway/addons` by default), which must not be writable by the user the node runs as, and `run --xray-socket <path>` is the socket of the Xray host that starts Xray (`/run/veilway-xray/host.sock` by default). Only a config with an `xray` section uses them, see `xray`. `veilway xray-host` is that host, which the install script runs as its own service on Linux. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key. `genkey --transport` prints a new node transport key for `transport_keys` of one inbound of one node, and its public half, which is what the profiles of that inbound carry: it is an X25519 key of its own and never a WireGuard key. `gensecret` prints a new transport secret for one device of a `veilway` inbound.
+`run` refuses a config file that group or others can read unless started with `--allow-readable-config`. `run --state <file>` sets the path of the usage state file, `veilway-state.json` next to the config file by default. `run --replay <file>` sets the path of the replay file, `veilway-replay` next to the state file by default; only a config with an obfuscated transport uses it, see `replay`. `run --api <path>` sets the unix socket of the control API, `veilway.sock` next to the config file by default, and `run --no-api` starts the node without the API; the two cannot be combined. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only. `run --addons <folder>` is the folder the Xray add-on is installed in (`/usr/local/lib/veilway/addons` by default), which must not be writable by the user the node runs as, and `run --xray-socket <path>` is the socket of the Xray host that starts Xray (`/run/veilway-xray/host.sock` by default). `run --xray-dir <folder>` is the folder shared with Xray's user where the sockets of `xray` outbounds are made (`/run/veilway-xray-out` by default). Only a config with an `xray` section or an `xray` outbound uses these three, see `xray` and "`xray` outbounds". `veilway xray-host` is that host, which the install script runs as its own service on Linux. `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system. `schema` prints the JSON Schema of this format. `genkey` prints a new WireGuard private key and its public key. `genkey --transport` prints a new node transport key for `transport_keys` of one inbound of one node, and its public half, which is what the profiles of that inbound carry: it is an X25519 key of its own and never a WireGuard key. `gensecret` prints a new transport secret for one device of a `veilway` inbound.
 
-`doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--replay <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
+`doctor` tries what a config needs of this host and of the network, once, before the node is started or after it misbehaves. It needs no running node. It never changes the node, the host or any file, and it never prints a secret: a line names tags, user-chosen names, field paths and listen addresses, and no other value of the config. `--config <file>` is the config to check (`config.json` by default). `--state <file>`, `--replay <file>`, `--api <path>` and `--no-api` mean what they mean for `run`, with the same defaults. `--addons <folder>` and `--xray-dir <folder>` do too, and matter when the config has an Xray inbound or an `xray` outbound. `--json` prints one JSON document with the same lines in place of text. `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most. Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
 
 `link offer` and `link answer` pair this node with another one, one command on each node, and print the entry for each node's `links` once both operators have compared the fingerprint. Neither writes the config: you put the entry in yourself. Exit status: 0 paired, 2 not confirmed, 1 anything else.
 
@@ -1140,12 +1232,14 @@ Each check prints one line: its status, the kind of check, what it looked at, an
 6. The proxy path of every `ws` and `fronted` listener: whether anybody but this host can reach it, whether the web server in front speaks HTTP/1.1 to the node, and, from a running node, whether the requests it has read named their source in `client_address_header`. For a `fronted-shaped` transport the line also prints the shape the transport uses, so that it can be compared with the profile.
 7. Every link that is enabled, without dialing anything: a clock that is set, whether an exit with a `chain` backend names each entry half, whether its `mtu` is below that of an inbound with users, and, from a running node, each link's state.
 8. Every DNS server of the config, those of `dns.servers` and then those of every DNS set: one query over UDP and the same query over TCP from the node itself, with the answer time. The line of a server of a set names the set, as in `set family, servers[0], udp`. A server that stands in two lists is asked once for each. Silence over UDP is a failure when some exit leaves directly, and a warning otherwise. Silence over TCP is a warning, because answers too long for one datagram and every lookup through a SOCKS5 proxy need TCP.
-9. Every outbound. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds, and when the config has sets a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where the queries of a set leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
+9. Every outbound. An `xray` one is not tried, since its socket exists only while the node runs: its line says so, and the `xray` line described below says whether the add-on is installed. A `direct` one gets a TCP connect and a UDP exchange to the first DNS server it can reach from the node itself. A `socks5` one gets four separate lines: the TCP connect to the proxy, the handshake with the authentication of the config, a CONNECT through the proxy to the first DNS server with a real DNS query, and a UDP ASSOCIATE with a real DNS query through the relay. A proxy without UDP therefore shows as one clear warning on the last line. The relay must be on the host the control connection reached, as the node requires. The DNS servers meant here are those of `dns.servers`. The servers of DNS sets are not tried through the outbounds, and when the config has sets a `skipped` line (`sets, through the outbounds`) after the DNS lines says so: where the queries of a set leave through a proxy, doctor does not tell whether that proxy reaches the set's servers.
 10. Every l3 exit (Linux only): `CAP_NET_ADMIN`, `/dev/net/tun`, `ip` and `nft` on the `PATH`, the forwarding sysctls as they are now and what the node would change with `masquerade`, and whether the interface name is free. When a running node has the exit and its interface is not there, a warning says the exit is down and being retried.
 11. ICMP ping sockets, when a policy uses `icmp_echo: direct`.
 12. The state file: a regular file or absent, a directory the user can write, the mode, and whether it parses.
 13. The replay file, for a config with an obfuscated transport: a regular file or absent, a directory the user can write, whether it is a replay file, and its floor, its limit and the clock. A floor more than 80 seconds ahead of the clock is a failure, because the node then refuses every device for longer than any start costs. A floor up to 80 seconds ahead is what a start or a reset leaves, and the line says how long it lasts. A limit more than 80 seconds ahead of the clock is a warning: a clock ran ahead, and a node that is started on that file refuses every device until the clock passes the limit. A file that is not a replay file is a failure. Doctor reads the file and never moves or writes it.
 14. The control socket path: what is there, and whether its directory can be written.
+
+When the config has an Xray inbound or an `xray` outbound, `doctor` also checks the add-on right after the config file, in a line of the kind `xray`: whether the executable is installed, is the pinned release and belongs to root. For an `xray` outbound it also checks the folder for the sockets (`--xray-dir`). It is a warning while the folder is not there yet, since the Xray unit makes it when it runs. It fails when the folder is not a folder, when its mode lets anyone but the owner and the group in or the group write to it (the mode is 750), when it belongs to root, or when the user `doctor` runs as is not in its group. Run `doctor` as the node's user, since root enters any folder. `scripts/veilway.sh addon xray install` sets the group and the folder up.
 
 The four statuses: `ok` means the check passed. `warn` means the node starts and works, but something is likely not what you want. `fail` means the node would not start or would not work for the thing checked. `skipped` means the check was not tried because a step before it failed, or because of `--no-api`. A final line counts the statuses.
 

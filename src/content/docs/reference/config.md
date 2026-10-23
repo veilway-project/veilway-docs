@@ -148,6 +148,7 @@ Rules for `address`:
 - Pools of different inbounds do not overlap.
 
 Who may use an inbound is decided by addresses alone: a device belongs to the inbound whose pool contains its address.
+A device may have one IPv4 and one IPv6 address in each inbound, so one device can use several inbounds. `veilway check` warns about a `veilway` inbound with transports that no device has an address in and no link uses, once the config has any device: every connection to it would be treated as a stranger's.
 
 ### The control channel
 

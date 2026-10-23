@@ -14,6 +14,7 @@ export default defineConfig({
 				root: { label: "English", lang: "en" },
 				fa: { label: "فارسی", lang: "fa", dir: "rtl" },
 			},
+			customCss: ["./src/styles/custom.css"],
 			components: { ThemeSelect: "./src/components/ThemeSelect.astro" },
 			// Applies the reader's layout direction before the page is drawn; the language's own direction is kept in data-lang-dir for "Automatic".
 			head: [{ tag: "script", content: "(function(){var h=document.documentElement;h.dataset.langDir=h.dir;try{var d=localStorage.getItem('veilway-dir');if(d==='ltr'||d==='rtl')h.dir=d}catch(e){}})()" }],

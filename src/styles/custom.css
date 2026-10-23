@@ -1,0 +1,20 @@
+/* Phone layout. Starlight's own rules stay as they are; these only stop wide content from pushing the page or crushing a column. */
+.sl-markdown-content :is(:not(pre) > code, a, td, th, li, p) { overflow-wrap: break-word; }
+/* Code inside Persian text reads left to right and stays in one piece at its edges. */
+:root[dir="rtl"] .sl-markdown-content :not(pre) > code { direction: ltr; unicode-bidi: isolate; }
+@media (max-width: 50rem) {
+	/* A table is its own scroll container. Give each column room to read, so it scrolls sideways instead of turning the last column into a strip of single words. */
+	.sl-markdown-content :is(:not(pre) > code, a, td, th, li, p) { overflow-wrap: anywhere; }
+	.sl-markdown-content :is(td, th) { min-inline-size: 7rem; }
+	.sl-markdown-content :is(td, th):first-child { min-inline-size: 9.5rem; }
+	.sl-markdown-content td:last-child:not(:first-child) { min-inline-size: 14rem; }
+	.sl-markdown-content :is(td, th):first-child { padding-inline-start: 0.75rem; }
+	.sl-markdown-content :is(td, th):last-child { padding-inline-end: 0.75rem; }
+}
+/* Code blocks stay left to right in Persian pages and scroll inside the block. */
+:root[dir="rtl"] .expressive-code { direction: ltr; }
+@media (pointer: coarse) {
+	/* Sidebar links and the pickers get a touch-sized hit area. */
+	#starlight__sidebar a { padding-block: 0.6rem; }
+	select { min-block-size: 2.75rem; }
+}

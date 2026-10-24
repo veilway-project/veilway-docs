@@ -44,6 +44,8 @@ The transport needs its own address and port, not shared with another transport.
 2. Choose **Add a transport** and set its type to **A real site's handshake, borrowed (alpha)**. A warning, **Alpha, unreviewed, rated Detectable**, appears.
 3. **Listens on**: the address and port from step 2, for example `0.0.0.0:8443`.
 4. **Site name**: the site from step 1, in lowercase, for example `www.example.com`. Leave **Extra names**, **Site port** and **Site address** empty unless you need them. An empty port means 443.
+
+   **Connect to the site through** (from v0.2.21): by default the server connects to the site from its own address, for strangers it relays and for its probes of the site. Pick one of the node's outbounds to send those connections that way instead. The detour makes the site answer probers later, which makes the server easier to tell apart, and some sites refuse foreign addresses. If that outbound is down, the server does not fall back to its own address.
 5. **Transport key, private half**: choose **Pick one**. The key is not shown again, and the panel keeps its public half.
 6. Tick **I know the site has not agreed to this, and I answer for using its name**. The node does not run the transport without it.
 7. Choose **Review changes**, then **Apply to the node**.

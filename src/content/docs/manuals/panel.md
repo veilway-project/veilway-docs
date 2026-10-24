@@ -449,7 +449,7 @@ A link shown again carries the user's current endpoint and the active gateway ke
 
 ## Node
 
-Five pages show what the node runs: **Inbounds**, **Exits and routing** (with the tabs **Exits**, **Routing** and **Outbounds**), **DNS and logs**, **Profiles** and **Nodes**.
+Five pages show what the node runs: **Inbounds**, **Exits and routing** (with the tabs **Exits**, **Routing** and **Outbounds**), **DNS and logs**, **Profiles** and **Links**.
 
 Every change goes through a review. **Edit** or **Remove** opens **Review changes**, and nothing reaches the node until you choose **Apply to the node**. The review shows:
 
@@ -649,7 +649,7 @@ The **Profiles** page has one profile for each Veilway inbound, made from the no
 
 ### Node links
 
-The **Nodes** page lists the node's links. A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/). The **Nodes** page has a **Guided setup** with three starts: **Set up as entry node**, **Set up as exit for an entry node** and **Reverse tunnel**. Each walks through the direction, codes and fingerprints, then adds the exit that leaves through the link (on the entry) or picks what the link may use (on the exit), all as one reviewed change. By hand, the two operators pair the nodes in four steps:
+The **Links** page lists the node's links. A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/). The **Links** page has a **Guided setup** with three starts: **Set up as entry node**, **Set up as exit for an entry node** and **Reverse tunnel**. Each walks through the direction, codes and fingerprints, then adds the exit that leaves through the link (on the entry) or picks what the link may use (on the exit), all as one reviewed change. By hand, the two operators pair the nodes in four steps:
 
 1. One operator chooses **Make an offer**, picks the inbound the link connects to, the direction, the transports and the tunnel addresses, and chooses how long the offer stays open. They send the offer code to the other operator. The offer holds no secret, but send it over a channel you trust.
 2. The other operator chooses **Paste an offer** and reads it. The panel shows where their node would connect before anything is answered. They accept and send back an answer code.
@@ -677,9 +677,29 @@ A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **End
 
 On both sides you can set an expiry and the MTU. **Remove** asks you to confirm with the other node's name and then goes through the review. The other node keeps its half until its operator removes it there, and linking again needs a new pairing.
 
+### Several servers
+
+:::caution[Designed for v0.3.0, not built]
+This section describes v0.3.0 as designed. See the [panel and nodes page](../../protocol/panel-nodes/).
+:::
+
+One panel can manage more than one server. A remote node joins **This server** through a managed [node link](#node-links), and the panel reaches its control API through that link. To set one up, follow [Add a second server](../../guides/second-server/). The **Servers** page lists each server with its state, last contact, users, pool use and traffic. **Add a server** starts the pairing in one of two directions.
+
+| Field | What it does |
+|---|---|
+| **Name** | The name shown in the panel, and in a user's profile names when the user has more than one server. |
+| **Position** | A lower number is listed first. |
+| **Address pool** | The IPv4 range of the devices at this server. Change it only while no device has an address in it. |
+| **Count this server's usage** | Off leaves this server's traffic out of the user's total. |
+| **Fastest usage growth** | The most a server's usage may grow per second. The default is 1.25 GB/s. A larger jump is clipped and logged. |
+
+On a user's page, **Servers this user may use** is **Every server** or **Only these servers**, with the servers you pick. Usage is shown for each server.
+
+**Remove server** asks the node to empty itself and drop the link, then removes the link here. It asks for your password and code again. Choose **The server is gone** instead when the server was seized or is gone. The panel then removes the link without asking the node.
+
 ### Tunnels
 
-A tunnel forwards one TCP or UDP port of this node through a [node link](#node-links) to one address on the far node, such as a server at home with no open port of its own. Nobody signs in: whoever reaches the port reaches the target. The **Tunnels** card on the **Nodes** page lists them below the links. A tunnel needs a link first, and an exit that leaves through it, since those are the only exits its **Exit** field offers.
+A tunnel forwards one TCP or UDP port of this node through a [node link](#node-links) to one address on the far node, such as a server at home with no open port of its own. Nobody signs in: whoever reaches the port reaches the target. The **Tunnels** card on the **Links** page lists them below the links. A tunnel needs a link first, and an exit that leaves through it, since those are the only exits its **Exit** field offers.
 
 Two presets under **Guided setup** start a tunnel with its protocol already set:
 
@@ -816,6 +836,6 @@ The panel checks GitHub for a newer published release (not a draft or a prerelea
 
 The panel never updates itself. It writes the word `panel`, `node` or `both` to a file in `/var/lib/veilway-panel-update/`. A root service started by a systemd path unit deletes the file and runs the script's `panel-update-request` command, which does what `veilway.sh update <word> --yes` does and checks the release signatures before it installs. Nothing in the file is used except that word. Servers installed before v0.2.2 have an installer that only knows `panel`. Run `curl -fsSL https://raw.githubusercontent.com/veilway-project/veilway/main/scripts/veilway.sh | sudo bash -s update` on them once.
 
-**Check for updates**, next to **Restart node** and **Restart panel** on **Nodes**, asks GitHub now instead of waiting for the next check, at most once a minute. It refreshes the update notice and says whether anything is newer. It is the API route `POST /update/check`.
+**Check for updates**, next to **Restart node** and **Restart panel** on **Links**, asks GitHub now instead of waiting for the next check, at most once a minute. It refreshes the update notice and says whether anything is newer. It is the API route `POST /update/check`.
 
-**Restart node** and **Restart panel**, on this node's card on **Nodes**, go the same way. The panel writes `restart-node` or `restart-panel`, and the script runs `veilway.sh restart`. They ask for your password again and are kept in the audit log. A node restart drops every connected device for a moment. Config changes never need one, since the node applies them as they are made. The script of v0.2.9 or later does the restart. An older one ignores the request, and its next update installs one that does.
+**Restart node** and **Restart panel**, on this node's card on **Links**, go the same way. The panel writes `restart-node` or `restart-panel`, and the script runs `veilway.sh restart`. They ask for your password again and are kept in the audit log. A node restart drops every connected device for a moment. Config changes never need one, since the node applies them as they are made. The script of v0.2.9 or later does the restart. An older one ignores the request, and its next update installs one that does.

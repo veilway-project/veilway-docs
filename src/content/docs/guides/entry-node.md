@@ -48,8 +48,8 @@ The two servers agree on which one opens the connection. Traffic flows both ways
 
 Have the other server's operator on a call or another channel you trust, because the last step compares fingerprints aloud. If you run both servers, open both panels side by side.
 
-1. On the **entry's** panel, open **Nodes** and choose **Set up as entry node**. For a reverse link, choose **Reverse tunnel** and then **The entry**.
-2. On the **exit's** panel, open **Nodes** and choose **Set up as exit for an entry node**. For a reverse link, choose **Reverse tunnel** and then **The exit**.
+1. On the **entry's** panel, open **Links** and choose **Set up as entry node**. For a reverse link, choose **Reverse tunnel** and then **The entry**.
+2. On the **exit's** panel, open **Links** and choose **Set up as exit for an entry node**. For a reverse link, choose **Reverse tunnel** and then **The exit**.
 3. Both sides pick the same direction. The panel says who makes the offer: the exit in a forward link, the entry in a reverse one. That side picks the Veilway inbound, the transports and the tunnel addresses, then sends the offer code to the other side.
 4. The other side pastes the offer, checks where its server would connect, and sends back the answer code. If the offer was made for the other side, the panel says so and refuses to answer.
 5. The offering side pastes the answer. Both sides read their eight fingerprint groups aloud and type the other's. Confirm only when they match. The link is then in each node's config.
@@ -60,7 +60,7 @@ Profiles do not change, so there is nothing to publish. Apps see the new exit at
 
 ## Check that it works
 
-- On both panels the link's card under **Nodes** shows **Up** within a minute. **Unreachable** means the dialing side cannot reach the other. Check the direction, the address in the offer and the firewall.
+- On both panels the link's card under **Links** shows **Up** within a minute. **Unreachable** means the dialing side cannot reach the other. Check the direction, the address in the offer and the firewall.
 - Connect a device to the entry, pick the new exit if it is not the default, and open a site blocked from inside. A "what is my IP" page should show the exit's address and country.
 - The link's **Carried** counter grows on both cards while users browse.
 

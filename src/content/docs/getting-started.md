@@ -201,7 +201,7 @@ If you have no domain name, the script can serve the subscriptions on the server
 sudo bash veilway.sh install panel --no-domain
 ```
 
-It asks for the web server (Caddy by default), the port (443 if it is free) and the server's IP address. `--https-port` and `--ip` set the last two without a question. `--yes` takes the defaults.
+It asks for the web server (nginx by default), the port (443 if it is free) and the server's public IP address. `--https-port` and `--ip` set the last two without a question. `--yes` takes the defaults. On a cloud server behind NAT, the address it finds is a private one: give the public one with `--ip`. A private address given with `--ip` is used as it is, for a server used only on your home network.
 
 The script makes a self-signed certificate for that IP. The admin pages stay on `127.0.0.1` and are not on the internet. The web server serves only the subscription path, `/sub`. Every other path answers 404.
 

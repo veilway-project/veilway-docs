@@ -193,6 +193,30 @@ panel.example.com {
 
 Then open `https://panel.example.com/3f9c0a7e21b84d65/`, enter the setup token with a username and password, accept the [operator terms](../legal/operator-terms/), and follow the [panel manual](../manuals/panel/). With the manual web server setup, set the panel's `not_found` to your web server's own 404 page, so a stranger cannot tell the subscription path from any other missing path.
 
+## Without a domain
+
+If you have no domain name, the script can serve the subscriptions on the server's IP address:
+
+```
+sudo bash veilway.sh install panel --no-domain
+```
+
+It asks for the web server (Caddy by default), the port (443 if it is free) and the server's IP address. `--https-port` and `--ip` set the last two without a question. `--yes` takes the defaults.
+
+The script makes a self-signed certificate for that IP. The admin pages stay on `127.0.0.1` and are not on the internet. The web server serves only the subscription path, `/sub`. Every other path answers 404.
+
+To open the admin pages, make an SSH tunnel from your computer:
+
+```
+ssh -L 8480:127.0.0.1:8480 root@<server-ip>
+```
+
+Then open `http://localhost:8480/<admin path>/`. The script prints the exact command and address at the end.
+
+The self-signed certificate is safe for your users. The apps check it by its pin, a hash of its public key, not by a name. The script prints the pin. Add the endpoint under **Settings** > **Endpoints** with the URL `https://<server-ip>:<port>/sub/main` and that pin.
+
+Do not open the admin pages in a browser over the self-signed certificate. The browser warns about it, and the admin pages are meant only for the tunnel.
+
 ## Installing from a mirror
 
 A mirror is a copy of the release files on a reachable server, for networks that block GitHub. Anyone can [host one](../guides/release-mirror/). You need not trust it: the installer checks every file against the script's built-in key, whichever mirror it came from.

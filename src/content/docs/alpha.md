@@ -1,16 +1,37 @@
 ---
 title: The alpha release
-description: What Veilway v0.2.17-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.2.20-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.17-alpha`, after `v0.2.16-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.20-alpha`, after `v0.2.19-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.17-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.17-alpha)
+- Node and install script: [v0.2.20-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.20-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.20-alpha
+
+- **Android QR scanning works.** **Scan with the camera** opens the phone's camera app. Veilway reads the photo on the phone, then deletes it.
+- **Pick an exit while disconnected.** The choice is kept for that subscription and used when you connect.
+
+## New in v0.2.19-alpha
+
+- **Faster downloads through the tunnel.** The node's TCP stack had a 16 KB limit on data in flight, no congestion control, and resent a lost packet many times. One download went from 68 KB/s to about 300 KB/s.
+- **Times on Android** follow the phone's 12 or 24 hour setting.
+- **The installer works without minisign** on Ubuntu 22.04 and Debian 11: it downloads minisign 0.11 and checks it against a pinned SHA-256.
+- **Panel:** a new device's first connect is no longer refused, linked inbounds carry no device addresses, a phone layout, and a transport picker when pairing two nodes.
+
+## New in v0.2.18-alpha
+
+- **Xray outbounds.** An exit can leave through another provider's Xray server, run by the Xray add-on. See [Xray outbound](../guides/xray-outbound/).
+- **Node links renew an idle session** instead of dropping it.
+- **Panel-made devices** get a WireGuard config and QR code.
+- **Subscriptions** carry the node's TLS pin and provider notices, and can show exit load (off by default).
+- **Inbounds and transports** have an enabled switch.
+- **Camera QR scanning** in the apps.
 
 ## New in v0.2.17-alpha
 

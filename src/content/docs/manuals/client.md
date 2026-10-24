@@ -143,7 +143,7 @@ If the app says **The answer did not reach the connection**, press connect again
 
 ## Exits
 
-If your provider lists exits, the **Exit** row on the **Connection** screen opens **Choose an exit**. Your traffic leaves the provider's network at the exit you pick.
+If your provider lists exits, the **Exit** row on the **Connection** screen opens **Choose an exit**. Your traffic leaves the provider's network at the exit you pick. From v0.2.20 you can pick it while disconnected too: the choice is kept for that subscription and used when you connect.
 
 - **Automatic** uses your provider's exit for you, or one of the exits your provider set up to switch to while yours is down. The **Exit** row shows which, such as **Automatic: Amsterdam**.
 - Each exit shows its country and, when reported, its load: **Not busy**, **Busy** or **Very busy** (coarse, changes at most once a minute). An exit that does not answer shows **Not answering right now**.

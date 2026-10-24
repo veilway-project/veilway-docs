@@ -50,6 +50,7 @@ export default defineConfig({
 						{ label: "Control channel", translations: { fa: "کانال کنترل" }, slug: "protocol/control-channel" },
 						{ label: "Subscription format", translations: { fa: "قالب اشتراک" }, slug: "protocol/subscription-format" },
 						{ label: "Node links", translations: { fa: "پیوند نودها" }, slug: "protocol/node-links" },
+						{ label: "Several nodes from one panel", translations: { fa: "چند نود از یک پنل" }, slug: "protocol/panel-nodes" },
 						{ label: "Upstream providers", translations: { fa: "ارائه‌دهندگان بالادستی" }, slug: "protocol/upstreams" },
 						{ label: "Offline bundle", translations: { fa: "بسته آفلاین" }, slug: "protocol/offline-bundle" },
 						{ label: "Xray in the desktop apps", translations: { fa: "Xray در برنامه‌های دسکتاپ" }, slug: "protocol/xray-client" },

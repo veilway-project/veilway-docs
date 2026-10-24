@@ -150,6 +150,21 @@ If your provider lists exits, the **Exit** row on the **Connection** screen open
 
 If the app cannot change the exit, it says **The exit could not be changed**.
 
+## Local proxy
+
+From v0.2.21, **Settings > Local proxy** runs a SOCKS5 and HTTP proxy on this computer, on port 10808 by default. Set a program or a browser to use it.
+
+- **Proxy only**: no VPN. Only programs set to use the proxy go through Veilway. Names are looked up through the tunnel. Nothing else on the computer changes.
+- **With the VPN**: the whole computer goes through Veilway, and the proxy is there as well.
+
+The proxy needs a user name and password. The app makes them when you turn it on; copy them into the program. You can turn the login off, but then any program on this computer can use the proxy. Chrome cannot send a SOCKS5 login: use the HTTP proxy for it.
+
+**Allow devices on my network** lets other phones and computers use the proxy. It always needs the login, and the traffic between them and this computer is not encrypted. Use it only on a network you trust.
+
+Connections from links of other apps (Xray) always use the VPN.
+
+On Linux without the app: `sudo veilway connect --proxy-only --local-proxy 127.0.0.1:10808 <link>`. Without `--proxy-user` and `--proxy-password-file` it prints a random login once.
+
 ## Usage
 
 The **Usage** screen shows:

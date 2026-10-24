@@ -28,6 +28,10 @@ To give a subscription to another device, press **Share** on its row. The app ca
 
 If the connection drops, the app retries a few times with longer pauses, then says it gave up. You can connect again.
 
+## Local proxy
+
+From v0.2.21, **Settings > Local proxy** runs a SOCKS5 and HTTP proxy on the phone, on port 10808 by default. **Proxy only** needs no VPN permission: only apps set to use the proxy go through Veilway. **With the VPN**, the whole phone goes through Veilway and the proxy is there as well. On Android the proxy always needs its user name and password, so other apps cannot use it or use it to find out that you run a VPN.
+
 ## The kill switch
 
 While the app runs, it keeps the VPN interface up and blocks all traffic when the connection drops, through reconnects and after it gives up. The notification says **No connection. Internet blocked until the VPN is back**, then **Internet blocked until you reconnect**. Only **Disconnect** lifts it.

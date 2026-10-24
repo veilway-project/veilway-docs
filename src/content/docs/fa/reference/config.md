@@ -360,7 +360,7 @@ server {
     location = /assets/live-7c1d0a52.js {
         proxy_pass http://veilway;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -372,7 +372,7 @@ server {
     location = /assets/sync-90be44f1.js {
         proxy_pass http://veilway;
         proxy_http_version 1.1;
-        proxy_set_header Host $host;
+        proxy_set_header Host $http_host;
         proxy_set_header Connection "";
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_buffering off;
@@ -485,7 +485,7 @@ server {
 location = /assets/feed-5a1e9c30.js {
     proxy_pass http://veilway;
     proxy_http_version 1.1;
-    proxy_set_header Host $host;
+    proxy_set_header Host $http_host;
     proxy_set_header Connection "";
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_buffering off;

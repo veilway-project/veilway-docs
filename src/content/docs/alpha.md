@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What Veilway v0.2.23-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.0-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.23-alpha`, after `v0.2.22-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.0-alpha`, after `v0.2.23-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.23-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.23-alpha)
+- Node and install script: [v0.3.0-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.0-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.0-alpha
+
+- **Several servers from one panel.** Add a server on the Servers page. It joins through a node link and the panel manages it through that link. A user's subscription lists the servers they may use, and usage is added up across them, with a cut on every server at the quota. A config sent to a server is put back after 2 minutes unless the panel can still reach it. See [Add a second server](../guides/second-server/).
+- **Install without a domain.** `install panel --no-domain` serves the subscriptions on the server's IP with a pinned certificate, and keeps the admin pages on an SSH tunnel.
+- **`veilway link remove`** lets a server leave its panel, and **`veilway connect --refresh`** gets the latest subscription first.
+- The command-line client on Windows is one file, the panel backs up its database before each upgrade, and `veilway doctor` checks managed links.
 
 ## New in v0.2.23-alpha
 

@@ -1157,6 +1157,7 @@ veilway genkey --transport
 veilway gensecret
 veilway link offer --config config.json --tag to-exit --inbound links --name entry-1 --address 10.9.0.2 --transports transports.json
 veilway link answer --config config.json --tag to-exit
+veilway link remove --config config.json --tag panel --empty --apply
 veilway mirror --config mirror.json
 veilway mirror --config mirror.json --check
 ```
@@ -1183,6 +1184,8 @@ veilway mirror --config mirror.json --check
 - `--timeout <seconds>` is how long each step on the network may take, 5 by default and 10 at most.
 
 Checks run a few at a time, so the command ends in well under a minute on a network that answers nothing.
+
+`link remove` takes the link `--tag` out of this node's config, which ends it at once. On a node a panel manages, this is how the node leaves the panel. `--empty` also removes every user and the clients of the Xray inbounds. Without it the users stay and keep working, out of the panel's reach. It asks for `yes` first, or not with `--yes`. `--apply` (or `--apply=SOCKET`) changes the node that runs through its control socket. Without it the config file is changed, and the node reads it at its next reload or restart. A link that an exit still names is refused, and nothing is changed. Exit status: 0 removed, 2 not confirmed, 1 anything else
 
 `link offer` and `link answer` pair this node with another one, one command on each node. Once both operators have compared the fingerprint, they print the entry for each node's `links`. Neither writes the config: you put the entry in yourself. Exit status: 0 paired, 2 not confirmed, 1 anything else.
 

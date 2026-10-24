@@ -69,7 +69,7 @@ To have the panel dial the new server instead:
 
 - **Remove server**: the panel asks the node, through the link, to remove its users and the link. Then the panel removes the link from this server. The panel asks for your password and code again.
 - **The server is gone**: if the server was seized or is gone, choose that option in the remove dialog. The panel then removes the link without asking the node. Nothing the node sends is served from then on, and nothing is sent to it. The panel can no longer change that node, so stop it or remove its users on the server itself.
-- Either operator can remove the link from their own config at any time. Management ends at once.
+- Either operator can remove the link from their own config at any time. Management ends at once. On the remote server: `sudo veilway link remove --config /etc/veilway/node/config.json --tag panel --apply=/run/veilway/control.sock` (use the link's tag on that server). Add `--empty` to remove its users too. Without it they stay and keep working, and the panel can no longer change them.
 
 ## Who can do what
 

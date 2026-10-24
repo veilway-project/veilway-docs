@@ -178,7 +178,7 @@ A node's profiles appear once that node has applied the device, and stay while i
 
 - **Remove node.** The panel asks the remote, through the link, to apply a document with no users and without the managing link. This is the one change guard 1 allows, and it is not put on trial. The remote writes it to its config file and drops any trial, answers 202, and puts it in force 10 s later, since the answer goes back through the link it removes. A restart in between comes back emptied. If the answer is lost, the node may be emptied all the same, and the panel says to remove it as taken. Then the panel removes the link from node 1.
 - **Taken.** If the node was seized or is gone, the panel skips asking and removes the link from node 1. After that nothing the node sends is served and nothing is sent to it.
-- Either operator can remove the link from their own config at any time, which ends management at once.
+- Either operator can remove the link from their own config at any time, which ends management at once: `veilway link remove`, with `--empty` to remove the node's users as well.
 
 ## Offline behavior
 

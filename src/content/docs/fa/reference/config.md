@@ -1157,6 +1157,7 @@ veilway genkey --transport
 veilway gensecret
 veilway link offer --config config.json --tag to-exit --inbound links --name entry-1 --address 10.9.0.2 --transports transports.json
 veilway link answer --config config.json --tag to-exit
+veilway link remove --config config.json --tag panel --empty --apply
 veilway mirror --config mirror.json
 veilway mirror --config mirror.json --check
 ```
@@ -1183,6 +1184,8 @@ veilway mirror --config mirror.json --check
 - `--timeout <seconds>` مدتی است که هر مرحله روی شبکه می‌تواند طول بکشد، پیش‌فرض 5 و حداکثر 10 ثانیه.
 
 بررسی‌ها چندتا‌چندتا اجرا می‌شوند، پس روی شبکه‌ای که هیچ جوابی نمی‌دهد هم دستور خیلی زودتر از یک دقیقه تمام می‌شود.
+
+`link remove` پیوند `--tag` را از پیکربندی این نود برمی‌دارد و آن را بی‌درنگ تمام می‌کند. نودی که پنلی مدیریتش می‌کند این‌طور از پنل جدا می‌شود. `--empty` همهٔ کاربران و کلاینت‌های ورودی‌های Xray را هم حذف می‌کند. بدون آن کاربران می‌مانند و کار می‌کنند، بیرون از دسترس پنل. اول `yes` می‌خواهد، مگر با `--yes`. `--apply` (یا `--apply=SOCKET`) نودِ در حال اجرا را از راه سوکت کنترلش تغییر می‌دهد. بدون آن فایل پیکربندی تغییر می‌کند و نود در بارگذاری دوباره یا راه‌اندازی بعدی آن را می‌خواند. پیوندی که خروجی‌ای هنوز نامش را دارد پذیرفته نمی‌شود و چیزی تغییر نمی‌کند. وضعیت خروج: ۰ حذف شد، ۲ تأیید نشد، ۱ هر چیز دیگر
 
 `link offer` و `link answer` این نود را با نود دیگری جفت می‌کنند، یک دستور روی هر نود. بعد از اینکه دو اپراتور اثرانگشت را مقایسه کردند، ورودی `links` هر نود را چاپ می‌کنند. هیچ‌کدام پیکربندی را نمی‌نویسند: ورودی را خودتان در آن می‌گذارید. کد خروج: 0 جفت شد، 2 تأیید نشد، 1 هر چیز دیگر.
 

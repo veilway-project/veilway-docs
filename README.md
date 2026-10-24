@@ -27,7 +27,7 @@ This is the source of the documentation site for [Veilway](https://github.com/ve
 
 ## Status
 
-The site describes the alpha, `v0.2.22-alpha`. It is tagged and released in the core repository. Parts of the site are still stubs.
+The site describes the alpha, `v0.2.23-alpha`. It is tagged and released in the core repository. Parts of the site are still stubs.
 
 - Written in English: the alpha release page, getting started, the guides (entry node, first inbound and user, release mirror, offline bundles, Xray profiles), the operator terms, the app privacy policy, the provider templates, the panel, client, Android, home network and Xray manuals, the config reference, the control API reference, the TypeScript SDK guide, the threat model summary, the obfuscation status page, and the draft protocol specification. The spec covers the overview, transports, HTTP/2, the shapes of fronted, borrowed site, the control channel, the subscription format, node links, the offline bundle, and Xray in the desktop apps.
 - Written in Persian: the alpha release page, getting started, the guides, the legal pages, the manuals (Xray included), the config and control API references, the TypeScript SDK guide and the threat model summary.

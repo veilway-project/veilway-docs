@@ -136,7 +136,7 @@ Not the events stream, not `openapi.json`, and never `/v1/links/{tag}/api/...` i
 A config pushed to the remote that drops its own management link would strand it. Two guards run on the remote for a `PUT /v1/config` that arrived through a link:
 
 1. **Refused at once** (422 `managing_link`): a document in which that link is missing, disabled, or has a different `id`, keys, addresses, `manage`, `inbound` or `peer`. The one exception is removal of the node (see "Removal"): a document that drops the managing link must then also have no users.
-2. **Applied on trial.** The remote keeps the previous document and puts it back unless another management request arrives through the same link within 120 s. The panel does a `GET /v1/status` right after every successful push, which confirms it. This catches what guard 1 cannot judge: the listen port or transports of the link's inbound, the `via` outbound, an MTU that breaks the path.
+2. **Applied on trial.** The remote keeps the previous document and puts it back after 120 s unless a management request confirms it: one that comes through the same link at least 10 s after the push, over a WireGuard session made after it. Both ends open a new session within seconds of the push, so a config that breaks the next session is put back. The panel waits 12 s, then reads `GET /v1/status` every 5 s for up to 100 s. This catches what guard 1 cannot judge: the listen port or transports of the link's inbound, the `via` outbound, an MTU that breaks the path.
 
 A push to node 1 is local and can always be undone from the panel. The panel still refuses a document for node 1 that removes a managed link outside "Remove node".
 
@@ -172,11 +172,11 @@ These are uses of HMAC and HKDF as they are meant to be used, not new constructi
 
 A subscription carries one set of profiles per node the user may use, in node order. Node 1's profile ids are unchanged byte for byte, since apps key their consent and memory by id. Other nodes' ids are `<slug>-<id>`. A name gets the node's name in front only when the user has more than one node.
 
-A node's profiles appear once that node has applied the device, and stay while it is down. The panel refuses a change that would pass 64 profiles and names the nodes and inbounds that add up. A device pending confirmation reaches no node. Confirming it takes an address in every allowed node's pool in one step, and a node with a full pool is left out of that device's document, with a warning.
+A node's profiles appear once that node has applied the device, and stay while it is down. The panel refuses a change that would pass 64 profiles and names the nodes and inbounds that add up. A node takes a new device within seconds, so a device's first document can leave out the nodes that do not hold it yet. While one is left out that way, the document's `update_interval` is 900 s, the shortest allowed, so the app comes back soon. A device pending confirmation reaches no node. Confirming it takes an address in every allowed node's pool in one step, and a node with a full pool is left out of that device's document, with a warning.
 
 ## Removal
 
-- **Remove node.** The panel asks the remote, through the link, to apply a document with no users and without the managing link. This is the one change guard 1 allows, and it is not put on trial. Then it removes the link from node 1.
+- **Remove node.** The panel asks the remote, through the link, to apply a document with no users and without the managing link. This is the one change guard 1 allows, and it is not put on trial. The remote answers 202 and applies it 2 s later, since the answer goes back through the link it removes. Then the panel removes the link from node 1.
 - **Taken.** If the node was seized or is gone, the panel skips asking and removes the link from node 1. After that nothing the node sends is served and nothing is sent to it.
 - Either operator can remove the link from their own config at any time, which ends management at once.
 

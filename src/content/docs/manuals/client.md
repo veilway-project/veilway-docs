@@ -19,7 +19,7 @@ The app asks for administrator rights through polkit (the `pkexec` program), and
 
 ### Windows
 
-The Windows installer is per machine: it needs an administrator and installs for every user. It puts `wintun.dll` next to the program, which the tunnel uses to create its network adapter.
+The Windows installer is per machine: it needs an administrator and installs for every user. It puts `wintun.dll` next to the program, which the tunnel uses to create its network adapter. The command-line `veilway.exe` is one file: it carries the same `wintun.dll`, writes it to `C:\ProgramData\Veilway\wintun` (administrators only) and checks it before each use.
 
 ### macOS
 
@@ -212,7 +212,7 @@ Press **Show the log** in **Settings**. The log leaves out paths, file names, ke
 
 The **Subscriptions** screen lists each subscription with its provider, logo, standing, end date and number of connections. The standing is one of **Up to date**, **Needs a refresh** or **Out of date**.
 
-- **Refresh** (the icon on the row) gets the provider's current settings. Shown only when the provider allows it.
+- **Refresh** (the icon on the row) gets the provider's current settings. Shown only when the provider allows it. On the command line, `veilway connect --refresh` does the same before it connects.
 - **Share** gives the subscription to another device. Shown on a subscription added with a link. See [Share a subscription](#share-a-subscription).
 - **Backup update addresses** appear when your provider has added addresses for refreshing while the main address is blocked. See [Backup update addresses](#backup-update-addresses).
 - **Remove** deletes the subscription, its connections and its keys from this computer. First it tells your provider this device left, freeing its place on your account (a few seconds at most). It is removed even when the provider cannot be reached. To use it again you need the link from your provider. You cannot remove a subscription in use, so disconnect first. `veilway remove` does the same on the command line: it tells the provider first, then removes, also when the provider cannot be reached. With one subscription it needs no argument. With several, name one with `--subscription` (the start of its id, which the error message lists). `--data-dir` sets where the client keeps its data, as for `connect`. It refuses while a connection runs.

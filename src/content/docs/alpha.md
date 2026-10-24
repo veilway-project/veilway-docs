@@ -1,16 +1,20 @@
 ---
 title: The alpha release
-description: What Veilway v0.2.21-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.2.22-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.2.21-alpha`, after `v0.2.20-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.2.22-alpha`, after `v0.2.21-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.2.21-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.21-alpha)
+- Node and install script: [v0.2.22-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.2.22-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.2.22-alpha
+
+- **Less battery use.** An idle tunnel wakes the device about a third as often as before: about 180 times a minute instead of about 500 in VPN mode, with half the processor time. With the screen off the app wakes even less, and the `tls` and `ws` transports send their keepalive less often. The app's screen stops refreshing while it is in the background.
 
 ## New in v0.2.21-alpha
 

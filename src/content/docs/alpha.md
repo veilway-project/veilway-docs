@@ -16,7 +16,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 
 - **Windows: the internet works again right after you disconnect.** Names could stay unresolved until you turned the network off and on, because Windows kept the lookups the kill switch had blocked. A disconnect now empties that cache once the kill switch is gone.
 - **Two-step sign-in is a choice at install.** A fresh install of the panel asks whether to ask for an authenticator code at sign-in. The answer is yes unless you say no, and `--no-two-step` says no for a script. Not recommended for a panel with real users.
-- **Xray-core v26.10.21** on servers and in the apps. This release of Xray trusts only the root certificates built into it.
+- **Xray-core v26.10.21** on servers and in the apps. This release of Xray trusts only the root certificates built into it. **On a server with the Xray add-on, run `sudo bash veilway.sh addon xray install` right after updating to v0.3.4**: the node starts only the Xray-core it pins, so Xray's users cannot connect until then. Later updates do this by themselves.
 
 ## New in v0.3.3-alpha
 

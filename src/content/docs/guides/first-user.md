@@ -23,7 +23,7 @@ The examples use `vpn.example.com`. Use your own domain.
 
 ## 2. Settings
 
-Open **Settings**.
+Open **Settings**. If you opened the panel at your domain, setup already filled in steps 1 and 2 (from v0.3.2): check them and go on to step 3.
 
 1. Under **Provider**, set **Node address** to `vpn.example.com`, or the server's public IP address. Devices connect to it, and profiles are built with it. The panel looks the domain up each time it makes a user's subscription, and apps get the IP addresses it finds then.
 2. Under **Endpoints**, choose **Add endpoint**. Set **Name** to `main` and **Address** to `https://vpn.example.com/sub/main`. Apps fetch the user's subscription here. The web server sends `/sub/` to the panel, and the name is the last part of the path. The first endpoint becomes the **Default endpoint** by itself.

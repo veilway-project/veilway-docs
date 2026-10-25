@@ -46,7 +46,7 @@ Run `sudo bash veilway.sh panel-prefix /new-path`. Without a path, the script pi
 
 ### Two-step sign-in off
 
-Use this only for tutorials and demos. With it off, anyone who learns an admin's password gets into the panel, your node and every user's links. Never use it on a panel that holds real users.
+Use this only for tutorials and demos. With it off, anyone who learns an admin's password gets into the panel, your node and every user's links. Never use it on a panel that holds real users. A fresh install asks whether to keep it on, and the default answer is yes. Answering no, or `--no-two-step`, writes `"two_step": "off"` (from v0.3.4).
 
 Add this line to `panel.json`, then run `sudo bash veilway.sh restart panel`:
 

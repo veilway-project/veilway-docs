@@ -64,6 +64,7 @@ Run the script with no arguments:
 |---|---|
 | `install node\|panel\|both\|mirror [--version vX.Y.Z]` | Installs the chosen parts from the latest release or the tag you give. `mirror` installs a relay mirror of the subscription endpoint. See [Relay mirrors](../manuals/panel/#relay-mirrors). |
 | `install panel\|both --domain <name> [--web caddy\|nginx]` | Also sets up a web server with HTTPS for that domain, and a plain site for every other path. See [Put a web server in front](#put-a-web-server-in-front). |
+| `install panel\|both --no-two-step` | A fresh install of the panel asks whether to ask for an authenticator code at sign-in, and the answer is yes unless you say no. This flag says no without asking. Not recommended: with it off, the admin password alone opens the panel. From v0.3.4. |
 | `update [node\|panel\|mirror\|both]` | Installs the latest release or the tag you give, and restarts the service. It also replaces the saved installer, `/usr/local/sbin/veilway.sh`, with the signed one of the same release, never an older one. The panel's update buttons run it. See [Updating the panel](../manuals/panel/#updating-the-panel). |
 | `status` | Shows each service's state and version, and the config and state folders. Needs no root. With root it also shows the panel's admin pages address, subscription path and admin usernames. |
 | `logs [node\|panel\|mirror]` | Follows the last 100 journal lines of the service. |

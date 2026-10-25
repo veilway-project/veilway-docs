@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.4-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.5-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.4-alpha`, after `v0.3.3-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.5-alpha`, after `v0.3.4-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.4-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.4-alpha)
+- Node and install script: [v0.3.5-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.5-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.5-alpha
+
+- **Pick a transport, or leave it Automatic.** In the desktop and Android apps, a connection with several transports has a **Transport** list. Automatic tries them and keeps the one that works. A picked one is used alone, still with the yes a weaker transport needs and Alpha transports for the borrowed site. See [the desktop app](../manuals/client/#connect).
+- **The card names the transport in use** once connected, such as `ws`.
+- **The connection list is grouped by subscription.**
+- **Download mirrors for the Xray add-on** in the desktop app's Settings, for when GitHub is blocked. The download is still checked against the version built into the app.
 
 ## New in v0.3.4-alpha
 

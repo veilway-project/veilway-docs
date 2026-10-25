@@ -67,7 +67,7 @@ Older installs have no such line (a file without it has the code on). There the 
 sudo sed -i '0,/^{$/s//{\n\t"two_step": "off",/' /etc/veilway/panel.json
 ```
 
-`curl -s http://127.0.0.1:8480/<prefix>/api/status` on the server then shows `"two_step":false`.
+`curl -s http://127.0.0.1:8480/<prefix>/api/status` on the server then shows `"two_step":false`. Before the first setup, the restart also makes a new setup token and the one the install printed stops working. Read the new one with `sudo journalctl -u veilway-panel -o cat | grep 'Setup token' | tail -n 1`.
 
 In this mode, sign-in, first setup, adding an admin and re-authentication ask for the password only. Every admin still gets an authenticator key, shown once, so it is ready when the code comes back. Passwords of 12 characters or more, sessions, CSRF checks, API tokens and the audit log stay. Sign-in is stricter: a source gets 5 tries in 15 minutes, and an account waiting after wrong tries refuses even the right password until the wait ends. Someone who keeps guessing can keep the admin waiting up to 15 minutes at a time.
 

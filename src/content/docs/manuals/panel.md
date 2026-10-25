@@ -4,7 +4,7 @@ description: Run a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.3.3-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
+The panel ships in the alpha, `v0.3.4-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Use it in a browser, or call its [admin API](#the-admin-api).

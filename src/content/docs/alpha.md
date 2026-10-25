@@ -1,16 +1,22 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.3-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.4-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.3-alpha`, after `v0.3.2-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.4-alpha`, after `v0.3.3-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.3-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.3-alpha)
+- Node and install script: [v0.3.4-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.4-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.4-alpha
+
+- **Windows: the internet works again right after you disconnect.** Names could stay unresolved until you turned the network off and on, because Windows kept the lookups the kill switch had blocked. A disconnect now empties that cache once the kill switch is gone.
+- **Two-step sign-in is a choice at install.** A fresh install of the panel asks whether to ask for an authenticator code at sign-in. The answer is yes unless you say no, and `--no-two-step` says no for a script. Not recommended for a panel with real users.
+- **Xray-core v26.10.21** on servers and in the apps. This release of Xray trusts only the root certificates built into it.
 
 ## New in v0.3.3-alpha
 

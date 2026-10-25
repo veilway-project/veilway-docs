@@ -1,16 +1,22 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.0-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.1-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.0-alpha`, after `v0.2.23-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.1-alpha`, after `v0.3.0-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.0-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.0-alpha)
+- Node and install script: [v0.3.1-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.1-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.1-alpha
+
+- **A `ws` path behind Caddy looks like any missing page.** The installer's decoy site answered only the host `127.0.0.1`, so a prober got an empty 200 at the path where every other path gets a 404. It now answers every host name, and `sudo bash veilway.sh update` repairs older setups.
+- **One `Server` field.** The panel's Caddy lines for `ws` and `fronted` now drop the decoy's `Server` field, which Caddy otherwise sent twice. Copy the lines again and reload Caddy.
+- **First install on a new server.** The installer waits up to 10 minutes for the package lock that Ubuntu's automatic updates hold in a server's first minutes.
 
 ## New in v0.3.0-alpha
 
@@ -197,6 +203,6 @@ Report problems on the [issue tracker of the core repository](https://github.com
 - **Desktop on macOS and Windows is compiled and tested on CI only.** It has never connected to a node on a real Mac or PC. On Windows the tunnel setup and cleanup passed a smoke test on a CI runner. Expect bugs in the routes, the firewall and DNS on both.
 - **HTTP/2 and the shapes of `fronted` have not been run behind a real CDN.** `ws`, `ws-plain` and `fronted` were tested behind nginx and HAProxy in Docker. A real CDN may behave differently. On the node, `http2` is off unless you turn it on.
 - **Borrowed-site mode is alpha.** It is off by default and labeled alpha in the panel and the apps. Only the project's own people have reviewed it, it is rated Detectable, and it has not run against real sites. Do not rely on it.
-- **Not in this release.** Xray on Android, split tunneling and store builds. They are planned for v0.3.0.
+- **Not in this release.** Xray on Android, split tunneling and store builds. They are planned for a later release.
 - **Some TLS details still differ from a browser.** No TLS session is resumed, and the fetch of a pinned subscription page sends a TLS hello that no browser sends.
 - **Android has no camera QR scan and no deep links yet.** Import a subscription by pasting its link or choosing its file or a picture of its QR code. While it runs, the app blocks traffic when the VPN drops. If the app is killed, use Android's Always-on VPN with Block connections without VPN, which is the full kill switch.

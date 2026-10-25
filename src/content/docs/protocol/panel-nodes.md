@@ -3,8 +3,8 @@ title: Several nodes from one panel
 description: How one panel manages more than one node through node links, the management port inside a link, the routes a managed node serves, the limits, trial and rollback of pushed configs, usage and quota across nodes, per-node secrets, and what each party can do.
 ---
 
-:::caution[Designed for v0.3.0, not built]
-Nothing on this page is built. It is the design of the owner's decisions of 2026-10-24, written before the code so that the threat model (section 5.19) and the code can be checked against it. Where the design leaves a detail open, the page says so under "Open questions". No one outside the project has reviewed it. Do not rely on any of it.
+:::caution[Unreviewed draft]
+Built in v0.3.0-alpha. This page is the design the code and the threat model (section 5.19) were checked against. Where it leaves a detail open, it says so under "Open questions". No one outside the project has reviewed it.
 :::
 
 One panel can manage several nodes. The node that runs next to the panel stays on the control socket exactly as today and is called node 1. Every other node is **remote**: it is joined to node 1 by a [node link](../node-links/), and the panel reaches the remote's control API inside that link, through node 1's own control socket. Read [Node links](../node-links/) first. This page adds one thing to a link (a management port) and describes what the panel does with it.

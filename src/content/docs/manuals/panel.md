@@ -685,10 +685,6 @@ On both sides you can set an expiry and the MTU. **Remove** asks you to confirm 
 
 ### Several servers
 
-:::caution[Designed for v0.3.0, not built]
-This section describes v0.3.0 as designed. See the [panel and nodes page](../../protocol/panel-nodes/).
-:::
-
 One panel can manage more than one server. A remote node joins **This server** through a managed [node link](#node-links), and the panel reaches its control API through that link. To set one up, follow [Add a second server](../../guides/second-server/). The **Servers** page lists each server with its state, last contact, users, pool use and traffic. **Add a server** starts the pairing in one of two directions.
 
 | Field | What it does |

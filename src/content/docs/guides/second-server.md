@@ -3,10 +3,6 @@ title: Add a second server
 description: Install a second Veilway node, connect it to your panel as a managed node, and let users connect through it.
 ---
 
-:::caution[Designed for v0.3.0, not built]
-Nothing in this guide is built yet. It describes v0.3.0 as designed. The [panel and nodes page](../../protocol/panel-nodes/) lists what is still open.
-:::
-
 One panel can run more than one server. The panel's own server is **This server**. Every other server is a **remote node**. A [node link](../../protocol/node-links/) joins it to this server, and the panel manages it through that link. Users get a set of profiles for each server they may use.
 
 ## Before you start
@@ -24,7 +20,7 @@ One server dials, and the other listens. The listening side must be reachable fr
 
 ## Step by step
 
-1. On the new server, run `sudo bash veilway.sh install node --version v0.3.0`. This installs the node only. At the end it prints the command for step 3.
+1. On the new server, run `sudo bash veilway.sh install node`. This installs the node only. At the end it prints the command for step 3.
 2. On this panel, open **Servers**, choose **Add a server**, and give the server a name and a position. Choose **The new server dials this panel**. The panel shows an offer code. Copy it.
 3. On the new server, run the printed command. It is `veilway link answer`, and it asks for the offer. Paste the code. It shows where the node will dial, then asks you to type `yes`. It then says that this panel will be able to read and change the node, and asks you to type `yes` again. Type it only if you agree.
 4. The command prints an answer code. On the panel, choose **Paste the answer** and paste it.

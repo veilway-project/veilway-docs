@@ -73,7 +73,20 @@ In this mode, sign-in, first setup, adding an admin and re-authentication ask fo
 
 Only `panel.json` sets the switch. No page or API route can change it, so whoever can write that file already owns the panel. While it is off, every page shows a red banner, the login page says so, and the panel logs a warning at every start. The audit log records `panel.two_step` with `off`, or with `on` and the counts below, whenever the value differs from the last start.
 
-To turn it on again, remove the line (or set it to `"on"`) and restart the panel. That start ends every session and revokes every API token made while the switch was off. The audit entry counts both, for example `on, 2 sessions ended, 1 tokens revoked`. An admin made while the switch was off gets a new key at that start, which nobody has seen, so they cannot sign in while the code is on. They can change the authenticator under Account while the switch is off (the key is shown there), or another admin can reset the account under Admins.
+To turn it on again, for example after a demo:
+
+1. While it is still off, sign in, open **Account**, then **Password and code**, choose **Change authenticator code** and add the key to your authenticator app. Every admin made while the switch was off needs to do this first: at the start that turns it on, they get a new key that nobody has seen, and cannot sign in.
+2. On the server, run:
+
+   ```
+   sudo sed -i 's/"two_step": "off"/"two_step": "on"/' /etc/veilway/panel.json
+   sudo bash veilway.sh restart panel
+   ```
+
+   On an older install whose file has no such line, remove the line you added instead.
+3. Sign in with your password and the 6-digit code.
+
+The start that turns it on ends every session and revokes every API token made while the switch was off. The audit entry counts both, for example `on, 2 sessions ended, 1 tokens revoked`. An admin made while the switch was off gets a new key at that start, which nobody has seen, so they cannot sign in while the code is on. An admin who skipped step 1 can be reset by another admin under **Admins**, or follow the last case of the next section.
 
 ### Lost the authenticator
 
@@ -81,7 +94,11 @@ The panel never shows an authenticator key again, but you can make a new one, sh
 
 - Signed in: open **Account**, then **Password and code**, and choose **Change authenticator code**.
 - Another admin can sign in: they open **Account**, then **Admins**, and choose **Reset** for your account. You get a new password and a new key.
-- You are the only admin and cannot sign in: `sudo bash veilway.sh admin reset <username>` changes the password only, and the old key stays. Turn two-step sign-in off as above, restart the panel, sign in with the password, make a new key under **Password and code**, then turn it on again and restart. Turning it on ends every session.
+- You are the only admin and cannot sign in:
+  1. `sudo bash veilway.sh admin reset <username>` asks twice for a new password and signs that admin out everywhere. It changes the password only: the old key stays.
+  2. Turn two-step sign-in off as above and restart the panel.
+  3. Sign in with the new password and make a new key under **Password and code**.
+  4. Turn it on again as above. That start ends every session.
 
 ## First login
 

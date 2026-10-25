@@ -28,6 +28,8 @@ To give a subscription to another device, press **Share** on its row. The app ca
 
 If the connection drops, the app retries a few times with longer pauses, then says it gave up. You can connect again.
 
+While disconnected, the **Connection** list is grouped under each subscription, and the **Transport** list picks a way of connecting or leaves it **Automatic** (from v0.3.5). It works as in [the desktop app](../client/#connect). The tile and the shortcut use the last pick.
+
 ## Tile and shortcut
 
 From v0.3.3, two switches turn the last connection on or off without opening the app:

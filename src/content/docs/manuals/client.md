@@ -79,7 +79,9 @@ Press **Keep subscription** to save it. The app confirms with a short message.
 
 ## Connect
 
-The **Connection** screen has one large switch to connect and disconnect. With more than one connection, a **Connection** list lets you pick one while disconnected. The app remembers your pick.
+The **Connection** screen has one large switch to connect and disconnect. With more than one connection, a **Connection** list lets you pick one while disconnected, grouped under each subscription's name. The app remembers your pick.
+
+A connection can offer several transports, ways of reaching the same server. While disconnected, the **Transport** list picks one (from v0.3.5). **Automatic**, the default, tries them and keeps the one that works, and moves to another if one is blocked. Picking one uses only that one, which helps on a network where you know what gets through. The app remembers the pick for each connection. A transport weaker than the connection's best one asks for your yes first, as Automatic does before falling back to it, and the borrowed-site transport (`faketls`) needs **Alpha transports** in Settings. Once connected, the line under the heading names the transport in use.
 
 The heading shows the state:
 

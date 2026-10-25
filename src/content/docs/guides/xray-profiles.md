@@ -33,7 +33,7 @@ Before you answer, the client says what it will do: download Xray-core version `
 - **No**: nothing is downloaded, and the connection does not start.
 - **Yes**: the client checks the archive against its pinned SHA-256 before opening it, takes out only the one `xray` file under a size cap, and checks that file again before every start.
 
-The add-on lives in the client's own folder, which only root can open. Xray runs as its own system user, `veilway-xray`, which the client creates on first use with no login shell. If GitHub is blocked, set `VEILWAY_MIRRORS` to `https://` mirror addresses separated by spaces. The client tries them after GitHub and still checks the archive against the pin.
+The add-on lives in the client's own folder, which only root can open. Xray runs as its own system user, `veilway-xray`, which the client creates on first use with no login shell. If GitHub is blocked, give mirror addresses: in the desktop app under **Settings**, **Xray add-on**, **Download mirrors** (from v0.3.5), or for the command line in `VEILWAY_MIRRORS`. Either takes up to 4 `https://` addresses with the layout of GitHub releases, separated by spaces. The client tries them after GitHub and still checks the archive against the pin, so a mirror cannot hand over another file. `veilway.sh mirror-sync` makes such a folder, see [Release mirror](../release-mirror/).
 
 The app never downloads an Xray release it does not pin, so a new Xray release needs a new app.
 

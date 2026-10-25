@@ -28,6 +28,17 @@ To give a subscription to another device, press **Share** on its row. The app ca
 
 If the connection drops, the app retries a few times with longer pauses, then says it gave up. You can connect again.
 
+## Tile and shortcut
+
+From v0.3.3, two switches turn the last connection on or off without opening the app:
+
+- **Quick settings tile.** Pull down the quick settings, tap the pencil, and drag **Veilway** into place. The tile is lit while connected.
+- **Home screen shortcut.** Touch and hold the app icon, then drag **Connect or disconnect** to the home screen.
+
+Both need one connection made from the app first, with the VPN permission allowed. Until then, they open the app. Touch and hold the tile to open the app.
+
+On Xiaomi phones (MIUI and HyperOS), turn on **Autostart** for Veilway: Settings, Apps, Manage apps, Veilway, Autostart. Without it the phone does not let the tile, the shortcut or the reconnect after a reboot start Veilway while the app is closed.
+
 ## Local proxy
 
 From v0.2.21, **Settings > Local proxy** runs a SOCKS5 and HTTP proxy on the phone, on port 10808 by default. **Proxy only** needs no VPN permission: only apps set to use the proxy go through Veilway. **With the VPN**, the whole phone goes through Veilway and the proxy is there as well. On Android the proxy always needs its user name and password, so other apps cannot use it or use it to find out that you run a VPN.

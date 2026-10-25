@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.2-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.3-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.2-alpha`, after `v0.3.1-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.3-alpha`, after `v0.3.2-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.2-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.2-alpha)
+- Node and install script: [v0.3.3-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.3-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.3-alpha
+
+- **Android: a quick settings tile and a home screen shortcut.** Both turn the last connection on or off without opening the app. See [the Android manual](../manuals/android/#tile-and-shortcut). On Xiaomi phones, turn on Autostart for Veilway.
+- **A different plain page on every server.** Every install used to serve the same page, so a search for it found Veilway servers. The installer now draws one for each server, and `sudo bash veilway.sh update` replaces the shared page if you never edited it. A page of your own is still the best cover.
 
 ## New in v0.3.2-alpha
 

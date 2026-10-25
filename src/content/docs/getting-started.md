@@ -3,7 +3,7 @@ title: Getting started
 description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-This page installs the alpha, `v0.3.2-alpha`. Files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Read [the alpha release](../alpha/) first for what it includes and its limits.
+This page installs the alpha, `v0.3.3-alpha`. Files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Read [the alpha release](../alpha/) first for what it includes and its limits.
 
 ## What you need
 
@@ -149,7 +149,7 @@ What it does, on Debian and Ubuntu:
 1. **Installs Caddy** from the system packages if they are version 2.6 or newer, otherwise from Caddy's own apt repository with its signing key. `--web nginx` installs nginx and certbot (`python3-certbot-nginx`) instead.
 2. **Writes the site as its own file.** For Caddy that is `/etc/caddy/conf.d/veilway-panel.caddy`, plus one added line, `import /etc/caddy/conf.d/*.caddy`, at the end of `/etc/caddy/Caddyfile`. An existing Caddyfile is otherwise kept, after a copy to `/var/backups/veilway`. For nginx the file is `/etc/nginx/conf.d/veilway-panel.conf`.
 3. **Forwards the panel's two paths** to `127.0.0.1:8480`: the admin prefix and the subscription path, both read from `panel.json`.
-4. **Serves a plain site everywhere else**: one ordinary page in `/var/www/veilway-site`, with no Veilway name or text. Edit or replace it freely. The script never overwrites it. The same site is also served over plain HTTP on `127.0.0.1:8080` (this machine only, in the same site file). That is the default decoy origin of a node's `tls`, `ws` and `fronted` transports, so a stranger who reaches the node gets the same page. If something else holds that port, the script says so and skips it. `VEILWAY_DECOY_PORT=<port>` picks another port.
+4. **Serves a plain site everywhere else**: one ordinary page in `/var/www/veilway-site`, with no Veilway name or text. From v0.3.3 the script draws the page for each server (topic, text, dates, type and colors), so a search for one page does not find every Veilway server. A page of your own hides the server best: edit or replace it freely. The script never overwrites an edited page. `update` draws a new page in place of the one every install shared before v0.3.3, only if you never edited it. The same site is also served over plain HTTP on `127.0.0.1:8080` (this machine only, in the same site file). That is the default decoy origin of a node's `tls`, `ws` and `fronted` transports, so a stranger who reaches the node gets the same page. If something else holds that port, the script says so and skips it. `VEILWAY_DECOY_PORT=<port>` picks another port.
 
 This site file does not forward a `ws` or `fronted` transport yet. Add its path to the file. The panel shows the exact Caddy and nginx lines under the transport (see [Web server lines](../manuals/panel/)). Reload the web server afterward.
 5. **Sets the panel's `not_found` to the web server's own 404 answer**, so a stranger cannot tell the panel's paths from any other missing page.
@@ -257,7 +257,7 @@ Do not pipe a script from a mirror straight into `bash`. Check it first.
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.3.2-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.3.3-alpha
 ```
 
 It downloads the node's and panel's files with signatures and pointers, verifies each before storing it, and puts `veilway.sh` at the top. It keeps a newer pointer already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.

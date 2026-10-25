@@ -54,11 +54,17 @@ Add this line to `panel.json`, then run `sudo bash veilway.sh restart panel`:
 "two_step": "off"
 ```
 
-Installs from 2026-10-19 on have `"two_step": "on"` in the file, so change `on` to `off`. Older installs have no such line (a file without it has the code on), so add it. These two commands put it first in the file and restart the panel:
+Installs from 2026-10-19 on have `"two_step": "on"` in the file. These two commands change it to `off` and restart the panel:
+
+```
+sudo sed -i 's/"two_step": "on"/"two_step": "off"/' /etc/veilway/panel.json
+sudo bash veilway.sh restart panel
+```
+
+Older installs have no such line (a file without it has the code on). There the first command adds it at the top of the file instead:
 
 ```
 sudo sed -i '0,/^{$/s//{\n\t"two_step": "off",/' /etc/veilway/panel.json
-sudo bash veilway.sh restart panel
 ```
 
 `curl -s http://127.0.0.1:8480/<prefix>/api/status` on the server then shows `"two_step":false`.

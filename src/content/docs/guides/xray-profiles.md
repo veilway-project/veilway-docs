@@ -28,7 +28,7 @@ Xray-core is not part of the client. The first time you connect a link, if the a
 
 > Install and connect?
 
-Before you answer, the client says what it will do: download Xray-core version `v26.3.27` from `github.com/XTLS/Xray-core`, at most 64 MiB, and check it against a fingerprint built into the app. Xray runs with limited rights and carries only this profile's traffic.
+Before you answer, the client says what it will do: download Xray-core version `v26.10.21` from `github.com/XTLS/Xray-core`, at most 64 MiB, and check it against a fingerprint built into the app. Xray runs with limited rights and carries only this profile's traffic.
 
 - **No**: nothing is downloaded, and the connection does not start.
 - **Yes**: the client checks the archive against its pinned SHA-256 before opening it, takes out only the one `xray` file under a size cap, and checks that file again before every start.

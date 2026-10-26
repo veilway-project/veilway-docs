@@ -4,7 +4,7 @@ description: Run a Veilway node from the web panel.
 ---
 
 :::note[Part of the alpha]
-The panel ships in the alpha, `v0.3.5-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
+The panel ships in the alpha, `v0.3.6-alpha`, from the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Its alpha gate installs a node and the panel with the install script in Docker containers, drives the panel, and connects a client through the node. [The alpha release](../../alpha/) lists the limits.
 :::
 
 The panel is the admin side of a node. It runs on the node's host and changes users and settings through the node's control socket. Use it in a browser, or call its [admin API](#the-admin-api).
@@ -129,7 +129,7 @@ Figures refresh every 10 seconds. You also edit [Notices](#notices) here.
 
 ## Users and devices
 
-The **Users** page lists every user. Search by name, group or note, and filter by enabled or disabled. Select users to change them in bulk: enable, disable, reset usage, reset links, delete, add or remove a group, set the quota, expiry or device limit, or set the exits to all exits or a chosen set. A default exit that the new set leaves out is cleared.
+The **Users** page lists every user. Search by name, group or note, and filter by enabled or disabled. Select users to change them in bulk: enable, disable, reset usage, reset links, delete, add or remove a group, set the quota, expiry or device limit, set the speed limit, or set the exits to all exits or a chosen set. A default exit that the new set leaves out is cleared.
 
 **Reset links** makes a new link and new Xray credentials for each selected user. The old links stop working at once. Tick **Also remove the devices enrolled with the old links** to remove those devices too. Without the tick they keep working until you remove them. The dialog does not show the new links. Open the user's page and choose **Show link and QR**. With **Show links once** on, the panel keeps no copy, so reset that user's link on their page instead, which is the only time the link is shown.
 
@@ -141,7 +141,8 @@ Fill in the form:
 - **Groups**: separate with commas. Routing rules and DNS sets can name a group.
 - **Quota** and **Count starts over**: leave the quota empty for no limit. Pick never, every day, every week or every month for the reset. The reset needs a quota.
 - **Expires on**: leave empty for no expiry.
-- **Device limit**: `0` means the node's own limit of 16.
+- **Device limit**: `0` means the node's own limit of 64.
+- **Upload limit** and **Download limit**: the most the user sends and receives, in Mbit/s (0.14 to 100000). Empty means no limit. Each server holds the limit on its own, over all of the user's devices together, see [Speed limits](../../reference/config/#speed-limits). TCP is slowed down and other traffic over the limit is dropped. Apps do not show the limit.
 - **Note**: only admins see it.
 - **Enabled**: a disabled user cannot connect. Their devices stay.
 - **Exits**: **All exits**, or **Only these** with the exits you tick. The user's app lists only these exits, though routing rules can still send their traffic to a specific exit. **Default exit** is where their devices leave when they pick none, among those exits. **Node default** leaves it to the node's routing default.
@@ -150,6 +151,8 @@ Saving shows the subscription link to copy.
 
 ### The user page
 
+- **Speed limit** shows the two limits and, once the node has had to hold the user back, how many packets it dropped and how many seconds TCP waited.
+- **Connection order** sets the order apps list this user's connections in. **Follow the global order** (the default) uses the one from the [Profiles page](#profiles). **Custom order** puts the connections you place first, in your order, and the rest follow the global order. **Reset to the global order** undoes it. See [Connection order](#connection-order).
 - **Usage** shows what counts toward the quota, since when, and the total sent and received. **Reset usage** starts the quota count over, and a user cut off for going over the quota can connect again. You can also set the total back to zero.
 - **Subscription link** holds the link and its QR code. Anyone with the link can enroll a device, so send it like a password. The panel keeps it sealed with the keys in `panel.keys`. **Show link and QR** opens it again after you confirm your password and code. With **Show links once** on (see [Subscription settings](#subscription-settings)) the link can be shown only when it is made or reset. The dialog gives the Veilway link, and a web link for apps that open a browser first. **Reset link** makes a new link, stops the old one at once and makes the user's Xray credentials new. You choose whether devices enrolled with the old link are removed too.
 - **Download sealed file** makes a `.vwsealed` file that holds the link, locked with a password you choose (at least 10 characters). The app asks for the password when it opens the file, then goes on as with any link. The panel keeps no copy of the password and asks for your password and code again. The audit log records that a file was made, not the password or the link. Send the password by another route than the file: anyone who has both gets the link, and the link is the account. No API token can do this. The format is in the [subscription format](../../protocol/subscription-format/).
@@ -161,7 +164,7 @@ Saving shows the subscription link to copy.
 - **Exits** sets which exits the user's app lists, with each exit's country and whether it is up. If the node deletes an exit the user was limited to, it shows as **Removed from the node**, and **Save exits** drops it from the list. The next time the panel updates the node, it clears a default exit that the node no longer has or that the user may no longer use.
 - **Delete user** stops the user's devices and links at once. This cannot be undone.
 
-The **Users** list shows each user's exits as **All exits** or a count.
+The **Users** list shows each user's exits as **All exits** or a count, and a **Speed limit** column (**No limit**, or the limits in Mbit/s). **Set speed limit** in the bulk actions replaces both limits of the selected users. Leave one empty for no limit on that side.
 
 ## Subscription settings
 
@@ -626,6 +629,18 @@ The **State** column of the list says **Carrying**, **Down** with the node's rea
 
 On an exit through an Xray server, the **UDP** choice under **Traffic the outbound cannot carry** offers only **Refuse** and **Drop silently**. The form says that the outbound carries UDP itself, and while the server is down the flow ends. The node checks the rest. The details and limits are under [`xray` outbounds](../../reference/config/#xray-outbounds) in the config reference.
 
+### Other providers
+
+An upstream is another provider's Veilway subscription that your node uses as an exit. The **Other providers** tab under **Exits and routing** has a card for each one, and [Use another provider as an exit](../../guides/upstream-provider/) adds one. From v0.3.6 the card shows what the node's tunnel does and lets you steer it.
+
+- **Tunnel.** Connecting, reconnecting, connected (with for how long), failed, or stopped with the reason: quota used up, account expired, account disabled or this node is stopping. The card also shows when the account ends, how often its quota starts over, the provider's notices (marked as a warning or not), and a list of **Profiles this node cannot use now** with plain reasons and no addresses.
+- **What this node asks for.** Four choices, which need no new password:
+  - **Exit of the provider.** Shows the provider's exits once the tunnel is up. A new exit is taken on the running tunnel, and nothing leaves through the old one meanwhile.
+  - **Profile.** **Automatic** tries every profile in the provider's order. Picking one uses it alone.
+  - **Try the other profiles too.** With a profile picked, go on to the others when it cannot be used.
+  - **Transport.** **Automatic** picks from every transport the profile lists. Picking one uses only that type.
+- A new profile or transport makes the tunnel start again, and the card says so. The exit alone does not. These choices change nothing the provider could use against the node: the link, the keys and the allowed transport classes are not here.
+
 ### Exits
 
 The **Exits** tab lists where a user's traffic leaves. Users pick among the exits their routing allows. Each exit has a name that users see, and a two-letter country code such as `DE`. It leaves through one of these:
@@ -656,6 +671,8 @@ A rule then sends traffic to one of these:
 - **Nowhere, silently**: the traffic is dropped with no answer.
 - **Nowhere, refused**: the device is told it cannot connect, so apps give up at once.
 
+In the destination network list, `host:self` stands for this server's own addresses. Users reach them unless a rule rejects them, so add a rule with `host:self` and **Nowhere, refused** if other services run on this server, and put a rule that lets one user or port through above it. See [Reaching the server itself](../../reference/config/#reaching-the-server-itself).
+
 Each rule has a name, made from what the rule does until you type your own. To change the order, drag a rule by its handle, use the arrow buttons, or press Space on the handle and move it with the arrow keys. The new order goes through the review like any other change.
 
 You can turn a rule off. It stays in the list and is skipped. For a home network that a phone should reach through the node, see [Home network](../home-network/).
@@ -670,6 +687,14 @@ The **Profiles** page has one profile for each Veilway inbound, made from the no
 
 **Relays only: do not give apps this node's address** is a switch on each profile. When it is on, apps get only the addresses of the enabled relays that carry that inbound, never the node's own. A transport that none of the relays reaching that user carries is left out of the user's profile. `faketls` and `ws-plain` are always left out, since a relay cannot sit in front of them. A user whom no relay reaches gets no profile for that inbound. Xray links are not affected. The page warns you when the switch is on and no enabled relay carries the inbound. Publish the profiles again after you change it.
 
+### Connection order
+
+Apps list a user's connections in the order of the subscription. From v0.3.6 you set it.
+
+- **Global order.** On the **Profiles** page, **Order in subscriptions** lists the profiles of every server. Move one by its handle or its step buttons, and choose **Save order**. A profile you have not placed goes last. **Use the default order** clears it. Without an order, this server's profiles come first, then the other servers by their position.
+- **Per user.** A user's page can set its own order. Those profiles come first, in that order, and the rest follow the global order.
+- A remote node's profiles used to follow the node's id and now follow its **Position** from the Servers page.
+
 ### Node links
 
 The **Links** page lists the node's links. A node link joins this node to another node, so users here can leave from there, or users there can leave from here. To keep users connected when international links are cut, with one server inside the country and one abroad, follow [Set up an entry node](../../guides/entry-node/). The **Links** page has a **Guided setup** with three starts: **Set up as entry node**, **Set up as exit for an entry node** and **Reverse tunnel**. Each walks through the direction, codes and fingerprints, then adds the exit that leaves through the link (on the entry) or picks what the link may use (on the exit), all as one reviewed change. By hand, the two operators pair the nodes in four steps:
@@ -679,7 +704,7 @@ The **Links** page lists the node's links. A node link joins this node to anothe
 3. The first operator chooses **Paste the answer**, and takes it.
 4. Both operators call each other and **compare fingerprints**. Each reads their own eight groups aloud and types the other side's groups. If a code changed on the way, the groups will not match. Confirm the pairing only when they match.
 
-In the offer, each transport of the inbound's profile has a checkbox with its port, path and TLS name and a short note on how it looks to the network (from v0.2.19). Uncheck the ones the link should not use, and keep at least one. A link can use `udp`, `udp-obfs`, `tls` and `ws`, but not Encrypted Client Hello or a self-signed certificate, so those show why they cannot be picked. Between countries, `tls` is usually the safest choice: UDP is often throttled or dropped. **Edit as JSON** changes the list by hand.
+In the offer, each transport of the inbound's profile has a checkbox with its port, path and TLS name and a short note on how it looks to the network (from v0.2.19). Uncheck the ones the link should not use, and keep at least one. A link can use `udp`, `udp-obfs`, `tls` and `ws`, but not Encrypted Client Hello, so that shows why it cannot be picked. A `tls` transport with a self-signed certificate can be picked since v0.3.6: the other node then trusts it through its pin alone, and the fingerprint you compare is the whole check. A `ws` one cannot. The panel puts the pin of every `tls` transport into the offer, also one with a certificate from an authority, which it used to leave out. See [Pins and self-signed links](../../protocol/node-links/#pins-and-self-signed-links). Between countries, `tls` is usually the safest choice: UDP is often throttled or dropped. **Edit as JSON** changes the list by hand.
 
 The two directions are:
 
@@ -688,7 +713,7 @@ The two directions are:
 
 The tunnel addresses must come from a network that no inbound pool on either node uses. A private address works only when both nodes share that network. A WebSocket transport runs through the other operator's web server, which can see the timing of the traffic.
 
-A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **Ended**. **Drop the pairing** removes a pairing that is still waiting.
+A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused**, **Key changed** or **Ended**. **Key changed** says the other server's certificate has a new key and the link has to be paired again. When a `tls` transport of this server gets a new key, **Servers** and the links that pin the old key show **The certificate key on port N changed**, and the link says the other server may still pin the old one. **Drop the pairing** removes a pairing that is still waiting.
 
 **Manage** on a link changes it after pairing. **Link on** turns it off without losing its keys: it neither dials nor answers until you turn it on again. On the node that is the exit you also set:
 
@@ -697,6 +722,7 @@ A link is shown as **Up**, **Connecting**, **Unreachable**, **Refused** or **End
 - whether rules may reach private networks through it
 - how many connections it may hold at once
 - a quota and its period
+- **Let this link continue through another link**: off by default. When it is on, the exits above may include exits that lead into other links, and the next server sees this server's link address. At most 3 links in a row, and never through another provider's upstream. The exits picker offers such exits only while the switch is on, and the link shows **Passed on to other links**, the packets this server forwarded from it into another link. See [Chaining](../../protocol/node-links/#chaining).
 
 On both sides you can set an expiry and the MTU. **Remove** asks you to confirm with the other node's name and then goes through the review. The other node keeps its half until its operator removes it there, and linking again needs a new pairing.
 

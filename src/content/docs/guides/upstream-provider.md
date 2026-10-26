@@ -52,7 +52,7 @@ Then route traffic to the new exit as for any exit: give it to users, name it in
 
 The review options in detail:
 
-- **Profile to use.** Which of the provider's profiles to use. Without a choice, the first usable one.
+- **Profile to use.** Which of the provider's profiles to use. Without a choice (Automatic), the node tries every profile in the provider's order and moves to the next when one fails. A profile you pick is the only one used, unless you also turn on **Try the other profiles too**.
 - **The provider's exit.** Which of the provider's exits to leave through. Without a choice, the provider's own default, which the provider picks.
 - **Transports that can be recognized.** By default only web-like transports (`tls`, `ws`, `fronted`, `faketls`) are used. You can also allow `udp-obfs`, `ws-plain` or plain `udp`, which are easier to spot. A profile with none of the allowed transports is not used.
 - **Reach the provider through.** A `direct` or `socks5` outbound for the fetch and the connection. `udp` and `udp-obfs` cannot go through a `socks5` outbound. A proxy on this host or at a link-local address is refused.

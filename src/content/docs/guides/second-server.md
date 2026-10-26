@@ -33,6 +33,17 @@ To have the panel dial the new server instead:
 2. On this panel, open **Servers**, choose **Add a server**, and choose **This panel dials the new server**. Choose **Paste an offer** and paste the code. The panel shows where it will dial and gives back an answer code.
 3. On the new server, choose **Paste the answer** and paste the code, then do the fingerprint check as in step 5.
 
+## A server with no domain
+
+Since v0.3.6 a server with no domain can be linked too, with its own self-signed certificate.
+
+- The side that listens needs a `tls` transport with `"self_signed": true`. The node makes the certificate itself and works out its pin.
+- The offer carries that pin, and the other side trusts the certificate through the pin alone. No certificate authority is asked, so the fingerprint check in step 5 is the whole check. Compare every group.
+- The pin stays the same when the certificate renews. If the key file is lost, the node makes a new key and the link shows **Key changed**. Pair it again.
+- A `ws` transport cannot be trusted this way, only `tls`.
+
+See [Pins and self-signed links](../../protocol/node-links/#pins-and-self-signed-links).
+
 ## Give users the new server
 
 - Set the server's **Address pool** when you add it. You can change it only while no device has an address in it.

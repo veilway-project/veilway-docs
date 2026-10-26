@@ -1,16 +1,30 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.5-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.6-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.5-alpha`, after `v0.3.4-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.6-alpha`, after `v0.3.5-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.5-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.5-alpha)
+- Node and install script: [v0.3.6-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.6-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.6-alpha
+
+- **Users now reach the server itself by default. Add a rule if that is wrong for you.** The node no longer refuses its own public addresses for users. If other services run on the same machine (a database, an admin port, another panel), add `{"tag": "no-self", "ip": ["host:self"], "action": "reject"}` to the routing rules, or a **Nowhere, refused** rule on `host:self` in the panel. The panel itself stays out of reach: it listens on `127.0.0.1`, which is still refused. A rule above it can let one user reach one port. See [Reaching the server itself](../reference/config/#reaching-the-server-itself).
+- **Up to 64 devices per user**, up from 16.
+- **Speed limits.** `speed_up` and `speed_down` on a user cap what the node sends and receives for that user, over all their devices. TCP is slowed down and other traffic over the limit is dropped. DNS and the control channel are never dropped. The limit is per node and the apps do not show it. In the panel: user form, bulk action and user page. See [Speed limits](../reference/config/#speed-limits).
+- **A slow site no longer fills the node's memory.** The userspace network stack counts bytes the node has not yet delivered against the device's receive window, so a slow destination holds the device back.
+- **Link a server with no domain.** A `tls` transport with a self-signed certificate can be trusted through its pin alone (`self_signed` on a link candidate). See [Add a second server](../guides/second-server/).
+- **Pins and key changes.** The node works out the pin of every `tls` transport, also one with a certificate from an authority, and the panel puts it into link offers. The node warns once when a transport's key changes, and `GET /v1/inbounds` shows it. The other side shows the link as **Key changed** (`pin_mismatch`) and not as unreachable. `veilway doctor` prints the pins. See [Pins and self-signed links](../protocol/node-links/#pins-and-self-signed-links).
+- **Chaining links.** `allow_chain` on the exit half lets a link's traffic continue through another link. Off by default, at most 3 links, never through another provider's upstream. See [Chaining](../protocol/node-links/#chaining).
+- **Other providers work like the apps.** An upstream tries every profile in turn when you pick none, can fail over to the others, takes a transport choice, and takes a new exit on the running tunnel. The card shows the tunnel's state, the profiles that cannot be used and the provider's exits. `PATCH /v1/upstreams/{tag}` changes only these choices. See [Other providers](../manuals/panel/#other-providers).
+- **Connection order.** Set the order of the profiles in subscriptions on the **Profiles** page, and a different one for a user. Remote servers now follow their position, not their id. See [Connection order](../manuals/panel/#connection-order).
+- **A built-in WireGuard outbound.** Paste a WireGuard config and the node runs the tunnel itself.
+- **Local proxy speed.** The apps' local proxy takes a larger receive buffer, so one connection through a far exit moves more than 64 KiB per round trip.
 
 ## New in v0.3.5-alpha
 

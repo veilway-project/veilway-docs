@@ -88,7 +88,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | GET | `/v1/stats` | همهٔ شمارنده‌ها با نرخ زنده |
 | GET | `/v1/sessions` | دستگاه‌های دارای نشست زنده |
 | GET | `/v1/exits` | هر نقطهٔ خروج با سلامت upstream آن |
-| GET | `/v1/inbounds` | هر ورودی با کلیدهای عمومی‌اش و رتبهٔ هر ترنسپورت |
+| GET | `/v1/inbounds` | هر ورودی با کلیدهای عمومی‌اش، رتبه و pin هر ترنسپورت |
 | GET | `/v1/links` | هر لینک نود فعال با وضعیت و شمارنده‌هایش |
 | GET | `/v1/upstreams` | هر upstream فعال با وضعیت، دلیل و شمارنده‌هایش |
 | POST | `/v1/upstreams/preview` | سند یک ارائه‌دهنده را برای بازبینی می‌گیرد و 600 ثانیه نگه می‌دارد |
@@ -112,7 +112,7 @@ curl --unix-socket /srv/veilway/veilway.sock http://veilway/v1/status
 | `inbounds`، `exits`، `users` | integer | پیکربندی در حال اجرا چندتا دارد. |
 | `flows` | integer | فلوهای جدول فلو در همین لحظه. |
 | `public_addresses` | فهرست string | نشانی‌های عمومی نود، همان‌طور که پیکربندی نام می‌برد (نام میزبان یا IP، بدون پورت). اگر نباشد خالی است. |
-| `certificates` | فهرست | گواهی‌های خودامضایی که نود برای ترنسپورت‌های `tls` با `"self_signed": true` ساخته، یکی برای هر نشانی گوش‌دادن، به شکل `{"listen", "pin", "not_before", "not_after"}`. `pin` همان SHA-256 از SubjectPublicKeyInfo کلید است با base64 استاندارد و با تمدید گواهی همان می‌ماند. `not_before` و `not_after` ثانیهٔ یونیکس‌اند. اگر نباشد خالی است. |
+| `certificates` | فهرست | گواهی هر ترنسپورت `tls`، یکی برای هر نشانی گوش‌دادن، به شکل `{"listen", "pin", "self_signed", "not_before", "not_after"}`. `pin` همان SHA-256 از SubjectPublicKeyInfo کلید است با base64 استاندارد. `self_signed` برای گواهی‌ای که نود ساخته `true` است (آن‌وقت pin تنها بررسی است و با تمدید گواهی همان می‌ماند) و برای گواهی‌ای که از فایل `cert` پیکربندی خوانده شده `false` (زنجیره هم بررسی می‌شود). تا v0.3.5 فقط خودامضاها فهرست می‌شدند. `not_before` و `not_after` ثانیهٔ یونیکس‌اند. اگر نباشد خالی است. |
 | `addons` | object | `{"xray": {"installed", "release"}}`: آیا فایل اجرایی افزونهٔ Xray در پوشهٔ افزونه‌ها هست، و این نود کدام نسخهٔ Xray-core را اجرا می‌کند. |
 
 ### `GET /v1/config`
@@ -218,6 +218,8 @@ curl --unix-socket veilway.sock -X PUT http://veilway/v1/config -H 'Content-Type
 | `dns_set` | تگ مجموعهٔ DNS که کاربر را نام می‌برد، وگرنه یکی از گروه‌هایش را. اگر هیچ‌کدام نباشد `null` است: پرسمان‌ها آن‌وقت به مجموعه‌ای می‌روند که ورودی را نام می‌برد، یا به `dns.servers`. |
 | `traffic` | شمارنده‌های طول عمر: `up_bytes`، `up_packets`، `down_bytes`، `down_packets`. up یعنی از دستگاه به نود. |
 | `devices` | برای هر دستگاه: `name`، `public_key`، `addresses`، `handshake_age_secs` (ثانیه‌های گذشته از ساخته‌شدن نشستش، بدون نشست `null`). |
+| `speed_up`، `speed_down` | مثل پیکربندی، به بایت بر ثانیه، یا `null` برای بدون محدودیت. از v0.3.6. |
+| `limited` | آنچه محدودیت‌های سرعت از زمان شروع نود انجام داده‌اند: `up_packets` و `down_packets` (بسته‌های حذف‌شده بیش از نرخ: UDP، ping و TCPای که از نقطهٔ خروج `netstack` نمی‌گذرد) و `paced_ms` (میلی‌ثانیه‌هایی که streamهای TCP منتظر محدودیت ماندند، جمع روی streamها و هر دو جهت). TCP از نقطهٔ خروج `netstack` کند می‌شود و هرگز حذف نمی‌شود. |
 
 کلید preshared هرگز جزو آن نیست.
 
@@ -286,7 +288,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `window_secs` | ثانیه‌هایی که نرخ‌ها روی آن‌ها گرفته شد: 5 وقتی نود این‌قدر کار کرده باشد، 0 پیش از نمونهٔ دوم. |
 | `users`، `inbounds`، `exits` | فهرست‌هایی از `{"name", "traffic", "up_bytes_per_sec", "down_bytes_per_sec"}`. `name` نام کاربر یا تگ است. نامی که در این بازه تازه است نرخ 0 دارد. |
 | `outbounds` | برای هر outbound پیکربندی در حال اجرا یک مورد، به همان ترتیب، با چهار فیلد یک خروجی (`name` تگ outbound است) به‌علاوهٔ `udp`، `udp_down_secs`، `udp_flips`، `latency_ms`، `measured_at` و `down_reason`. `traffic` و نرخ‌ها جمع خروجی‌هایی است که بک‌اندشان این outbound را نام می‌برد. outbound ای که هیچ خروجی از آن استفاده نمی‌کند صفر دارد و خروجی با بک‌اند `l3`، `block` یا `chain` زیر هیچ‌کدام نمی‌آید. نود برای outbound شمارندهٔ جدا ندارد، پس جمع ترافیکی را هم دارد که سیاست `unsupported` یک خروجی با `"direct"` از کنار پروکسی فرستاده است. نود برای هر خروجی، از فلوهایش، می‌فهمد پروکسی UDP را رله می‌کند یا نه، پس فیلدهای UDP آن چیزی است که خروجی‌های outbound روی هم می‌دانند: `udp` تا وقتی آخرین تلاش یکی از آن‌ها رد شده باشد `false` است و برای outbound ای که پروکسی SOCKS5 نیست `null`. `udp_down_secs` از تازه‌ترین رد می‌شمارد. `udp_flips` جابه‌جایی‌های خروجی‌ها را جمع می‌کند، پس یک تغییر پروکسی که دو خروجی متوجهش شوند دو بار شمرده می‌شود. وضعیت هر خروجی در `/v1/exits` است. `latency_ms` مدتی است که پروکسی برای پاسخ به greeting آخرین فلوی دایل‌کننده‌اش طول کشید و `measured_at` زمان آن (ثانیهٔ یونیکس). برای outbound مستقیم و تا وقتی فلویی از پروکسی استفاده نکرده، هر دو `null`اند. `down_reason` دلیل اینکه outbound از نوع `xray` الان نمی‌تواند فلویی را حمل کند، با کلمات: افزونه نصب نیست یا اجرا نمی‌شود، Xray تمام شده و دوباره راه می‌افتد، یا نام سرور نشانی‌ای نمی‌دهد که نود حق وصل شدن به آن را داشته باشد. هر خروجی روی آن با همین دلیل از کار افتاده است. تا وقتی outbound حمل می‌کند و برای هر outbound غیر `xray` برابر `null` است. reload آن‌ها را از نو شروع می‌کند. |
-| `drops` | بسته‌هایی که از شروع حمل نشدند، به تفکیک نام دلیل. |
+| `drops` | بسته‌هایی که از شروع حمل نشدند، به تفکیک نام دلیل. `link_hops` بسته‌های پیوندی را می‌شمارد که از پیوند چهارم می‌گذشتند، [Chaining](../../protocol/node-links/#chaining) را ببینید. `rate_limited` بسته‌های حذف‌شده بیش از محدودیت سرعت کاربر را می‌شمارد. هر دو از v0.3.6. |
 | `dns` | `answered`، `refused`، `failed`، `malformed`، `throttled`. |
 | `flows` | فلوهای جدول فلو در همین لحظه. |
 | `ws_stalled`، `ws_refused` | اتصال‌های WebSocket که ارتقا را تمام نکردند و رها شدند، و آن‌هایی که هنگام accept رد شدند. |
@@ -410,7 +412,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `enabled` | برای ورودی‌ای که پیکربندی خاموشش کرده `false` است: گوش نمی‌دهد و دستگاهی نمی‌پذیرد. |
 | `public_key` | کلید عمومی WireGuard ورودی. |
 | `transport_public_key` | نیمهٔ عمومی کلید ترنسپورت نود که پروفایل با خود دارد. برای ورودی بدون `transport_keys` برابر `null` است. |
-| `transports` | برای هر ترنسپورت یک `{"transport", "enabled", "rating"}`، به ترتیب پیکربندی. `enabled` برای ترنسپورتی که پیکربندی خاموشش کرده `false` است. `transport` یکی از `udp`، `ws`، `udp-obfs`، `tls` یا `fronted` است. `rating` آن چیزی است که سانسورچی از اتصال یک پروفایل می‌تواند ببیند: `protected`، `detectable` یا `unsafe`. در این نسخه همهٔ ترنسپورت‌ها `detectable` رتبه می‌گیرند. |
+| `transports` | برای هر ترنسپورت یک `{"transport", "enabled", "rating"}`، به ترتیب پیکربندی. `enabled` برای ترنسپورتی که پیکربندی خاموشش کرده `false` است. `transport` یکی از `udp`، `ws`، `udp-obfs`، `tls` یا `fronted` است. `rating` آن چیزی است که سانسورچی از اتصال یک پروفایل می‌تواند ببیند: `protected`، `detectable` یا `unsafe`. در این نسخه همهٔ ترنسپورت‌ها `detectable` رتبه می‌گیرند. روی ترنسپورت `tls` که گوش می‌دهد سه کلید دیگر هست. `pin`: SHA-256 از SubjectPublicKeyInfo گواهی‌اش با base64 استاندارد، همان pinی که یک لینک یا پروفایل حمل می‌کند. `key_changed_at` و `previous_pin`: فقط وقتی نود فهمیده کلید همان نیست که پیش‌تر ارائه می‌داد، و تا 30 روز بعد از آن. `key_changed_at` زمان آن است (ثانیهٔ یونیکس) و `previous_pin` pin قدیمی. لینک یا پروفایلی که کلید قدیمی را pin کرده تا وقتی دوباره جفت‌سازی یا refresh نشود شکست می‌خورد. نود همچنان گواهی تازه را ارائه می‌دهد. از v0.3.6. |
 
 ### `GET /v1/links`
 
@@ -421,7 +423,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `tag`، `id` | تگ لینک و شناسهٔ آن (22 نویسه base64url). |
 | `half` | `entry` وقتی این نود کاربران را دارد و بسته‌هایشان را از راه یک خروجی با بک‌اند `chain` به لینک می‌فرستد. `exit` وقتی آنچه از لینک می‌رسد از این نود بیرون می‌رود. |
 | `role` | `listener` وقتی لینک به یک ورودی این نود وصل می‌شود، `dialler` وقتی این نود به نود دیگر وصل می‌شود. |
-| `state` | `up` (یک handshake وایرگارد در 180 ثانیهٔ گذشته کامل شده)، `connecting`، `unreachable` (هیچ کاندیدای نود دیگر پاسخ نمی‌دهد)، `refused` (نود دیگر پاسخ می‌دهد و اثبات را نمی‌پذیرد) یا `ended` (24 ساعت handshake نبوده، یا این نود لینک را به‌خاطر سهمیه یا انقضا قطع کرده). نودی که وصل می‌شود از `ended` به بعد روزی یک بار دوباره امتحان می‌کند. |
+| `state` | `up` (یک handshake وایرگارد در 180 ثانیهٔ گذشته کامل شده)، `connecting`، `unreachable` (هیچ کاندیدای نود دیگر پاسخ نمی‌دهد)، `refused` (نود دیگر پاسخ می‌دهد و اثبات را نمی‌پذیرد)، `pin_mismatch` (نود دیگر پاسخ می‌دهد، اما کلید گواهی‌اش با هیچ‌یک از pinهای کاندیدا نمی‌خواند: کلید تازه دارد و لینک باید دوباره جفت‌سازی شود، که مشکل شبکه نیست) یا `ended` (24 ساعت handshake نبوده، یا این نود لینک را به‌خاطر سهمیه یا انقضا قطع کرده). نودی که وصل می‌شود از `ended` به بعد روزی یک بار دوباره امتحان می‌کند. |
 | `state_secs`، `state_flips` | ثانیه‌هایی که لینک در `state` بوده، و چند بار `state` عوض شده. |
 | `handshake_secs` | ثانیه‌های گذشته از آخرین handshake کامل تونل لینک. بدون نشست `null`. |
 | `transport`، `transport_index`، `candidate_index` | روی نود وصل‌شونده: ترنسپورتی که روی آن است، و جای آن ترنسپورت و کاندیدایش در فهرست نود دیگر، از 0. روی نود پذیرنده همه `null` هستند. |
@@ -430,6 +432,7 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 | `exit` | روی نیمهٔ ورود: خروجی با بک‌اند `chain` که لینک پشت آن است. |
 | `flows` | فلوهایی که لینک حمل می‌کند. |
 | `dropped` | بسته‌هایی که از لینک بیرون آمدند و حمل نشدند. |
+| `chained` | روی نیمهٔ خروجی: بسته‌هایی که این نود از لینک به لینک دیگری رساند، که فقط با `allow_chain` پیش می‌آید. وگرنه `0`. |
 | `traffic` | بسته‌های داخلی. up آنچه این نود به لینک فرستاد، down آنچه از آن گرفت. |
 
 ## Upstreamها
@@ -438,9 +441,10 @@ curl --unix-socket veilway.sock -X POST http://veilway/v1/replay/reset
 
 | مسیر | بدنه | پاسخ |
 |---|---|---|
-| `GET /v1/upstreams` | ندارد | `{"upstreams": [...]}`. هر کدام `tag`، `state` (`fetching`، `connecting`، `up` یا `down`)، `reason`، `provider`، `signing_key` (اثر انگشت کلیدی که سند در حال اجرا با آن امضا شده)، `profile`، ترنسپورت و خروجی در حال استفاده، سهمیه، اطلاعیه‌ها، MTU، آخرین refresh، دلیل شکست refresh، جابه‌جایی یا میزبان‌های منتظر، و شمارنده‌ها را دارد. |
+| `GET /v1/upstreams` | ندارد | `{"upstreams": [...]}`. هر کدام `tag`، `state` (`fetching`، `connecting`، `up` یا `down`)، `reason`، `provider`، `signing_key` (اثر انگشت کلیدی که سند در حال اجرا با آن امضا شده)، `profile`، ترنسپورت و خروجی در حال استفاده، سهمیه، اطلاعیه‌ها، MTU، آخرین refresh، دلیل شکست refresh، جابه‌جایی یا میزبان‌های منتظر، و شمارنده‌ها را دارد. از v0.3.6 آنچه اپ همان موتور نشان می‌دهد هم دارد: `engine_state` (`connecting`، `reconnecting`، `connected`، `stopped:<reason>` با `quota`، `expired`، `disabled` یا `node-stopping`، یا `failed`؛ تا وقتی تونلی نیست `null`)، `connected_secs`، `transports` (نوع‌هایی که پروفایل در حال استفاده فهرست می‌کند)، `profiles` (همهٔ پروفایل‌های سند به ترتیب امتحان‌شدن، هرکدام با `id`، `name`، `usable` و، وقتی قابل استفاده نیست، `reason` ساده‌ای که هرگز آدرسی در آن نیست)، `exits` (حداکثر 16 نقطهٔ خروج که ارائه‌دهنده می‌دهد، هرکدام با `tag`، `name`، `country`، `all_protocols` و `selected`)، `provider_notices` (با `information` یا `warning`)، `choice` (`profile`، `failover`، `transport` و `exit` همان‌طور که پیکربندی اکنون انتخاب می‌کند، برای خودکار `null`) و، در `quota`، وقتی کانال کنترل باز است، `period`، `period_start`، `account_expires_at`، `up_bytes` و `down_bytes`. |
 | `POST /v1/upstreams/preview` | `link`، `private_key`، `device_secret` و اختیاری `via` و `allow_private` | بازبینی سند ارائه‌دهنده با `id` و `expires_in_secs`. وقتی 4 جا پر باشد `409` با `previews_full`. وقتی نشود از ارائه‌دهنده پرسید یا پاسخش بررسی‌ها را رد کند `502` با `provider_failed`. |
 | `POST /v1/upstreams/preview/{id}/decline` | ندارد | `{"id": ...}`. اگر چنین پیش‌نمایشی منتظر نباشد `404` با `preview_not_found`. |
+| `PATCH /v1/upstreams/{tag}` | هر یک از `profile`، `failover`، `transport` و `exit`، هرکدام یک مقدار یا `null` | `{"tag", "revision", "generation", "live"}`. فیلدی که نیاید همان می‌ماند و `null` یعنی خودکار: همهٔ پروفایل‌ها به نوبت، بدون failover، همهٔ ترنسپورت‌ها، نقطهٔ خروج پیش‌فرض ارائه‌دهنده. هر فیلد دیگر در بدنه با `422` رد می‌شود، پس لینک، کلیدها، `allow`، `allow_private` و `via` را از این راه نمی‌شود عوض کرد. تغییر از همان بررسی‌ها و همان اعمال `PUT /v1/config` می‌گذرد، روی revisionی که اکنون اجرا می‌شود، و در فایل پیکربندی نوشته می‌شود. `live` وقتی `true` است که فقط نقطهٔ خروج عوض شده: تونل می‌ماند و نقطهٔ خروج دیگر از آن خواسته می‌شود. هر تغییر دیگر تونل را دوباره می‌سازد. `404` با `upstream_not_found`، `409` اگر پیکربندی در این بین دو بار جابه‌جا شده. از v0.3.6. |
 | `POST /v1/upstreams/{tag}/confirm` | اختیاری `move` و `hosts`، که هر دو اگر نیایند `true`اند | `{"moved": bool, "hosts": bool}`، که هرکدام اگر چیزی منتظرش نبوده `false` است. اگر پاسخ نگه داشته نشود `500` با `state_unwritten`. |
 | `POST /v1/upstreams/{tag}/retry` | ندارد | `{"tag": ...}`. همین حالا وصل می‌شود و همهٔ انتظارها را از نو شروع می‌کند. |
 | `DELETE /v1/upstreams/{tag}` | ندارد | `{"tag": ..., "confirmed": bool}`. وقتی `confirmed` برابر `false` است، همین فراخوانی دوباره به ارائه‌دهنده خبر می‌دهد. |

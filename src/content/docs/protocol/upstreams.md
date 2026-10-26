@@ -27,6 +27,7 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 | Previews waiting or being fetched at once | at most 4 |
 | Life of a preview | 600 s, then its place at the provider is given back |
 | Wait for the provider to answer `leave` | at most 10 s |
+| Time a profile may stay unconnected, while the provider cannot be reached or refuses, before the node tries the next one | 120 s |
 | Refresh while the exit carries | the document's `update_interval`, held between 3,600 s and 86,400 s, plus up to 20% |
 | Refresh after a refusal, an expired document or a refresh that failed | 3,600 s plus up to 20% for the first 24 h, then 86,400 s plus up to 20% |
 | Wait before the tunnel is made again after it failed | 30 s, doubling to 3,600 s, plus up to 10%. A run that carried for 30 s or more starts the waits over. |
@@ -49,8 +50,10 @@ An upstream is an entry in `upstreams`, and an exit uses it with the backend `{"
 | `link` | yes | A native `veilway://sub/` link of the provider. It holds the account's token, so it is a secret. Carried, file, legacy and plain links are refused. |
 | `signing_key` | yes | The provider's signing key that the operator confirmed, as the fingerprint (8 groups of 4 hex digits) or the key (43 characters of base64url). The key in the link must be this one. |
 | `private_key`, `device_secret` | yes | The node's device key and device secret for this provider, both secrets. The operator's panel makes them. |
-| `profile` | no | The profile of the document to use. The first one without it. |
-| `exit` | no | The provider's exit to leave through. Without it the provider's default, which the provider chooses. |
+| `profile` | no | The profile of the document to use. Without it every profile is tried in the document's order (automatic). |
+| `failover` | no | With a `profile`: also try the other profiles when that one cannot be used. Off by default, so a named profile is the only one used. |
+| `transport` | no | The transport type to connect over: `udp`, `udp-obfs`, `tls`, `ws`, `ws-plain`, `fronted` or `fronted-shaped`. Without it the engine picks from the profile's transports. |
+| `exit` | no | The provider's exit to leave through. Without it the provider's default, which the provider chooses. A change of it alone is taken on the running tunnel. |
 | `via` | no | A `direct` or `socks5` outbound the node reaches the provider through, for the fetch and for TCP transports. `udp` and `udp-obfs` cannot go through a `socks5` outbound, and a profile that lists nothing else is not used. A proxy on a loopback, unspecified or link-local address is refused. |
 | `allow` | no | Classes of transport besides `cover` that the node may use: `no_cover`, `exposed`, `plain`. Empty: `tls`, `ws`, `fronted` and `faketls` only. |
 | `allow_private` | no | Whether the provider may have the node dial private addresses. Off by default. |
@@ -91,6 +94,22 @@ A provider names where the node connects. The node refuses a profile if any addr
 
 The engine's control channel reports the provider's exits, the device's usage, notices and `bye`. The node shows them to the operator and applies one thing: a lower MTU, never below 1280 (or the profile's MTU if that is lower) and never above the profile's. Text from the provider is cut and stripped of control, zero-width, separator and direction characters. Nothing from the channel changes routes, addresses, resolvers or the exits the node's own users see. An oversized packet of a user gets the ICMP error with the link's MTU.
 
+## Choosing the profile, the transport and the exit
+
+From v0.3.6 the node chooses as the apps do. Three keys steer it, and each can be left out for automatic.
+
+- **Profile.** Without `profile` the node tries every profile of the document in its order, starting with the last one that carried (kept in memory only). With `profile` and no `failover` it uses that profile alone, as before. With `profile` and `failover: true` it tries that one first, then the rest.
+- **Transport.** Without `transport` the engine picks among the profile's transports, keeps what worked and moves on when one is blocked. With it, only that type is used. The classes in `allow`, the datagram check for a `socks5` `via` and the rules for `faketls` (alpha, not used by the node) still apply, and a type outside them is refused when the config is checked.
+- **Exit.** `exit` is the provider's exit to leave through. A change of `exit` alone does not make the tunnel again. The node asks the running tunnel for the other exit. The carrier stops carrying at that moment and carries again only once the provider says the new exit is the one selected for the device, so nothing leaves through the old exit in between.
+
+Failover is bounded, so that a provider cannot walk the node through its profiles:
+
+- A profile is given up when its tunnel failed, when it has not connected for 120 s while the engine says the provider cannot be reached, refuses or answers wrongly, or when the pinned exit is not one it offers.
+- A device that is offline, and a provider that stops the account on purpose (quota, expired, disabled, stopping), never move the node to another profile.
+- Every profile is held to the same checks before its tunnel starts: the dial addresses, the datagram check, the allowed classes and the chosen transport. One that fails is skipped with a reason shown to the operator and never an address.
+- The profiles that failed make a round, kept in memory. The next attempt skips them. When all have failed the round starts over with the usual wait, which doubles to an hour.
+- The engine's memory of what worked is one store per upstream, shared by its profiles, so its hourly budget of new addresses covers all of them.
+
 ## Refresh and failure
 
 The node refreshes the document in a task of its own, so packets go on while the provider answers. The interval is the document's, held between an hour and a day, plus up to 20%.
@@ -126,7 +145,8 @@ Not defended: anonymity from the provider, the integrity of DNS answers and unpr
 
 | Route | What it does |
 |---|---|
-| `GET /v1/upstreams` | Every enabled upstream: phase (`fetching`, `connecting`, `up`, `down`), reason, provider, the fingerprint of the signing key in use (`signing_key`), profile, transport and exit in use, quota, notices, MTU, last refresh and why one failed, a move or hosts that wait, and counters. No key, secret or link. |
+| `GET /v1/upstreams` | Every enabled upstream: phase (`fetching`, `connecting`, `up`, `down`), reason, provider, the fingerprint of the signing key in use (`signing_key`), profile, transport and exit in use, quota, notices, MTU, last refresh and why one failed, a move or hosts that wait, and counters. Since v0.3.6 also the tunnel's own state and how long it has been connected, the transports of the profile in use, every profile with whether it is usable and why not, the provider's exits with the selected one, the provider's notices with their severity, the quota's period and the account's end, and the choice the config makes now. No key, secret, link or address. |
+| `PATCH /v1/upstreams/{tag}` | Changes `profile`, `failover`, `transport` and `exit`, and nothing else. A field left out stays, and `null` is automatic. A body with any other field is refused, so the link, the keys, `allow`, `allow_private` and `via` cannot be changed this way. The result goes through the same checks and the same apply as a pushed config, at the revision that runs now, and is saved to the config file. Only `exit` is taken on the running tunnel (`live: true` in the answer). |
 | `POST /v1/upstreams/preview` | Step 2 of enrollment. |
 | `POST /v1/upstreams/preview/{id}/decline` | Gives a preview's place back. |
 | `POST /v1/upstreams/{tag}/confirm` | Confirms a move, new refresh hosts or both. Without a body both. |

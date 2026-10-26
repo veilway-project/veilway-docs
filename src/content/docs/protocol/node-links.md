@@ -32,6 +32,9 @@ Every range written "a to b" is inclusive at both ends. None of these numbers ha
 | Translated ports and echo identifiers at the entry | 1024 to 65535, drawn at random |
 | Rest before a translated port is used again for the same remote address and port | 120 s |
 | Hop limit the entry writes on a packet it sends into a link | 64 |
+| Hop limit a node writes when it continues a link's packet into another link (`allow_chain`) | the received one, at most 64, minus 1 |
+| Lowest hop limit a node writes into a link | 62, so a chain has at most 3 links |
+| Time a pin of a `tls` transport is shown as changed | 30 days |
 | A pasted answer waiting for its confirmation | until the offer's `expires_at`, then the pairing is discarded |
 | A size warning on a link | cleared 600 s after the last report |
 | A link reported as "ended or misconfigured" | after 24 h of nothing but refusals, or 24 h without a handshake. From then on the dialler tries once a day. |
@@ -117,7 +120,7 @@ The node that pastes an offer refuses it when an address in it lies inside one o
 - **ICMP errors** that arrive for a translated flow are found by the packet they quote, translated back, quote included and with the quote's checksum corrected, and delivered to the user's device. An error that quotes nothing the entry sent is dropped.
 - **IPv6** is translated in the same way, to the link's IPv6 address. That is address translation for IPv6, which the protocol's designers did not want, and it is chosen here for the privacy reason above.
 - **Other IP protocols** have no ports to tell flows apart. For each protocol and remote address, one user at a time holds the translation. Another user's packet to the same remote address under the same protocol is refused with an ICMP error until the first flow has gone idle. A user can hold a remote address on purpose and so keep others from it under that protocol.
-- **Fields that are rewritten on every packet sent into a link**, because they show which device a packet came from: the hop limit is set to the one value in the table of numbers, the IPv4 identification field is drawn anew, the IPv6 flow label is set to zero, and the traffic class is set to zero with its two congestion bits kept. A fixed hop limit has a visible cost: a user who traces a route through a linked exit sees nothing between the entry and the destination.
+- **Fields that are rewritten on every packet sent into a link**, because they show which device a packet came from: the hop limit is set to the value in the table of numbers (64 from an entry, one less at each middle node, see "Chaining"), the IPv4 identification field is drawn anew, the IPv6 flow label is set to zero, and the traffic class is set to zero with its two congestion bits kept. A fixed hop limit has a visible cost: a user who traces a route through a linked exit sees nothing between the entry and the destination.
 - **Packets the entry makes itself.** The entry's resolver sends its lookups through the exit a flow was routed to, and the node may send a ping on a user's behalf. Through a link these are packets like any other: their source is the entry's link address, they take a translated port or identifier, and they count against the exit's cap for the link. The resolver asks through a `chain` exit over UDP only, and an answer that arrives truncated stays truncated for the user's device, which can ask again over TCP itself.
 - **No policies for what an exit cannot carry.** A `chain` exit carries whole packets of every IP protocol, so the per-exit `unsupported` policies of the config reference do not exist for it. What the far node cannot carry, the far node refuses.
 - **Answers do not keep a flow alive by themselves.** An answer from the link never extends a flow that is closing or closed, and refreshes a flow's idle time only while the device itself has sent on that flow within its idle time. An exit cannot hold the entry's table full by sending.
@@ -132,6 +135,7 @@ Translation keeps users' tunnel addresses from the exit, and it removes the fiel
 - **The exit sees:** every destination, every DNS name that the entry's resolver asks through it, the volume and timing of the traffic, and the entry's address.
 - **The exit can still tell devices apart, and often count them.** A forwarded packet keeps what the entry cannot cheaply rewrite: the timestamps and options of TCP, initial sequence numbers, how a device sizes its windows, and the timing of its packets. Counting hosts behind an address translator from such fields is a known technique. One device is the same device across all its flows, so its flows can be tied together, and a user who is tied together once can be followed for as long as they stay. When the exit's own backend ends TCP connections itself (`netstack`), these fields end at the exit and go no further. The exit node itself has read them either way.
 - With few users, or one, the sum is the user.
+- Through a chain (`allow_chain`), the last exit sees the middle node's link address and not the first entry's. The middle node reads everything the last exit would, for the flows it forwards.
 
 A user who must not be told apart by the exit's operator has no protection from this page. The protection it gives is narrower: the exit holds no address or key of a user, and nothing in the link tells it who is who.
 
@@ -150,7 +154,7 @@ A user who must not be told apart by the exit's operator has no protection from 
 - **Private networks** are refused for a link unless the link has `allow_private` set, and are then decided by the rules.
 - **Rules.** A routing rule can match on `link`, a list of link tags. A link has a default exit of its own, `exit`, used when no rule names one, and a list of exits it may leave through. Both are set by the exit's operator.
 - **Port 53.** `dns.hijack` does not apply to a link. Its DNS traffic was already answered by the entry's resolver, which chose its own servers, and it is routed like any other flow. So a link uses none of the exit's waiting queries and none of its memory of names. One consequence must be known to the exit's operator: the exit never learns which name an address of a link's flow was looked up for, so a rule of the exit that matches by `domain` never matches a link's traffic. A block by name does not cover a link. Validation warns when a rule with a `domain` condition could apply to a link.
-- **A link may not leave through another link.** Validation refuses a link that is entitled to a `chain` exit, directly or through a `via` policy, and through a balancer once the config has balancers. The engine also refuses, at the moment it decides a flow, to send a packet that arrived from a link into a link. This binds nodes that follow this page. A node that does not could forward on, and no other node could tell. What bounds the cost then is the link's caps.
+- **A link leaves through another link only with `allow_chain`.** It is off by default. Validation refuses a link that is entitled to a `chain` exit without it, directly or through a `via` policy, and through a balancer once the config has balancers. The engine also refuses, at the moment it decides a flow, to send a packet that arrived from a link into a link when the link does not allow it. An `upstream` exit is never allowed. With `allow_chain` the hop rule of "Chaining" bounds the chain. This binds nodes that follow this page. A node that does not could forward on, and no other node could tell. What bounds the cost then is the link's caps.
 - **Limits of a link**, each its own and not a user's share: flows, ICMP errors and resets, and direct pings, with the values in the table of numbers, and an optional quota and expiry.
 - The exit counts bytes and packets per link.
 
@@ -250,6 +254,53 @@ A dialling node may reach the other node through one of its `socks5` outbounds, 
 - **Nothing goes round it.** When the chain cannot be dialled, the link is unreachable. The dialler does not try the direct path.
 - **What the proxies see.** SOCKS5 is plain text. Each proxy of the chain sees the user name and password of the proxies after it, the CONNECT targets and the bytes of the flows it carries. The link's own payload stays protected end to end: the TLS session or the WebSocket inside the chain is opaque to every proxy, and so is WireGuard. The server name a candidate shows in its TLS handshake is in the clear, as on a direct path, so the proxies see it too.
 
+## Pins and self-signed links
+
+A `tls` candidate of a link needs 1 to 4 pins: the SHA-256 of the SubjectPublicKeyInfo of the listener's certificate, in base64. The offer carries them, so the fingerprint both operators compare covers them.
+
+**Two ways to trust the certificate.**
+
+- **From a certificate authority.** The chain, the name and the dates are checked, and a pin is a second condition. A pin never replaces the chain.
+- **Self-signed** (`self_signed: true` on the candidate, from v0.3.6). For a node with no domain. The node makes its own certificate (`"tls": {"self_signed": true}`), and the dialler trusts it through its pins alone: no chain, name or date is checked, TLS 1.3 only, and the handshake must be signed by the pinned key. The candidate needs 1 to 4 pins and no `verify_name`, and `sni` may be empty. It is allowed on `tls` only, never on `ws`. At pairing the dialler's screen and `veilway link answer` mark such a candidate as self-signed, pin only.
+
+A self-signed link is as strong as the fingerprint the two operators compared. No certificate authority stands behind it. Whoever steals the key file of that transport can pose as the exit of the link until the link is paired again. Like a self-signed certificate on a profile, it is visible to anyone who completes the handshake.
+
+**Where a pin comes from.** The node works out the pin of every `tls` transport it listens on, for a self-signed certificate and for one read from `cert` and `key` alike. Read it from:
+
+- `veilway doctor`, which prints the pin of each `tls` transport;
+- `GET /v1/inbounds` (`pin` on the transport) and `GET /v1/status` (`certificates`);
+- the panel, which puts it into the offers it makes.
+
+To check one by hand, against the certificate the server really serves:
+
+```sh
+openssl s_client -connect 192.0.2.10:443 -servername example.org </dev/null 2>/dev/null \
+  | openssl x509 -pubkey -noout | openssl pkey -pubin -outform der \
+  | openssl dgst -sha256 -binary | base64
+```
+
+For a file, use `openssl x509 -in cert.pem -pubkey -noout` in place of the first two lines. The result must equal the pin in the offer. For a self-signed transport, pass the address of the transport itself.
+
+**A key that changed.** The pin changes when the transport gets a new key: a lost or replaced key file, or a certificate renewed with a new key. A self-signed transport keeps its key across renewals, and only makes a new one when the key file is missing.
+
+- **On the listener.** The node remembers the pin of each `tls` transport in `tls-pins.state` next to the config file (read as hostile input, mode 600). When the pin differs at a start, a reload or a certificate file change, the node logs one warning naming the links on that inbound that pin the old key. It never refuses the new certificate. `GET /v1/inbounds` shows `key_changed_at`, `previous_pin` and `pin` for 30 days, and `veilway doctor` warns.
+- **On the dialler.** A certificate whose key matches none of the candidate's pins ends the attempt as `pin_mismatch`, not as unreachable, and a warning says to pair the link again (at most once in 10 minutes). The dialler keeps trying at the usual waits and never falls back to no pin.
+- **Pair again.** A new key breaks every link that pins the old one until the link is paired again, or its `peer.transports[].candidates[].pins` are edited by hand.
+- **Keep the key of a CA certificate.** When the certificate renews with a new key, the pin changes. Ask certbot to keep the key: `certbot renew --reuse-key`, or `reuse_key = true` in the certificate's renewal file.
+
+## Chaining
+
+By default a link may not leave through another link. Since v0.3.6 the operator of the exit half can allow it for one link, so that a chain of nodes can stretch a path.
+
+- **Off by default.** `links[].allow_chain: true` on the exit half lets that link's `exits` and `exit` name a `chain` exit of this node. It is an error on the entry half. Without it validation refuses a `chain` exit there, and the engine refuses the flow when it decides it.
+- **Never through an upstream.** An `upstream` exit is one device on another provider's account, and the users of a third node may not spend it. Validation refuses it for a link with or without `allow_chain`, and the engine refuses it again when it decides a flow.
+- **Hop limit.** The entry writes 64 on every packet it sends into a link. A node that continues a link's packet into another link writes `min(received, 64) - 1` and drops the packet when that is below 62. So a chain has at most 3 links, a loop between nodes dies after 3, and an entry that writes 255 gains nothing. The drop is counted as `link_hops` and as `dropped` on the link, sends no error back, and is logged at warn at most once in 10 minutes for each link.
+- **Translation.** The middle node sees the incoming link's packet as a flow of that link and translates it as the entry does: its source becomes the middle's own address on the next link, with a translated port. Answers go back by the same table.
+- **Nothing is fragmented toward a link.** What does not fit the next link is answered as too big, at every hop.
+- **Reload.** Flows are decided again at every reload, so turning `allow_chain` off cuts the chained flows within a second. The node logs at info when the setting changes, with the `chain` exits the link then reaches.
+- **What each side knows.** The last exit sees the middle node's link address, never the first entry's or a user's. The first entry is not told that its traffic continues, and cannot see or limit what happens at the middle. The middle node shows `chained` in `GET /v1/links`: the packets it forwarded from the link into another link.
+- **Whose limits apply.** The last exit's `max_flows` and quota cover what the middle forwards together with the middle's own users.
+
 ## Lifetime
 
 **Connecting and reconnecting.** The dialler follows the client rules of the transports page, with two rules of version 1 on top: it tries one candidate at a time, never two in flight, and every attempt that did not open is followed by a wait of at least the 2 to 10 s that those rules give between transports, whatever its outcome. Otherwise the client rules hold without change: the order of transports in the offer, candidates and their marks, the difference between a refusal, an unreachable candidate and a fault of the node itself, the waits and their doubling, and "the last transport is never set aside". There is no user to ask, so there is no consent to a class: the listener's operator decided which transports the offer lists, and the dialler's operator accepted them at pairing.
@@ -261,6 +312,7 @@ A dialling node may reach the other node through one of its `socks5` outbounds, 
 | Up | A WireGuard handshake completed within the last 180 s. |
 | Connecting | The dialler is trying, or the listener has not heard a handshake yet. |
 | Unreachable | Dialler only: no candidate answers. |
+| Pin mismatch | Dialler only: the other node answers, but its certificate's key matches none of the candidate's pins. It has a new key, and the link has to be paired again. See "Pins and self-signed links". |
 | Refused | Dialler only: the listener answers and does not accept the proof. |
 | Ended or misconfigured | The state after the time in the table of numbers. From then on the dialler tries once a day, because the address it dials may by then be someone else's. The state says so, so that nothing keeps trying without telling its operator. |
 | Up, with a size warning | The link is up and the system has reported "packet too big" for the link's own outer packets, which suggests the link's `mtu` is too high for the path. The warning clears when no such report has come for the time in the table of numbers. Anyone on the path can forge such a report, which is why it only warns and changes nothing. |
@@ -333,6 +385,7 @@ These keys are in the [config reference](../../reference/config/), which is the 
 | `links[].peer` | dialler | The listener's `inbound_public_key`, `transport_public_key` and `transports`, as the offer gave them. |
 | `links[].via` | dialler | The tag of a `socks5` outbound whose chain the TCP transports of the link go through. See "Through an outbound". |
 | `links[].exit`, `links[].exits` | the exit half | The link's default exit, and the exits it may leave through. |
+| `links[].allow_chain` | the exit half | Whether the link may continue through a `chain` exit into another link. Default `false`. See "Chaining". |
 | `links[].allow_private` | the exit half | Whether private networks are decided by the rules for this link. Default `false`. |
 | `links[].max_flows`, `links[].quota_bytes`, `links[].quota_period`, `links[].expires_at` | the exit half | How much the link may use. The quota and its period mean what they mean for a user. |
 | `routing.rules[].link` | the exit half | A condition: a list of link tags. |
@@ -341,9 +394,9 @@ These keys are in the [config reference](../../reference/config/), which is the 
 
 Which half a node is follows from `direction` and from whether the link is listed with `inbound` or with `peer`.
 
-**The control API** (`GET /v1/links`) reports for each link: its tag and id, the half and the role of this node, the state and since when, the time of the last handshake, the transport and candidate in use on the dialler, flows, and bytes and packets in each direction. It reports no key and no secret.
+**The control API** (`GET /v1/links`) reports for each link: its tag and id, the half and the role of this node, the state and since when, the time of the last handshake, the transport and candidate in use on the dialler, flows, `chained` (on the exit half, the packets forwarded into another link) and bytes and packets in each direction. It reports no key and no secret.
 
-**`veilway doctor`** checks, without dialing anything: that a link's addresses lie in the inbound's pool on a listener and in none of this node's pools on a dialler, that a link's inbound carries no users, that no link key is a device's key, that the clock is set, that the link's `mtu` is not below the `mtu` of an inbound whose users are routed to it nor below the MTU of an `l3` exit it may use, that a link is not entitled to a `chain` exit, and, from a running node, each link's state.
+**`veilway doctor`** checks, without dialing anything: that a link's addresses lie in the inbound's pool on a listener and in none of this node's pools on a dialler, that a link's inbound carries no users, that no link key is a device's key, that the clock is set, that the link's `mtu` is not below the `mtu` of an inbound whose users are routed to it nor below the MTU of an `l3` exit it may use, that a link is not entitled to a `chain` exit unless it has `allow_chain`, the pin of each `tls` transport (against the pin the node served last and the links that name it), and, from a running node, each link's state.
 
 ## Ratings and what users are told
 
@@ -358,6 +411,8 @@ Which half a node is follows from `direction` and from whether the link is liste
 - **A hostile or compromised exit** sees and can alter everything that passes through it that is not encrypted end to end, can answer DNS falsely, and can drop or delay. It can fill any live flow with bytes, which the entry counts against that user before the user's device throws them away, so an exit can use up users' quotas. It can tell the entry's users' devices apart and often count them, as "What the exit learns" says. It cannot learn a user's address or key from the link, cannot send the entry a packet that reaches a user unless it answers a flow that user opened, and cannot reach the entry's own addresses or other users.
 - **Each node learns the other's address, and the dialler learns more.** The dialler holds the listener's names, paths and keys: in a forward link the entry holds the exit's, and in a reverse link the exit holds the inbound key, transport key and paths of the entry's link inbound. That inbound carries no users, so these are not what the entry's subscribers hold. Either is enough to block the listener. An operator pairs with someone they are willing to give that to.
 - **A link multiplies what a leak costs.** The link's keys on a compromised node let its holder act as that side of the link until the other operator ends it.
+- **A self-signed link rests on the fingerprint.** There is no authority to ask, so the pins in the offer are the only check of the listener's certificate. A key file that leaks lets its holder pose as the listener until the link is paired again. A new key breaks the link and is never worked around.
+- **A chain hides a hop from the entry.** The entry's operator picked the middle node, and the traffic leaves at a node the entry never saw. The entry cannot detect this. The middle node sees every destination of the flows it forwards. The hop rule is only a loop guard between nodes that follow it.
 - **Parsers.** The offer and the answer are hostile input to a panel, pasted by a person. Each has a fuzz target in the same change as its parser, and a code that fails any check changes nothing.
 
 **Where this page differs from the threat model's invariants.** Invariant 8 says every decrypted packet is checked for a source its device owns, and a reverse link's peer is checked by another rule. Invariant 10 says a returning packet goes to the device that holds its destination address, and with translation that address is the link's.
@@ -376,5 +431,5 @@ Each is listed with the default this page takes.
 | Should the control channel's catalog carry the "linked" mark itself? | Not in its version 1, which does not grow. It is a point for the next version. |
 | Should a link find its path MTU by probing? | No. The operators set `mtu`, both nodes lower TCP segment sizes, and a warning state shows a value that is too high. |
 | Should a node tell its peer that it is ending the link? | No. A message would be one more thing a node believes from the other. |
-| Chains of more than two nodes | Not in version 1. Conforming nodes refuse them in validation and in the engine. |
+| Chains of more than two nodes | Off by default. With `allow_chain` on the exit half of a link, at most 3 links in a row, never through an upstream. Conforming nodes refuse the rest in validation and in the engine. |
 | Spreading users over several exit nodes by load | Not on this page. |

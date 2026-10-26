@@ -42,7 +42,7 @@ A node may serve `socks5`, `http` and `mixed` proxy inbounds, which let other so
 - **No open proxy.** There is no anonymous method. SOCKS5 offers only user name and password, and HTTP answers 407. A login is a user of the config with a `proxy_password` the inbound admits. A user who is disabled, expired or over quota is refused, and a cut-off ends the user's connections within a second.
 - **Guessing.** Passwords have 16 to 128 characters. A source that fails 10 logins to one name in 60 seconds is refused that name, and the wait for a name grows with its failures. Connections, connections per source and unfinished logins are capped.
 - **UDP has no login of its own.** The relay carries only datagrams from the client's address and, off loopback, from the port the client named. A client behind a NAT gets no UDP unless the operator turns on `udp_any_port`, which lets a sender that shares the client's address take the association before the client's first datagram.
-- **No way to the node's own networks.** The destination gate refuses the node's own addresses and pools before any rule. Names are resolved by the node, never by the host.
+- **No way to loopback or the node's tunnel networks.** The destination gate refuses loopback, link-local, the cloud metadata addresses and every tunnel pool before any rule. The node's own public addresses are open unless a `host:self` rule refuses them, see [Reaching the server itself](#reaching-the-server-itself). Names are resolved by the node, never by the host.
 - **Requests that smuggle another one.** The HTTP reader is strict and bounded, one plain request is carried to a connection, and nothing written behind it reaches the origin. A fuzz target covers both front ends.
 
 What is not defended: everything above that says "not encrypted"; a censor that finds the port can block it and learn what it is; whoever learns a user's proxy password is that user on every proxy inbound that admits them until it changes; and the operator sees what users do through the node. The model has not been reviewed by anyone outside the project.
@@ -59,6 +59,32 @@ A node may carry an exit through a VLESS, VMess, Trojan or Shadowsocks server of
 - **A change restarts Xray**, which drops Xray inbound users for a moment.
 
 What is not defended: Xray's own egress, which its unit does not restrict, so a bug in Xray is not held to the provider's address; a hostile provider's bytes, which Xray parses, so a flaw in Xray-core would give an attacker the outbound credentials and every Xray user's flows; and availability, since the provider can cut the exit. Only Linux nodes run it. The model has not been reviewed by anyone outside the project.
+
+## Reaching the server itself
+
+Since v0.3.6, users reach services on the node's own public addresses unless a rule refuses them. The routing name `host:self` stands for every address the machine holds, read from its interfaces every 60 seconds. An operator who runs other services there (another panel, a database, an admin port) adds `{"tag": "no-self", "ip": ["host:self"], "action": "reject"}` to the rules. It holds for every exit, door and node link. Nothing adds that rule for the operator. See [Reaching the server itself](../../reference/config/#reaching-the-server-itself).
+
+- **Still refused whatever the rules say:** loopback, link-local, the cloud metadata addresses and every tunnel pool. The panel listens on `127.0.0.1` only, so users cannot reach it.
+- **What the rule cannot name:** an address no interface holds (a public address behind a 1:1 NAT), an anycast address and a broadcast address. They stay reachable.
+- **A service that listens on every address** is reachable through any of them until the rule is added.
+- **A gateway address** answers DNS, ping, and on a `veilway` inbound the control channel, for its own inbound only.
+
+## Node links
+
+A link joins two nodes, and its full model is in the node links page and the threat model. What it means for an operator:
+
+- **Pairing rests on two fingerprints** that the operators read to each other. Nothing else protects the pairing, and the key agreement in it has had no outside review.
+- **A self-signed link rests on the same fingerprint.** A `tls` candidate with `self_signed` is trusted through its pins alone, with no certificate authority. Whoever steals the key file of that transport can pose as the exit until the link is paired again.
+- **A new key is told, never hidden.** The node remembers the pin of each `tls` transport and warns once when it changes, naming the links that pin the old key. It still serves the new certificate. The dialling node reports `pin_mismatch`, not "unreachable", and never falls back to no pin.
+- **Chaining is off by default.** With `allow_chain` on the exit half, a link's traffic may continue through another link, at most 3 links in a row, never through an upstream. The hop limit is only a loop guard between nodes that follow it. The entry cannot see or limit what happens at the middle node, which sees every destination of the flows it forwards.
+
+## Other providers' subscriptions
+
+An exit that uses another provider's subscription (an upstream) is held to section 5.15 of `THREAT_MODEL.md`, risks U1 to U9. The provider sees the node's address and every destination, DNS name and unprotected byte of the flows sent to it. A hostile provider cannot steer the node at its own host or networks: every dial address of every profile it lists is refused if it is loopback, an inbound pool, the node itself or private (unless allowed). Failover between profiles is bounded, so a provider cannot make the node walk through them by cutting it off. `PATCH /v1/upstreams/{tag}` changes only the profile, failover, transport and exit, never the link, the keys or what the node may dial. Nothing goes around a down upstream.
+
+## Speed limits
+
+A user's `speed_up` and `speed_down` only delay or drop. They never reroute a flow or change what a rule decided. TCP the node holds as a stream is delayed, and other traffic over the rate is dropped and counted. DNS and the control channel are never dropped. The limit is per node, so a user online on several nodes at once gets the limit on each, and a per-account cap is not built.
 
 ## Exit load
 

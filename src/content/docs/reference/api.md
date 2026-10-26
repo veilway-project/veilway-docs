@@ -88,7 +88,7 @@ No answer, event or log line of the API contains the value of a secret (`private
 | GET | `/v1/stats` | All counters with live rates |
 | GET | `/v1/sessions` | Devices with a live session |
 | GET | `/v1/exits` | Every exit with its upstream health |
-| GET | `/v1/inbounds` | Every inbound with its public keys and the rating of each transport |
+| GET | `/v1/inbounds` | Every inbound with its public keys, the rating and the pin of each transport |
 | GET | `/v1/links` | Every enabled node link with its state and counters |
 | GET | `/v1/upstreams` | Every enabled upstream with its state, reason and counters |
 | POST | `/v1/upstreams/preview` | Fetches a provider's document for review, and keeps it for 600 seconds |
@@ -112,7 +112,7 @@ Every route can also answer `408`, `503`, `404` and `405` as above. The tables b
 | `inbounds`, `exits`, `users` | integer | How many the running config has. |
 | `flows` | integer | Flows in the flow table right now. |
 | `public_addresses` | list of strings | The node's public addresses as the config names them (host names or IP addresses, no port). Empty if none. |
-| `certificates` | list | The self-signed certificates the node made for its `tls` transports with `"self_signed": true`, one per listen address, as `{"listen", "pin", "not_before", "not_after"}`. `pin` is the SHA-256 of the key's SubjectPublicKeyInfo in standard base64, and stays the same when the certificate is renewed. `not_before` and `not_after` are Unix seconds. Empty if none. |
+| `certificates` | list | The certificate of every `tls` transport, one per listen address, as `{"listen", "pin", "self_signed", "not_before", "not_after"}`. `pin` is the SHA-256 of the key's SubjectPublicKeyInfo in standard base64. `self_signed` is `true` for a certificate the node made (the pin is then the only check, and stays the same when the certificate is renewed) and `false` for one read from the config's `cert` file (the chain is checked as well). Until v0.3.5 only self-signed ones were listed. `not_before` and `not_after` are Unix seconds. Empty if none. |
 | `addons` | object | `{"xray": {"installed", "release"}}`: whether the Xray add-on's executable is in the add-on folder, and the Xray-core release this node runs. |
 
 ### `GET /v1/config`
@@ -218,6 +218,8 @@ The list answers `{"users": [...]}`. The single route answers one user or `404 u
 | `dns_set` | The tag of the DNS set that names the user, or else one of their groups. `null` when none does: queries then go to the set that names the inbound, or to `dns.servers`. |
 | `traffic` | Lifetime counters: `up_bytes`, `up_packets`, `down_bytes`, `down_packets`. Up is from the device into the node. |
 | `devices` | Per device: `name`, `public_key`, `addresses`, `handshake_age_secs` (seconds since its session was made, `null` without a session). |
+| `speed_up`, `speed_down` | As in the config, in bytes per second, or `null` for no limit. From v0.3.6. |
+| `limited` | What the speed limits did since the node started: `up_packets` and `down_packets` (dropped over the rate: UDP, pings and TCP that does not leave through a `netstack` exit) and `paced_ms` (milliseconds that TCP streams waited for the limit, added up over streams and both directions). TCP through a `netstack` exit is slowed down, never dropped. |
 
 A preshared key is never part of it.
 
@@ -286,7 +288,7 @@ One snapshot of every counter, with rates in bytes per second. The node samples 
 | `window_secs` | Seconds the rates were taken over: 5 once the node has run that long, 0 before its second sample. |
 | `users`, `inbounds`, `exits` | Lists of `{"name", "traffic", "up_bytes_per_sec", "down_bytes_per_sec"}`. `name` is the user name or the tag. A name that is new in the window has rate 0. |
 | `outbounds` | One entry per outbound of the running config, in its order, with the four fields of an exit (`name` is the outbound's tag) plus `udp`, `udp_down_secs`, `udp_flips`, `latency_ms`, `measured_at` and `down_reason`. `traffic` and the rates are sums over the exits whose backend names the outbound; an outbound no exit uses shows zeros, and an exit with an `l3`, `block` or `chain` backend counts under none. The node keeps no counter per outbound, so the sum includes traffic an exit's `unsupported` policy sent around the proxy with `"direct"`. The node learns per exit, from its flows, whether a proxy relays UDP, so the UDP fields give what the outbound's exits know together: `udp` is `false` while any of them was last refused, and `null` for an outbound that is not a SOCKS5 proxy. `udp_down_secs` counts from the latest refusal. `udp_flips` adds up the exits' flips, so one proxy change that two exits notice counts twice. `/v1/exits` has each exit's state. `latency_ms` is how long the proxy took to answer the greeting of the last flow that dialed it, and `measured_at` is when (Unix seconds); both are `null` for a direct outbound and until a flow has used the proxy. `down_reason` is why an `xray` outbound cannot carry a flow now, in words: the add-on is not installed or not running, Xray ended and starts again, or the server's name gives no address the node may dial. Every exit through it is down with that reason. It is `null` while the outbound carries and for any outbound that is not `xray`. A reload starts them over. |
-| `drops` | Packets that were not carried since start, by reason name. |
+| `drops` | Packets that were not carried since start, by reason name. `link_hops` counts packets of a link that would have crossed a fourth link, see [Chaining](../../protocol/node-links/#chaining). `rate_limited` counts packets dropped over a user's speed limit. Both from v0.3.6. |
 | `dns` | `answered`, `refused`, `failed`, `malformed`, `throttled`. |
 | `flows` | Flows in the flow table right now. |
 | `ws_stalled`, `ws_refused` | WebSocket connections dropped because they never finished the upgrade, and refused at accept. |
@@ -410,7 +412,7 @@ A device's source address is never part of a session or any answer, whatever `lo
 | `enabled` | `false` for an inbound the config switched off: it does not listen and takes no device. |
 | `public_key` | The inbound's WireGuard public key. |
 | `transport_public_key` | The public half of the node transport key that a profile carries. `null` for an inbound with no `transport_keys`. |
-| `transports` | One `{"transport", "enabled", "rating"}` per transport, in the config's order. `enabled` is `false` for a transport the config switched off. `transport` is `udp`, `ws`, `udp-obfs`, `tls` or `fronted`. `rating` is what a censor can see of a profile's connection: `protected`, `detectable` or `unsafe`. Every transport is `detectable` in this version. |
+| `transports` | One `{"transport", "enabled", "rating"}` per transport, in the config's order. `enabled` is `false` for a transport the config switched off. `transport` is `udp`, `ws`, `udp-obfs`, `tls` or `fronted`. `rating` is what a censor can see of a profile's connection: `protected`, `detectable` or `unsafe`. Every transport is `detectable` in this version. On a `tls` transport that is listening there are three more keys. `pin`: the SHA-256 of its certificate's SubjectPublicKeyInfo in standard base64, the pin a link or a profile carries. `key_changed_at` and `previous_pin`: only when the node found that the key is not the one it served before, and for 30 days after. `key_changed_at` is when (Unix seconds) and `previous_pin` the old pin. A link or a profile that pins the old key fails until it is paired or refreshed again. The node still serves the new certificate. From v0.3.6. |
 
 ### `GET /v1/links`
 
@@ -421,7 +423,7 @@ A device's source address is never part of a session or any answer, whatever `lo
 | `tag`, `id` | The link's tag and its id (22 characters of base64url). |
 | `half` | `entry` when this node has the users and sends their packets into the link, through an exit with a `chain` backend. `exit` when what arrives from the link leaves from this node. |
 | `role` | `listener` when the link connects to an inbound of this node, `dialler` when this node dials the other one. |
-| `state` | `up` (a WireGuard handshake completed within the last 180 seconds), `connecting`, `unreachable` (no candidate of the other node answers), `refused` (the other node answers and does not take the proof) or `ended` (no handshake for 24 hours, or this node cut the link off for quota or expiry). A node that dials tries again once a day from `ended`. |
+| `state` | `up` (a WireGuard handshake completed within the last 180 seconds), `connecting`, `unreachable` (no candidate of the other node answers), `refused` (the other node answers and does not take the proof), `pin_mismatch` (the other node answers, but its certificate's key matches none of the candidate's pins: it has a new key, and the link has to be paired again, which is no network problem) or `ended` (no handshake for 24 hours, or this node cut the link off for quota or expiry). A node that dials tries again once a day from `ended`. |
 | `state_secs`, `state_flips` | Seconds in `state`, and how often `state` changed. |
 | `handshake_secs` | Seconds since the link's tunnel last completed a handshake. `null` without a session. |
 | `transport`, `transport_index`, `candidate_index` | On the node that dials: the transport it is at, and the places of that transport and of its candidate in the other node's list, from 0. All `null` on the node that is dialed. |
@@ -430,6 +432,7 @@ A device's source address is never part of a session or any answer, whatever `lo
 | `exit` | On the entry half: the exit with a `chain` backend the link is behind. |
 | `flows` | The flows the link carries. |
 | `dropped` | Packets that came out of the link and were not carried. |
+| `chained` | On the exit half: packets this node forwarded from the link into another link, which happens only with `allow_chain`. `0` otherwise. |
 | `traffic` | Inner packets. Up is what this node sent into the link, down what it took out of it. |
 
 ## Upstreams
@@ -438,9 +441,10 @@ These routes work on the `upstreams` of the running config. A tag the running co
 
 | Route | Body | Answers with |
 |---|---|---|
-| `GET /v1/upstreams` | none | `{"upstreams": [...]}`. Each has `tag`, `state` (`fetching`, `connecting`, `up` or `down`), `reason`, `provider`, `signing_key` (the fingerprint the document in force is signed under), `profile`, the transport and exit in use, quota, notices, MTU, the last refresh, why a refresh failed, a waiting move or hosts, and counters. |
+| `GET /v1/upstreams` | none | `{"upstreams": [...]}`. Each has `tag`, `state` (`fetching`, `connecting`, `up` or `down`), `reason`, `provider`, `signing_key` (the fingerprint the document in force is signed under), `profile`, the transport and exit in use, quota, notices, MTU, the last refresh, why a refresh failed, a waiting move or hosts, and counters. Since v0.3.6 it also has what the app of the same engine shows: `engine_state` (`connecting`, `reconnecting`, `connected`, `stopped:<reason>` with `quota`, `expired`, `disabled` or `node-stopping`, or `failed`; `null` while no tunnel exists), `connected_secs`, `transports` (the types the profile in use lists), `profiles` (every profile of the document in the order they are tried, each with `id`, `name`, `usable` and, when it is not, a plain `reason` that never holds an address), `exits` (up to 16 the provider offers, each with `tag`, `name`, `country`, `all_protocols` and `selected`), `provider_notices` (with `information` or `warning`), `choice` (`profile`, `failover`, `transport` and `exit` as the config chooses them now, `null` for automatic) and, in `quota`, once the control channel is open, `period`, `period_start`, `account_expires_at`, `up_bytes` and `down_bytes`. |
 | `POST /v1/upstreams/preview` | `link`, `private_key`, `device_secret`, and optionally `via` and `allow_private` | The review of the provider's document with its `id` and `expires_in_secs`. `409` with `previews_full` when 4 places are taken. `502` with `provider_failed` when the provider cannot be asked or its answer fails the checks. |
 | `POST /v1/upstreams/preview/{id}/decline` | none | `{"id": ...}`. `404` with `preview_not_found` when no such preview waits. |
+| `PATCH /v1/upstreams/{tag}` | any of `profile`, `failover`, `transport` and `exit`, each a value or `null` | `{"tag", "revision", "generation", "live"}`. A field left out stays as it is, and `null` means automatic: every profile in turn, no failover, every transport, the provider's default exit. Any other field in the body is refused with `422`, so the link, the keys, `allow`, `allow_private` and `via` cannot be changed this way. The change goes through the same checks and the same apply as `PUT /v1/config`, at the revision that runs now, and is written to the config file. `live` is `true` when only the exit changed: the tunnel is kept and asked for the other exit. Any other change makes the tunnel again. `404` with `upstream_not_found`, `409` when the config moved twice meanwhile. From v0.3.6. |
 | `POST /v1/upstreams/{tag}/confirm` | optionally `move` and `hosts`, both `true` when left out | `{"moved": bool, "hosts": bool}`, each `false` when nothing waited for it. `500` with `state_unwritten` when the answer could not be kept. |
 | `POST /v1/upstreams/{tag}/retry` | none | `{"tag": ...}`. Connects now and starts every wait over. |
 | `DELETE /v1/upstreams/{tag}` | none | `{"tag": ..., "confirmed": bool}`. When `confirmed` is `false`, the same call tells the provider again. |

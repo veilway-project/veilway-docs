@@ -60,7 +60,7 @@ Apps that take a SOCKS5 proxy use `127.0.0.1`, port `1080`, the user name and th
 
 - **`curl` says the SOCKS5 server rejected the user.** Check that the user name is the account's name, the password is the current one, and the inbound admits the account. The inbound's row on **Inbounds** counts refused logins.
 - **`curl` says connection refused on 127.0.0.1:1080.** The SSH tunnel is not running, or the inbound is not applied. Check that the `ssh -N -L` command still runs and that **Apply to the node** went through.
-- **Login works but the page does not load.** The account's rules and exit decide where traffic goes, as for its tunnel. Check its exits and the **Routing** rules. The node refuses destinations on itself and its own networks.
+- **Login works but the page does not load.** The account's rules and exit decide where traffic goes, as for its tunnel. Check its exits and the **Routing** rules. The node refuses loopback and its own tunnel networks. Its own public addresses are open unless a rule with `host:self` refuses them, see [Reaching the server itself](../../reference/config/#reaching-the-server-itself).
 - **Many wrong tries.** After 10 wrong logins to one name in a minute, the node refuses that name from your source until the minute ends. Wait, then retry.
 
 ## Use a public address anyway

@@ -35,7 +35,7 @@ This page covers the node's config. Endpoints, gateway keys, mirrors, relays and
 - **Secrets.** These are secrets: `private_key`, `preshared_key`, `transport_keys`, `transport_secrets`, `transport_secret`, `username`, `password`, `server_key` and the `secret` of an Xray client. No error, warning, log line or API response shows a value, only its path (`outbounds[1].password`) and what was expected. On Unix, `veilway run` refuses a config file that group or others can read, unless you start it with `--allow-readable-config`. `veilway check` warns.
 - **Keys.** A WireGuard key is standard base64 with padding, exactly 44 characters, decoding to 32 bytes. Keys are compared as decoded bytes. An all-zero key is an error.
 - **Paths.** A file path is relative to the config file's directory. Absolute paths and any `..` component are errors.
-- **Limits.** File: at most 64 MiB and 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users, 16 devices per user, 4 notices, 8 public addresses, 64 links, 64 tunnels and 16 Xray inbounds.
+- **Limits.** File: at most 64 MiB and 8,000,000 JSON values. At most 64 inbounds with 8 transports each, 256 outbounds, 256 exits, 256 groups, 32 DNS sets, 4096 routing rules, 1024 entries in any list inside a rule, 65,536 users, 64 devices per user, 4 notices, 8 public addresses, 64 links, 64 tunnels and 16 Xray inbounds.
 - **Errors and warnings.** Validation reports the path of each bad field, with at most 100 errors and 100 warnings, then a count of the rest. An error refuses the config. A warning lets it load and is logged. Warnings are advice, not part of the format.
 
 ## `version`
@@ -260,7 +260,7 @@ A device reaches its tunnel through a WebSocket connection inside TLS, on a name
 |---|---|---|---|
 | `listen` | `ip:port` | required | Where the node ends TLS. |
 | `path` | 12 to 256 bytes from `A-Z a-z 0-9 . _ ~ / -`, starting with `/`, no `..` component | required | The path a device's request names. Anyone with a subscription knows it. Choose one your site does not have. |
-| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get and renew the certificate with your own tooling. On a native `tls` transport, `self_signed: true` may replace `cert` and `key`. The node then makes its own self-signed key and certificate (files `tls-<inbound tag>.key` and `.crt`, next to the config file, mode 600) and renews the certificate with the same key. It reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. A renewal keeps the key, so the pin survives it. The panel puts this pin into the `tls` candidates of the profiles it makes, see the panel manual. `name` (optional, with `self_signed` only) is the host name in the certificate: a lowercase DNS name of at most 64 characters. Without it the node draws one. A running node never makes a new key. If the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. Node links and pairing refuse `self_signed` candidates. See the transports page of the protocol specification. |
+| `tls` | `cert` and `key`, both file paths | required | The certificate chain and its key, as PEM files. Version 1 has no built-in issuance from an authority: get and renew the certificate with your own tooling. On a native `tls` transport, `self_signed: true` may replace `cert` and `key`. The node then makes its own self-signed key and certificate (files `tls-<inbound tag>.key` and `.crt`, next to the config file, mode 600) and renews the certificate with the same key. It reports the pin (the SHA-256 of the SubjectPublicKeyInfo) in `veilway doctor` and in the control API's status. A renewal keeps the key, so the pin survives it. The panel puts this pin into the `tls` candidates of the profiles it makes, see the panel manual. `name` (optional, with `self_signed` only) is the host name in the certificate: a lowercase DNS name of at most 64 characters. Without it the node draws one. A running node never makes a new key. If the key file is gone or changed, it keeps the current certificate and logs a warning, since the pin would change. A node link may trust it through its pin alone, see `links` below. The node also works out the pin of a certificate read from `cert` and `key`, and `veilway doctor` and the control API show it. It remembers the pin of each `tls` transport in `tls-pins.state` next to the config file, and warns once when the key of a transport changes (from v0.3.6), see [Pins and self-signed links](../../protocol/node-links/#pins-and-self-signed-links). See the transports page of the protocol specification. |
 | `decoy.origin` | `http://` URL with an address or a name and an optional port, nothing behind it | required | Your own web server. There is no default and no other kind of decoy. |
 | `decoy.proxy_protocol` | bool | `false` | Send the PROXY protocol header, version 2, at the start of every connection to the origin. |
 | `limits.sessions` | integer 1 to 1,048,576 | `16384` | Established sessions the listener holds at once. |
@@ -566,7 +566,7 @@ A client logs in with the user's `name` and `proxy_password`. There is no anonym
 
 - The inbound must admit the user (`users`, `groups`, or neither list for everyone with a password). A user who is disabled, expired or over quota is refused at the request, as everywhere else.
 - A wrong password, a wrong name and a user the inbound does not admit are answered alike and take the same time.
-- **Proxy-only users.** A user with a `proxy_password` may have `"devices": []`. Such a user is counted, held to a quota and cut off like any other. A user without a `proxy_password` still needs 1 to 16 devices.
+- **Proxy-only users.** A user with a `proxy_password` may have `"devices": []`. Such a user is counted, held to a quota and cut off like any other. A user without a `proxy_password` still needs 1 to 64 devices.
 - The control API shows `proxy_password` as `"<redacted>"`. A document sent back with that marker keeps the running password of the user with the same `name`. A marker in a config file read from disk is an error.
 - A user's connections end within a second of the user being cut off, of the password changing, or of the inbound no longer admitting the user.
 - The node cannot recover a login the user did not write down. The panel keeps its own sealed copy, see the [panel manual](../../manuals/panel/#proxy-inbounds-socks5-and-http).
@@ -725,13 +725,13 @@ Engine, `l3`:
 Every exit refuses these destinations, whatever the config says:
 
 - every address inside an inbound pool (traffic between users never leaves through an exit, see below);
-- the node's own addresses, loopback, and link-local (`169.254.0.0/16`, `fe80::/10`);
+- loopback and link-local (`169.254.0.0/16`, `fe80::/10`);
 - the cloud metadata addresses `fd00:ec2::254` and `100.100.100.200` (from v0.2.15; only these two addresses, your rules handle the networks around them);
 - multicast, broadcast, unspecified and `0.0.0.0/8`;
 - IPv6 addresses that embed an IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo) whose embedded address is refused;
 - every IPv4-mapped IPv6 destination (`::ffff:a.b.c.d`), outright.
 
-Private networks are not on that list. Routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
+The node's own public addresses are not on that list either. Users reach them unless a rule refuses them, see [Reaching the server itself](#reaching-the-server-itself). Private networks are not on that list. Routing rules decide about them, so an operator can refuse them, allow them, or allow them for some users only. See `geoip:private` under routing.
 
 ### Traffic between users
 
@@ -823,7 +823,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 | `user` | list of user names | the sending user |
 | `group` | list of group names | any group of the sending user |
 | `link` | list of link tags | what arrives from one of these links, on a node that is the exit half of each. Not together with `user` or `group`, which a link does not have. |
-| `ip` | list of networks, or the names `geoip:private`, `tunnel:users` and `tunnel:<inbound tag>` | destination address |
+| `ip` | list of networks, or the names `geoip:private`, `host:self`, `tunnel:users` and `tunnel:<inbound tag>` | destination address. `host:self` is the machine's own addresses, see [Reaching the server itself](#reaching-the-server-itself). |
 | `domain` | list of names | a name this user resolved to the destination address through the node. `example.com` matches that name only. `*.example.com` matches every name below it and not `example.com` itself. |
 | `protocol` | list of `tcp`, `udp`, `icmp`, `icmpv6`, `gre`, `esp`, `sctp`, or an integer 0 to 255 | IP protocol. A name and its number are the same entry. |
 | `port` | list of integers 1 to 65535 or strings `"lo-hi"` with `lo <= hi` | destination port. Needs `protocol` present and limited to `tcp`, `udp` and `sctp`. |
@@ -883,6 +883,30 @@ For flows between users, only an echo reply counts as the answer to a delivered 
 
 The flow table holds at most 65536 flows in total, 1024 per user and 512 per device. Refused flows are remembered apart from these limits (4096, the oldest gives way).
 
+### Reaching the server itself
+
+Since v0.3.6, users can reach services on the node's own public addresses unless a rule refuses them. Loopback and link-local stay refused by the gate. The panel listens on `127.0.0.1`, so users cannot reach it.
+
+The name `host:self` in a rule's `ip` list stands for every address the machine holds on its interfaces. The node reads them again every 60 seconds and at each reload, so it follows DHCP and addresses added later. An IPv4 address of the machine written inside an IPv6 one matches too. Addresses of the inbound pools are not part of it. The rule holds for every door: tunnels, proxy inbounds, the Xray add-on and node links.
+
+Nothing adds a rule for you. If other services listen on this machine (a database, an admin port, another panel), refuse them:
+
+```json
+{"tag": "no-self", "ip": ["host:self"], "action": "reject"}
+```
+
+A rule above it can let one user reach one port. Rules are checked from the top, so the first match decides:
+
+```json
+{"tag": "alice-ssh", "user": ["alice"], "ip": ["host:self"], "protocol": ["tcp"], "port": [22], "action": "user"},
+{"tag": "no-self", "ip": ["host:self"], "action": "reject"}
+```
+
+- A service that listens on every address of the machine is reachable through any of them until a rule refuses them.
+- An address that no interface holds, such as a public address behind a 1:1 NAT, is not in `host:self`. An anycast address and a broadcast address are not either. They stay reachable.
+- With an `l3` exit, the node's own firewall table still keeps tunnel traffic from the host itself, whatever the rules say.
+- `veilway doctor` lists the addresses `host:self` covers and says whether an enabled rule names it.
+
 ## `users`
 
 | Key | Type | Default | Meaning |
@@ -890,13 +914,14 @@ The flow table holds at most 65536 flows in total, 1024 per user and 512 per dev
 | `name` | matching `[a-z0-9][a-z0-9._-]{0,63}` | required | Unique. This is the user's identity: usage counters and rules refer to it. Renaming a user is removing one and adding another. |
 | `enabled` | bool | `true` | |
 | `groups` | list of declared group names | `[]` | |
-| `devices` | list of 1 to 16 | required | See below. Empty only for a user with a `proxy_password`, who then uses proxy inbounds alone. |
+| `devices` | list of 1 to 64 | required | See below. Empty only for a user with a `proxy_password`, who then uses proxy inbounds alone. |
 | `proxy_password` | 16 to 128 printable ASCII characters, no `:` | none | Secret. The password for the `socks5`, `http` and `mixed` inbounds, with `name` as the user name. See [Proxy inbounds](#who-may-log-in). From v0.2.17. |
 | `exits` | `"all"` or a list of exit tags | required | Exits the user may leave through. An empty list means none: the user can connect but every flow is rejected, and validation warns. |
 | `exit` | exit tag | none | The user's own exit. Must be in `exits`. |
 | `quota_bytes` | integer 1 to 9007199254740991 | none | Bytes of inner IP traffic, both directions, per period, including traffic that was rejected or answered locally. See Usage and quota. |
 | `quota_period` | `daily`, `weekly`, `monthly` | none | When the count resets, at 00:00 UTC (weekly on Monday, monthly on the 1st). Needs `quota_bytes`. Without it the quota never resets. |
 | `expires_at` | RFC 3339 timestamp with an explicit offset | none | From this moment the user is treated as disabled. |
+| `speed_up`, `speed_down` | integer 16384 to 12500000000, bytes per second | none | The most the user sends and receives through this node. Without a key there is no limit. See [Speed limits](#speed-limits). From v0.3.6. |
 
 ### `devices`
 
@@ -926,6 +951,20 @@ Engine. Usage never lives in the config document. It is kept in one state file (
 - **Writes.** The file is written with mode 600 through a temporary file in the same directory, then fsync, then rename, at most once every 10 seconds and only when something changed. It is also written on shutdown, right after a user is cut off for quota, and right after a usage reset. Writing never blocks traffic. A failed write is retried, and logged once and then every 10 minutes while writes keep failing. If the node is killed, at most about 10 seconds of counted usage can be lost.
 - **Start.** A missing file means zero usage. A file that cannot be parsed, has an unknown version, or is larger than 16 MiB is kept under the same name with `.bad` appended and logged at error, and the node starts from zero, since an unreadable state file must not keep a node down. A state file that group or others can write is treated the same way. Values are clamped, never trusted: a count above 9007199254740991 saturates at it. One entry that is not valid is skipped, and only that user starts from zero, or only that device has chosen no exit. The node reads no more than 65,536 users and 65,536 devices from a file. An exit in the file is held against the config like one a device asks for: when it is not in the user's `exits` it is dropped at start and logged at info. If the path is not a regular file (a directory, a symbolic link, a device), the node leaves it untouched, logs an error and keeps usage in memory until it stops.
 - **Removed users.** The entry of a user the config no longer names is dropped at the commit that removes it, and so is the entry of a device. A renamed user starts from zero.
+
+### Speed limits
+
+`speed_up` is the most a user sends through this node and `speed_down` the most the user receives, in bytes per second (16384 to 12500000000). A user with neither key has no limit. From v0.3.6.
+
+- **Per user.** All of the user's devices and proxy logins share one limit, so more devices get no more speed.
+- **Per node.** The same user on two nodes has the limit on each.
+- **TCP is slowed down.** TCP that the node holds as a stream (a `netstack` exit, the proxy inbounds, the Xray add-on) waits for its turn. Nothing is lost.
+- **Other traffic over the rate is dropped.** That is UDP, pings, and anything through an `l3`, `chain` or `upstream` exit. A drop is counted as `rate_limited` in `drops` and in the user's `limited` counters.
+- **DNS and the control channel are never dropped.** They count against the limit, so a user at the limit can still look up names and keep the control channel up.
+- **A short burst passes.** It is one second at the rate, at least 64 KiB, and cannot be set.
+- **A dropped upload still counts toward the quota.** A dropped download does not.
+- **Node links have no limit of their own.** Limit the user on the entry node.
+- **Apps do not show it.** `GET /v1/users` and the panel do.
 
 ## `notices`
 
@@ -1015,12 +1054,13 @@ Do not write a link by hand. `veilway link offer` and `veilway link answer` pair
 | `private_key` | key | none | Secret. On the node that dials: the WireGuard key it made for this link. Needs `peer`. |
 | `peer` | object | none | On the node that dials: `inbound_public_key` (the key of the other node's inbound), `transport_public_key` (needed when a `tls` or `ws` transport is listed) and `transports` (1 to 8). Needs `private_key`. See below. |
 | `exit` | exit tag | none | On the exit half: the exit the link leaves through when no rule names one. Without it that is `routing.default`. Must be in `exits`. |
-| `exits` | list of exit tags | required on the exit half | On the exit half: the exits the link may leave through. None is a `chain` exit, because a link may not leave through another link. |
+| `exits` | list of exit tags | required on the exit half | On the exit half: the exits the link may leave through. A `chain` exit is among them only with `allow_chain`. An `upstream` exit never is. |
+| `allow_chain` | bool | `false` | On the exit half: whether the link may continue through a `chain` exit of this node, into another link. The node the traffic leaves from then sees this node's link address, and the entry is not told. A chain has at most 3 links, see [Chaining](../../protocol/node-links/#chaining). An error on the entry half. From v0.3.6. |
 | `allow_private` | bool | `false` | On the exit half: whether rules decide about private networks for this link. Without it they are refused whatever the rules say. |
 | `max_flows` | integer 1 to 65,536 | `16384` | On the exit half: the flows the link may have at once. It is a warning when the `max_flows` of the links this node is the exit of come to more than half of the 65,536 flows the node holds. |
 | `quota_bytes`, `quota_period`, `expires_at` | as for a user | none | On the exit half. They mean what they mean for a user. |
 
-Which half a node is follows from `direction` and from whether the link has `inbound` or `peer`. The entry half has the users and is used through a `chain` exit. The exit half takes traffic from the other node. `exit`, `exits`, `allow_private`, `max_flows`, `quota_bytes`, `quota_period` and `expires_at` are errors on the entry half, and `exits` is required on the exit half. An entry half that no `chain` exit names is a warning.
+Which half a node is follows from `direction` and from whether the link has `inbound` or `peer`. The entry half has the users and is used through a `chain` exit. The exit half takes traffic from the other node. `exit`, `exits`, `allow_private`, `allow_chain`, `max_flows`, `quota_bytes`, `quota_period` and `expires_at` are errors on the entry half, and `exits` is required on the exit half. An entry half that no `chain` exit names is a warning.
 
 `peer.transports` lists the other node's transports in its order of preference, in the shape a profile of a subscription has:
 
@@ -1029,7 +1069,9 @@ Which half a node is follows from `direction` and from whether the link has `inb
 | `type` | `udp`, `udp-obfs`, `tls` or `ws` | `fronted` and `fronted-shaped` are read and refused: a link carries the traffic of many users, and polling that through a CDN is not a transport of a link. |
 | `endpoints` | list of 1 to 16 `ip:port` | For `udp` and `udp-obfs`, which take neither `path` nor `candidates`. |
 | `path` | as for `tls` | For `tls` and `ws`, together with `candidates`. |
-| `candidates` | list of 1 to 16 objects | For `tls` and `ws`. Each has `address` (`ip:port`), `sni` (a lowercase host name, or `""` for none), `host` (the `Host` of the request), `verify_name` (the name the certificate is held against: required when `sni` is empty and not allowed otherwise) and `pins` (1 to 4 SHA-256 hashes of the certificate's SubjectPublicKeyInfo, in base64). A `tls` candidate needs `pins`. The chain is always validated and a pin is a second condition. |
+| `candidates` | list of 1 to 16 objects | For `tls` and `ws`. Each has `address` (`ip:port`), `sni` (a lowercase host name, or `""` for none), `host` (the `Host` of the request), `verify_name` (the name the certificate is held against: required when `sni` is empty and not allowed otherwise) and `pins` (1 to 4 SHA-256 hashes of the certificate's SubjectPublicKeyInfo, in base64). `self_signed` (only on `tls`: `true` trusts the certificate through its pins alone, see below). A `tls` candidate needs `pins`. Unless `self_signed` is set, the chain is validated and a pin is a second condition. |
+
+A `tls` candidate with `"self_signed": true` is for a node with no domain. Its certificate is trusted through its pins alone: no chain, name or date is checked, and the handshake must be signed by the pinned key. It needs 1 to 4 `pins` and no `verify_name`, and `sni` may be `""`. It is an error on `ws`. A new key on that node breaks the link until the operators pair again. See [Pins and self-signed links](../../protocol/node-links/#pins-and-self-signed-links).
 
 An address the node dials may not be loopback, link-local, unspecified, multicast, broadcast, in `0.0.0.0/8`, inside an inbound pool of this node, or an IPv6 address that carries an IPv4 address. A private address is a warning.
 
@@ -1066,8 +1108,10 @@ A list of at most 8 other providers' Veilway subscriptions. The node holds one d
 | `signing_key` | string | required | The provider's signing key the operator confirmed: 8 groups of 4 hex digits with spaces, or 43 characters of base64url. The link must carry this key. |
 | `private_key` | string | required | The node's device key for this provider, a 32-byte key in standard base64, as WireGuard keys are written. A secret. Not all zero, and no two upstreams share one. |
 | `device_secret` | string | required | The device secret for this provider: 16 bytes as 22 characters of base64url. A secret. |
-| `profile` | string | the first profile | The provider's profile to use. |
-| `exit` | string | the provider's default | The provider's exit to leave through. |
+| `profile` | string | automatic | The provider's profile to use. Without it the node tries every profile in the document's order, starting with the last one that carried. |
+| `failover` | bool | `false` | With a `profile`: whether the node goes on to the other profiles when that one cannot be used. Without `failover` a named profile is the only one used. Without a `profile` every profile is tried whatever this says. From v0.3.6. |
+| `transport` | string | automatic | The type of transport to connect over: `udp`, `udp-obfs`, `tls`, `ws`, `ws-plain`, `fronted` or `fronted-shaped`. Without it the node picks from every transport of the profile, as the apps do. A type outside `allow` is refused. From v0.3.6. |
+| `exit` | string | the provider's default | The provider's exit to leave through. A change of `exit` alone is taken on the running tunnel: nothing leaves through the old exit meanwhile. Any other change makes the tunnel again. |
 | `via` | outbound tag | none | A `direct` or `socks5` outbound for the fetch and for TCP transports. A proxy on a loopback, unspecified or link-local address is refused. |
 | `allow` | list of up to 4 classes | empty | Transport classes besides `cover` that the node may use: `no_cover`, `exposed` and `plain`. |
 | `allow_private` | bool | `false` | Whether the provider may have the node dial private addresses. |

@@ -60,6 +60,19 @@ A node may carry an exit through a VLESS, VMess, Trojan or Shadowsocks server of
 
 What is not defended: Xray's own egress, which its unit does not restrict, so a bug in Xray is not held to the provider's address; a hostile provider's bytes, which Xray parses, so a flaw in Xray-core would give an attacker the outbound credentials and every Xray user's flows; and availability, since the provider can cut the exit. Only Linux nodes run it. The model has not been reviewed by anyone outside the project.
 
+## WireGuard outbounds
+
+A node may carry an exit through a WireGuard server of another party (v0.3.6 and later). The full model is section 5.20 of `THREAT_MODEL.md`, risks W1 to W7. What it means for an operator:
+
+- **The server sees the exit.** Its owner sees the node's address, every destination and every byte the destination does not protect, for all users sent through it. It does not see users, their tunnel addresses or keys: every flow leaves from one tunnel address. There is no anonymity from it, and a hostile server can forge DNS answers and unprotected content.
+- **The server cannot reach the node.** Anything it sends that is not an answer to a flow the node opened is dropped and counted, and never answered: no reset, no ping reply, no open port. Its queues and flow counts are bounded, so a flood does not grow the node's memory. One user holds at most a quarter of the flows.
+- **Users can reach the server's own network.** Its other peers and private ranges are open to them unless a routing rule rejects those ranges. The node only refuses its own addresses and networks, and validation warns about every WireGuard outbound.
+- **A forged name cannot aim the node at itself.** An address that is loopback, in an inbound's pool or the node's own is refused. A forged address to somewhere else cannot finish the handshake, because the server's key is in the config, so the outbound is down and nothing but handshakes is sent.
+- **Nothing goes around a down tunnel.** The outbound is down about 20 seconds after the server goes silent, and every flow of the exit ends with a reason. It never goes to `direct`, to another exit or to the default, and `unsupported.udp` may not be `direct` or `via`.
+- **Keys stay put.** The keys are never shown or logged. A key may not be one the config uses anywhere else, so a leak of one opens nothing else.
+
+What is not defended: the outer UDP is plain WireGuard, so a censor can recognize and block it (use an Xray outbound where that matters); one outbound runs on one core and ends every flow twice, so its speed is bounded; a flaw in the WireGuard or TCP/IP code the node uses on the server's bytes would be reachable by that server; and a server that finishes the handshake and then drops everything keeps the outbound up until the next rekey or keepalive, about 35 seconds on a busy tunnel and up to 2.5 minutes on an idle one. The model has not been reviewed by anyone outside the project.
+
 ## Reaching the server itself
 
 Since v0.3.6, users reach services on the node's own public addresses unless a rule refuses them. The routing name `host:self` stands for every address the machine holds, read from its interfaces every 60 seconds. An operator who runs other services there (another panel, a database, an admin port) adds `{"tag": "no-self", "ip": ["host:self"], "action": "reject"}` to the rules. It holds for every exit, door and node link. Nothing adds that rule for the operator. See [Reaching the server itself](../../reference/config/#reaching-the-server-itself).

@@ -36,6 +36,7 @@ export default defineConfig({
 						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },
 						{ label: "Use another provider as an exit", translations: { fa: "استفاده از ارائه‌دهندهٔ دیگر به‌عنوان خروجی" }, slug: "guides/upstream-provider" },
 						{ label: "Use an Xray server as an exit", translations: { fa: "استفاده از سرور Xray به‌عنوان خروجی" }, slug: "guides/xray-outbound" },
+						{ label: "Use a WireGuard server as an exit", translations: { fa: "استفاده از سرور WireGuard به‌عنوان خروجی" }, slug: "guides/wireguard-outbound" },
 						{ label: "Borrowed-site mode (alpha)", translations: { fa: "حالت سایت قرضی (آلفا)" }, slug: "guides/borrowed-site" },
 					],
 				},

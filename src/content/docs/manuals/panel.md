@@ -611,6 +611,7 @@ The **Outbounds** tab of **Exits and routing** lists how the node dials out.
 - **Direct** dials from the node's own address.
 - **SOCKS5 proxy** dials through a proxy you run or rent. Give its address and, if it has them, a username and password.
 - **Xray server** (from v0.2.18) dials through a VLESS, VMess, Trojan or Shadowsocks server you rent, run by the Xray add-on. See [Xray servers](#xray-servers).
+- **WireGuard server** (from v0.3.6) dials through a WireGuard server such as Mullvad or one of your own, with a tunnel the node runs itself. See [WireGuard servers](#wireguard-servers).
 
 A Direct outbound has two optional fields. **Source address** is a local IP of the server its traffic leaves from. Since v0.2.8, **Network interface** is the name of a network interface of the server, such as `eth1`. Traffic of an outbound with an interface leaves through it whatever the routing table says. Needs Linux or macOS. If an interface is missing when the node starts, the log shows a warning, and that outbound's flows fail until it is there.
 
@@ -628,6 +629,19 @@ The panel warns that **The provider sees what this exit carries**. When the add-
 The **State** column of the list says **Carrying**, **Down** with the node's reason underneath, or **Not reported yet**. It refreshes every 10 seconds. Every exit that uses a down outbound is down too, and nothing goes around it.
 
 On an exit through an Xray server, the **UDP** choice under **Traffic the outbound cannot carry** offers only **Refuse** and **Drop silently**. The form says that the outbound carries UDP itself, and while the server is down the flow ends. The node checks the rest. The details and limits are under [`xray` outbounds](../../reference/config/#xray-outbounds) in the config reference.
+
+### WireGuard servers
+
+A **WireGuard server** outbound lets an exit leave through a WireGuard server of another party. The node is the WireGuard client and needs no network device. The [WireGuard outbound guide](../../guides/wireguard-outbound/) walks through it. Choose **Add outbound** and set **Type** to **WireGuard server**.
+
+- **Import a WireGuard config.** Paste the text of a `.conf` file and choose **Read config**. It is read in the page and never sent anywhere, and the text is cleared once it is read. The panel fills the fields and lists what it ignored, such as DNS servers and scripts. It refuses a file with more than one `[Peer]`, a missing key or a bad address, and says which line.
+- **The fields** are **Server address** (`host:port`), **Server public key**, **Private key**, **Preshared key** (optional) and **Addresses inside the tunnel** (one IPv4 and at most one IPv6). **Tuning and network** has **MTU**, **Keepalive**, **Most open flows** and the optional **Source address** and **Network interface**, as for a Direct outbound.
+
+The keys are never shown again after saving. Leave them as they are to keep the saved ones. If you change the server or its public key, write the private key again.
+
+The panel warns that **The server's owner sees what this exit carries**, and says that the path to the server is plain WireGuard, which a censor can block. Where WireGuard is blocked, use an Xray server.
+
+The **State** column says **Carrying**, or **Down for** a time with the reason. Under it are the last handshake, the server address the node uses now and how many flows are open. It refreshes every 10 seconds. Every exit that uses a down outbound is down too, and nothing goes around it. On such an exit, **UDP** under **Traffic the outbound cannot carry** offers only **Refuse** and **Drop silently**. Details and limits are under [`wireguard` outbounds](../../reference/config/#wireguard-outbounds) in the config reference.
 
 ### Other providers
 

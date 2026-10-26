@@ -622,6 +622,7 @@ An outbound is a way for the userspace stack to open TCP and UDP flows.
 | `direct` | optional `bind` (a local IP, not a wildcard), optional `interface` (a network interface of the host by name, 1 to 15 characters of letters, digits, `_`, `-` and `.`, starting with a letter or digit; since v0.2.8) | Connects from the node itself. With `bind`, flows of the other address family are rejected. With `interface`, every socket of the outbound is tied to that interface (`SO_BINDTODEVICE` on Linux, `IP_BOUND_IF` on macOS), so its traffic leaves there whatever the routing table says. |
 | `socks5` | `server` (`host:port`, IPv6 literals in brackets), optional `username` and `password` (both or neither, each 1 to 255 bytes), optional `via` (the tag of another `socks5` outbound) | Connects through a SOCKS5 proxy, or through a chain of them when `via` is set. UDP uses UDP ASSOCIATE when the proxy offers it. |
 | `xray` | `server` (`host:port`) and `protocol`, or a `link`; the fields of the protocol | Connects through a VLESS, VMess, Trojan or Shadowsocks server of another party, run by the Xray add-on. Linux nodes only. See "`xray` outbounds" below. |
+| `wireguard` | `server` (`host:port`), `public_key`, `private_key`, `addresses`, and optional `preshared_key`, `mtu`, `keepalive_secs`, `max_flows`, `bind`, `interface` | Connects through a WireGuard server of another party, with a tunnel the node runs itself. See "`wireguard` outbounds" below. |
 
 Every outbound also has a `tag`.
 
@@ -688,6 +689,60 @@ The warnings are a server written as a name (see below), and `routing.fallback` 
 **Secrets.** `id` and `password` are secrets. The control API shows the marker in their place and takes it back for the running outbound with the same tag, server, protocol and kind of security. Change any of those and you must write the secret out again.
 
 `veilway doctor` checks the add-on and the socket folder when the config has an `xray` outbound, see "Commands".
+
+### `wireguard` outbounds
+
+From v0.3.6. A `wireguard` outbound sends flows through a WireGuard server of another party: Mullvad, a server of your own, any `wg-quick` peer. The node is the WireGuard client and runs the tunnel itself, in userspace, so it needs no `wg` tool and no interface. Use it behind a `netstack` exit. The [guide](../../guides/wireguard-outbound/) shows the steps in the panel. Whoever runs the server sees what the exit carries, as any provider of an exit does.
+
+| Key | Type | Default | Meaning |
+|---|---|---|---|
+| `tag` | tag | required | |
+| `server` | `host:port` | required | The server's UDP endpoint. IPv6 literals go in brackets. A name is looked up by the system's resolver at start, every 5 minutes and whenever the node starts a handshake again. The last address is kept while the name still resolves. |
+| `public_key` | key | required | The server's public key. |
+| `private_key` | key | required | Secret. The node's own key for this server. |
+| `preshared_key` | key | none | Secret. |
+| `addresses` | list of 1 or 2 addresses | required | The node's addresses inside the tunnel, at most one of each family. A `/32` or `/128` at the end is dropped. A destination of a family with no address here is refused as unsupported. |
+| `mtu` | integer, 1280 to 1500 | 1420 | The tunnel's MTU. |
+| `keepalive_secs` | integer, 0 to 3600 | 25 | Seconds between keepalives. 0 sends none. |
+| `max_flows` | integer, 16 to 4096 | 1024 | The flows open through the tunnel at once, TCP and UDP together. A flow past it is refused and counted. |
+| `bind`, `interface` | as for `direct` | none | The local address and the network interface of the UDP socket that talks to the server. |
+
+```json
+{"tag": "wg-out", "type": "wireguard", "server": "198.51.100.7:51820", "public_key": "<server public key>", "private_key": "<node private key>", "addresses": ["10.2.0.2", "fd00::2"]}
+```
+
+Each flow of the exit is opened from the tunnel by a TCP/IP stack of its own. Every flow leaves from the node's one tunnel address, so the server cannot tell users apart.
+
+**What is refused.**
+
+- A `server` that is loopback, link-local, unspecified, multicast, a cloud metadata address or an address of an inbound's pool. Private addresses are allowed, since the server may be on your own network. A name that resolves to a refused address leaves the outbound down.
+- An address inside the tunnel that is loopback, multicast, unspecified, or inside an inbound's pool.
+- A `private_key` that is the server's, or any inbound, device or link key of the config, or the key of another `wireguard` outbound. A key has one use.
+- A `via` on the outbound, and the outbound as the `via` of another outbound, of a link or of an upstream. It carries flows of its own and cannot carry a chain.
+- An exit on it whose `unsupported.udp` is `direct` or `{"via": ...}`. Use `reject` or `drop`.
+
+**Warnings.**
+
+- Every `wireguard` outbound warns: users routed through it reach whatever the server's own network reaches, its other peers included. The node's gate only refuses the node's own addresses and networks. If users must not reach those ranges, add a routing rule that rejects them, such as `{"tag": "no-wg-lan", "ip": ["10.2.0.0/16"], "action": "reject"}`.
+- A `server` written as a name: whoever sees the node's lookups learns the name. Write the address when it must stay hidden.
+- `routing.fallback` next to an exit on it: users fall back to that exit while the outbound is down.
+
+**Health.** The outbound is down when the server has not answered a handshake for 20 seconds, when a datagram could not be sent, or when one of its two tasks ended. A task that ends is started again after 2 seconds, then 4, doubling to 60. A down outbound tries a new handshake on the same schedule, and every change is logged at info with the reason. An outbound with no handshake for 180 seconds and nothing unanswered is idle and counts as up. While it is down the exit does not work: flows end with a reason and nothing goes to `direct`, to another exit or to the provider's default. `GET /v1/exits` shows the state, see [the API reference](../api/#get-v1exits).
+
+**Limits.**
+
+- One user holds at most a quarter of `max_flows` flows of an outbound, never fewer than 16. A quarter of `max_flows`, at most 16 places, are kept for the node's own DNS lookups through the outbound, so a user cannot starve them.
+- Each flow costs about 272 KiB once it carries data, so the default 1,024 flows come to about 272 MiB and 4,096 to about 1.1 GiB.
+- One outbound runs on one core. Measured on three cores of one machine, one connection moved about 54 MB/s in each direction in a release build. More flows share the same core.
+- Packets over the MTU, and datagrams too large for it, are dropped and counted.
+
+**DNS.** The node's resolver asks through the outbound for users routed to it, over UDP and with a fallback to TCP. No name leaves around the tunnel.
+
+**Changes.** Adding or removing the outbound, or changing anything the tunnel is made of (the server, the keys, `addresses`, `mtu`, `keepalive_secs`, `max_flows`, `bind`, `interface`, or the pool of an inbound) restarts its tunnel, and flows open at that moment end. Other outbounds, exits and users are not touched.
+
+**Secrets.** `private_key` and `preshared_key` are secrets. The control API shows the marker in their place and takes it back only for the running outbound with the same tag, server and public key. Change any of those and write the key again.
+
+**Not hidden.** The outer UDP is plain WireGuard, easy to recognize and block. Where WireGuard is blocked, use an [`xray` outbound](#xray-outbounds). Whoever sees the node's lookups learns a server name, and the server sees every flow.
 
 ## `exits`
 

@@ -396,6 +396,13 @@ A device's source address is never part of a session or any answer, whatever `lo
 | `interface_flips` | How often the interface switched between up and down. |
 | `links` | The tags of the node links of a `chain` backend, which `/v1/links` reports on. Empty for every other backend. |
 | `link_up` | Whether one of those links is up. While none is, traffic routed to the exit is answered as unreachable and has no other way out. `null` for every other backend. |
+| `outbound_up` | For an exit through a `wireguard` outbound: whether the outbound works. `false` only while it is down: the server has not answered a handshake for 20 seconds or a datagram could not be sent. With no handshake in the last 180 seconds and nothing unanswered it is idle and counts as `true`. While `false`, the exit does not work, devices without a choice of exit leave through `routing.fallback`, and nothing leaves around it. `null` for any other exit. |
+| `outbound_down_secs` | Seconds since the outbound went down. `null` unless `outbound_up` is `false`. |
+| `outbound_down_reason` | Why it is down, in words. It names no key. `null` unless `outbound_up` is `false`. |
+| `outbound_flips` | How often the outbound switched between working and down. `0` for any other exit. |
+| `handshake_secs` | Seconds since the last handshake with the server. `null` for any other exit and before the first handshake. |
+| `endpoint` | The address and port the outbound talks to now, which is the one its name resolved to. `null` for any other exit and before the name resolved. |
+| `flows` | The flows open through the outbound's own stack, TCP and UDP. `null` for any other exit. |
 | `latency_ms`, `measured_at` | As for an outbound in `/v1/stats`, for the outbound of a `netstack` backend. `null` otherwise. |
 | `load` | The `load` setting of the exit in the config, as `{"by", "busy", "very_busy"}`. `null` when the exit reports no load to apps. |
 | `load_level` | The level apps are told: `"low"`, `"medium"` or `"high"`. `null` without a `load` setting, and until the node has looked twice (every 10 seconds). |

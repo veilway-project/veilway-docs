@@ -23,7 +23,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 - **Chaining links.** `allow_chain` on the exit half lets a link's traffic continue through another link. Off by default, at most 3 links, never through another provider's upstream. See [Chaining](../protocol/node-links/#chaining).
 - **Other providers work like the apps.** An upstream tries every profile in turn when you pick none, can fail over to the others, takes a transport choice, and takes a new exit on the running tunnel. The card shows the tunnel's state, the profiles that cannot be used and the provider's exits. `PATCH /v1/upstreams/{tag}` changes only these choices. See [Other providers](../manuals/panel/#other-providers).
 - **Connection order.** Set the order of the profiles in subscriptions on the **Profiles** page, and a different one for a user. Remote servers now follow their position, not their id. See [Connection order](../manuals/panel/#connection-order).
-- **A built-in WireGuard outbound.** Paste a WireGuard config and the node runs the tunnel itself.
+- **A built-in WireGuard outbound.** Paste a WireGuard config and the node runs the tunnel itself. Mullvad, a home server or any `wg-quick` peer can be an exit, and the panel shows its health. It is plain WireGuard on the wire, so where that is blocked use an Xray outbound. See [Use a WireGuard server as an exit](../guides/wireguard-outbound/).
 - **Local proxy speed.** The apps' local proxy takes a larger receive buffer, so one connection through a far exit moves more than 64 KiB per round trip.
 
 ## New in v0.3.5-alpha

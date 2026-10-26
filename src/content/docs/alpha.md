@@ -25,6 +25,7 @@ Report problems on the [issue tracker of the core repository](https://github.com
 - **Connection order.** Set the order of the profiles in subscriptions on the **Profiles** page, and a different one for a user. Remote servers now follow their position, not their id. See [Connection order](../manuals/panel/#connection-order).
 - **A built-in WireGuard outbound.** Paste a WireGuard config and the node runs the tunnel itself. Mullvad, a home server or any `wg-quick` peer can be an exit, and the panel shows its health. It is plain WireGuard on the wire, so where that is blocked use an Xray outbound. See [Use a WireGuard server as an exit](../guides/wireguard-outbound/).
 - **Local proxy speed.** The apps' local proxy takes a larger receive buffer, so one connection through a far exit moves more than 64 KiB per round trip.
+- **The panel checks exits.** It refuses an exit the server does not have, and refuses removing an exit that users still name. If the server ever refuses the users the panel sends, a red banner on every page says so, with **Push again**.
 
 ## New in v0.3.5-alpha
 

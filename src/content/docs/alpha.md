@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.8-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.9-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.8-alpha`, after `v0.3.7-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.9-alpha`, after `v0.3.8-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.8-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.8-alpha)
+- Node and install script: [v0.3.9-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.9-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.9-alpha
+
+- **A new installer menu.** `sudo bash veilway.sh` now shows what is installed and running at the top, groups its items, and takes the arrow keys or a number. Logs, Restart, Admins and Restore offer a list to pick from. An install shows its steps and a summary before it changes anything. Uninstall and Restore ask you to type the word.
+- **Web server in the menu.** Set up a web server for a panel that has none, check it, edit the [decoy page](../guides/decoy-site/), or remove it.
+- **Add to this server's web server.** A button under a `ws` or `fronted` transport's **Web server lines** in the panel puts its path into the web server for you, tests it and reloads it. Run `sudo bash veilway.sh update` once first, so the host has the helper. See [Getting started](../getting-started/).
+- **A Generate button for a transport's path**, and the transport switch and the sidebar's node card no longer squeeze or cut off their text.
 
 ## New in v0.3.8-alpha
 

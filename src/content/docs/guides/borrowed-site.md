@@ -54,7 +54,7 @@ Open the port in the server's firewall, for example with `sudo ufw allow 8443/tc
 
 ## 4. Publish the profile
 
-Open **Profiles**. The transport has its own profile, `<tag> (borrowed site, alpha)`, with an **Alpha** mark. When it shows **Ready**, choose **Publish profiles**. If not, see "Left out of this profile" and "Still needed" on that page, and the problems below.
+Open **Profiles**. The transport has its own profile, `<name> (borrowed site, alpha)`, with an **Alpha** mark. `<name>` is the name of the inbound's other profile, or its tag. Rename that profile and this one follows. When it shows **Ready**, choose **Publish profiles**. If not, see "Left out of this profile" and "Still needed" on that page, and the problems below.
 
 Users with a link get the new profile at their next refresh. Profiles of other transports do not change.
 

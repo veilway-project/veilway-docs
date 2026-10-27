@@ -1,16 +1,21 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.7-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.8-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.7-alpha`, after `v0.3.6-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.8-alpha`, after `v0.3.7-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.7-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.7-alpha)
+- Node and install script: [v0.3.8-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.8-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.8-alpha
+
+- **Rename the borrowed-site profile.** Its name now starts with the name you give the inbound's other profile, and ` (borrowed site, alpha)` stays at the end. Before, it always started with the inbound's tag. See [Borrowed site](../guides/borrowed-site/).
+- **No profile for a link's inbound.** An inbound that a node link connects to no longer gets a profile, so **Publish profiles** never offers users a connection they cannot use.
 
 ## New in v0.3.7-alpha
 

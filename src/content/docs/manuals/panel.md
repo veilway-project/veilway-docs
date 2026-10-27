@@ -552,7 +552,7 @@ Choose **Review changes**, then **Apply to the node**, and open the listener's T
 
 The panel only checks that names, ports and addresses are well formed and never connects to the site. Check from the node yourself, for example with `openssl s_client -connect www.example.com:443 -tls1_3 -servername www.example.com`. At start the node probes the site 8 times, then once every 6 hours, and logs what it finds.
 
-**The profile.** The transport gets a profile of its own on **Profiles**, named like `main (borrowed site, alpha)` with an **Alpha** mark. An app that does not know the transport refuses the whole profile that holds it, so the panel never mixes it with other transports' profiles. The profile is ready when it has:
+**The profile.** The transport gets a profile of its own on **Profiles**, named like `main (borrowed site, alpha)` with an **Alpha** mark. The first part is the name you gave the inbound's profile, or the inbound's tag when you gave none. The ending always stays. An app that does not know the transport refuses the whole profile that holds it, so the panel never mixes it with other transports' profiles. The profile is ready when it has:
 
 - the inbound's public key, as for any profile,
 - the transport's public key, which the panel holds only if it saw the key in full. If the profile says it has none, pick a new key in the transport's form and apply,

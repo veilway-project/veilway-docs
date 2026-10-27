@@ -188,7 +188,7 @@ Below the connection, the app can show a card with what the provider posts: noti
 
 The kill switch is on by default. If the connection drops, it blocks all traffic, so nothing leaves outside the tunnel. A change takes effect the next time you connect. With it off, traffic can leave outside the tunnel when the connection drops.
 
-If a connection ends on its own while it is on, the **Connection** screen says **The connection ended**, then **The kill switch still blocks all traffic. Disconnect to lift it.** with a **Disconnect** button. The internet may look down because traffic outside the tunnel is blocked. Press **Disconnect** to lift the block. Closing the app does not lift it. **Quit** does, because it disconnects first.
+If a connection ends on its own while it is on, the **Connection** screen says **Internet blocked**. Traffic outside the tunnel is blocked, so the internet looks down. Press **Reconnect** to connect again, or **Unblock internet** to lift the block and use the internet without Veilway. Closing the window does not lift it. **Quit** does, because it disconnects first.
 
 ## Start at login
 

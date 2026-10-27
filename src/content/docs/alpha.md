@@ -1,16 +1,20 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.6-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.7-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.6-alpha`, after `v0.3.5-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.7-alpha`, after `v0.3.6-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.6-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.6-alpha)
+- Node and install script: [v0.3.7-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.7-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.7-alpha
+
+- **The desktop app says when the internet is blocked.** If a connection drops while the kill switch is on, the **Connection** screen now says **Internet blocked** and puts **Unblock internet** where the switch was, with **Reconnect** beside it. Before, only a banner said so, and the internet looked broken. See [Kill switch](../manuals/client/#kill-switch).
 
 ## New in v0.3.6-alpha
 

@@ -878,7 +878,7 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 | `user` | list of user names | the sending user |
 | `group` | list of group names | any group of the sending user |
 | `link` | list of link tags | what arrives from one of these links, on a node that is the exit half of each. Not together with `user` or `group`, which a link does not have. |
-| `ip` | list of networks, or the names `geoip:private`, `host:self`, `tunnel:users` and `tunnel:<inbound tag>` | destination address. `host:self` is the machine's own addresses, see [Reaching the server itself](#reaching-the-server-itself). |
+| `ip` | list of networks, or the names `geoip:private`, `geoip:<cc>` (a country), `host:self`, `tunnel:users` and `tunnel:<inbound tag>` | destination address. `host:self` is the machine's own addresses, see [Reaching the server itself](#reaching-the-server-itself). |
 | `domain` | list of names | a name this user resolved to the destination address through the node. `example.com` matches that name only. `*.example.com` matches every name below it and not `example.com` itself. |
 | `protocol` | list of `tcp`, `udp`, `icmp`, `icmpv6`, `gre`, `esp`, `sctp`, or an integer 0 to 255 | IP protocol. A name and its number are the same entry. |
 | `port` | list of integers 1 to 65535 or strings `"lo-hi"` with `lo <= hi` | destination port. Needs `protocol` present and limited to `tcp`, `udp` and `sctp`. |
@@ -903,7 +903,14 @@ All conditions present in a rule must hold. Inside one list, any entry may match
 
 A domain is lowercase ASCII (punycode for other scripts), at most 253 bytes with labels of 1 to 63, no trailing dot, and not an IP address in any spelling (a last label that is all digits, or `0x` followed by hex digits, is refused). `*` may only be the whole first label and needs at least two labels after it.
 
-`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool: those are `tunnel:users`. A network in a rule, and `geoip:private`, also match an IPv6 destination that embeds a matching IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo). No other `geoip:` name is accepted yet, and a `tunnel:` name must be `users` or the tag of an inbound. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
+`geoip:private` stands for every private and special-purpose range: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `100.64.0.0/10`, `192.0.0.0/24`, `192.0.2.0/24`, `192.88.99.0/24`, `198.18.0.0/15`, `198.51.100.0/24`, `203.0.113.0/24`, `240.0.0.0/4`, `fc00::/7` and `2001:db8::/32`. It never matches an address inside an inbound pool: those are `tunnel:users`. A network in a rule, and `geoip:private`, also match an IPv6 destination that embeds a matching IPv4 address (IPv4-compatible, NAT64, 6to4, Teredo). A `tunnel:` name must be `users` or the tag of an inbound. A config that keeps users away from each other and out of the networks behind its exits starts its rules with:
+
+`geoip:<cc>`, with a two-letter lowercase country code such as `geoip:tr`, stands for every address the five regional internet registries have allocated or assigned to that country (from v0.3.10). Like `geoip:private`, it never matches an address inside an inbound pool, and it also matches an IPv6 destination that embeds a matching IPv4 address.
+
+- **The list is a file**, `/usr/local/lib/veilway/geoip.txt`, or the path given with `--geoip` to `run`, `check` and `doctor`. Each release carries one, `veilway-geoip.txt`, made from the registries' files on the day of the release and signed like the other assets. `veilway.sh install node` and `update node` install it.
+- **The node reads it only when a rule names a country**, at start and at every reload, so a newer list takes effect with a reload. It keeps only the countries the rules name.
+- **A rule that names a country is an error** when the file is missing or invalid, or when the country has no addresses in it. A list older than 180 days is a warning.
+- **Registry data is where an address is registered,** not where its server stands. A network registered in one country and used in another follows its registration, and large cloud providers' addresses mostly follow their home country. For a split by site, add `domain` rules.
 
 ```json
 {"tag": "isolate-users", "ip": ["tunnel:users"], "action": "reject"},
@@ -1267,6 +1274,7 @@ veilway mirror --config mirror.json --check
 - `run --api <path>` sets the unix socket of the control API. Default: `veilway.sock` next to the config file. `run --no-api` starts the node without the API. You cannot combine the two. Whoever can open the socket administers the node, see the control API reference. Both flags exist on Unix only.
 - `run --addons <folder>` is the folder the Xray add-on is installed in (`/usr/local/lib/veilway/addons` by default). It must not be writable by the user the node runs as.
 - `run --xray-socket <path>` is the socket of the Xray host that starts Xray (`/run/veilway-xray/host.sock` by default).
+- `run --geoip <file>`, also on `check` and `doctor`, is the country address list that `geoip:<cc>` rule entries read. Default: `/usr/local/lib/veilway/geoip.txt`.
 - `run --xray-dir <folder>` is the folder shared with Xray's user where the sockets of `xray` outbounds are made (`/run/veilway-xray-out` by default).
 - Only a config with an `xray` section or an `xray` outbound uses these three, see `xray` and "`xray` outbounds". `veilway xray-host` is that host, which the install script runs as its own service on Linux.
 - `check` prints every error and warning and exits with a non-zero status when there is an error. It gives the same answer on any operating system.

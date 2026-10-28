@@ -86,9 +86,10 @@ The link's MTU defaults to `1420`, or `1390` when it uses `udp-obfs`. From v0.3.
 By default, users' traffic for sites inside the country also travels abroad and back. That is slow, and some domestic sites refuse foreign addresses. Send it out of the entry directly instead:
 
 1. On the entry, open **Exits and routing**. The entry's own **Direct** exit should already exist.
-2. Add a rule with the condition **Domain** and **Then send it to** the Direct exit. List the sites by name, or with a wildcard of at least two labels, such as `*.com.tr` and `*.gov.tr`. A whole top-level domain such as `*.tr` is refused. For address ranges, add a rule with **Destination network** instead.
+2. Add a rule with the condition **Destination network** set to the country, such as `geoip:tr`, and **Then send it to** the Direct exit. From v0.3.10, this matches every address registered in that country.
+3. For sites hosted abroad but meant for the country, add a rule with the condition **Domain**, with the names, or a wildcard of at least two labels such as `*.com.tr`. A whole top-level domain such as `*.tr` is refused.
 
-**Domain** matches names that users looked up through the node, which apps do by default. The entry's provider sees these sites, as any local network would.
+The country list comes from the internet registries and installs with the node. A rule naming a country does not validate until it is there, see the [config reference](../../reference/config/#a-rule). **Domain** matches names that users looked up through the node, which apps do by default. The entry's provider sees these sites, as any local network would.
 
 ## Check that it works
 

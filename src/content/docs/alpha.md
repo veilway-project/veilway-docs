@@ -1,16 +1,23 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.9-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.10-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.9-alpha`, after `v0.3.8-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.10-alpha`, after `v0.3.9-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.9-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.9-alpha)
+- Node and install script: [v0.3.10-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.10-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).
+
+## New in v0.3.10-alpha
+
+- **Rules can name a country.** `geoip:tr`, `geoip:de` and so on in a rule's **Destination network** match every address registered in that country. Each release carries the list, built from the five internet registries' files, and `veilway.sh` installs it. On an entry server, send your country's sites out the Direct exit and the rest abroad, see [Entry node](../guides/entry-node/#keep-sites-inside-the-country-on-the-entry).
+- **Links find their own MTU.** A node link tests the largest packet its path carries in both directions and lowers its MTU to it, within a minute of coming up and every 10 minutes after. This fixes links where pings worked but large transfers hung. Both servers need v0.3.10. The panel's link card shows the MTU in force.
+- **New guide:** [Reach a home server through your VPS](../guides/home-server/). The [entry node guide](../guides/entry-node/) now covers running both servers from one panel, picking the link's transports and what each link state means.
+- **Update twice.** The first `sudo bash veilway.sh update node` still runs the old installer, which does not know the country list. Run it a second time to install the list.
 
 ## New in v0.3.9-alpha
 

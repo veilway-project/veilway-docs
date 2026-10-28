@@ -32,6 +32,7 @@ export default defineConfig({
 						{ label: "Give an account a proxy login", translations: { fa: "ورود پراکسی برای یک حساب" }, slug: "guides/proxy-inbound" },
 						{ label: "Entry node", translations: { fa: "نود ورودی" }, slug: "guides/entry-node" },
 						{ label: "Add a second server", translations: { fa: "افزودن سرور دوم" }, slug: "guides/second-server" },
+						{ label: "Home server through a VPS", translations: { fa: "سرور خانه از راه VPS" }, slug: "guides/home-server" },
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
 						{ label: "Offline bundles", translations: { fa: "بسته‌های آفلاین" }, slug: "guides/offline-bundle" },
 						{ label: "Xray profiles on Linux", translations: { fa: "پروفایل‌های Xray روی لینوکس" }, slug: "guides/xray-profiles" },

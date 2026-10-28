@@ -16,7 +16,7 @@ While connected, all traffic goes through the tunnel, local network included. Th
 
 The node must sit on your home network, or on one connected to it. A node in a data center cannot reach it.
 
-If your home network cannot take outside connections, use a reverse tunnel, where the node there dials out. The [entry node guide](../../guides/entry-node/) shows the steps.
+If your home network cannot take outside connections, the node there can dial out to a VPS. [Reach a home server through your VPS](../../guides/home-server/) shows the steps.
 
 1. In the panel, open **Exits and routing**, go to the routing rules, and add a rule:
    - **Destination network:** your home range, for example `192.168.1.0/24`. Check it on your router.

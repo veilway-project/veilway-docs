@@ -25,6 +25,17 @@ If users can reach your server abroad directly, you do not need an entry node. I
 
 Both need a Veilway inbound for the link to connect to, as the [panel manual](../../manuals/panel/#node-links) describes. Install both with [Getting started](../../getting-started/).
 
+## If you run both servers
+
+The steps below are for two operators, each with a panel. If both servers are yours, the exit needs no panel of its own: your entry's panel manages it.
+
+1. On the exit, run `sudo bash veilway.sh install node`. It installs the node only.
+2. On the entry's panel, add the exit with [Add a second server](../second-server/). The link it makes carries the panel's control and users' traffic both.
+3. On the entry's panel, open **Exits and routing** with **Server** set to this server. On the **Exits** tab, add an exit that leaves through **Another node**, with that link. Give it the name and country users see, and make it the default exit if all traffic should go abroad.
+4. On each user, set **Servers this user may use** to **Only these servers** with the entry ticked. Otherwise users also get profiles that connect to the exit directly.
+
+The link's traffic leaves through the exit server's own default exit. To change that, open **Exits and routing** with **Server** set to the exit server.
+
 ## Forward or reverse
 
 The two servers agree on which one opens the connection. Traffic flows both ways either way.
@@ -58,9 +69,34 @@ Have the other server's operator on a call or another channel you trust, because
 
 Profiles do not change, so there is nothing to publish. Apps see the new exit at their next connect.
 
+## Pick the link's transports
+
+The offer lists the inbound's transports, and you untick the ones the link should not use.
+
+- **`tls` is usually best between countries.** UDP is often throttled or dropped on international routes.
+- **An exit with no domain still works over `tls`.** Since v0.3.6 a self-signed certificate is trusted through its pin, and the fingerprints you compare are the whole check.
+- **Keep two transports** if the inbound has them, so the link can switch when one is blocked.
+
+## Set the MTU
+
+The link's MTU defaults to `1420`, or `1390` when it uses `udp-obfs`. It is picked from the transports, not measured. Over `tls` and `ws` it rarely matters. Over `udp` and `udp-obfs`, lower it on **both** servers under **Manage** when the path between them is itself a tunnel or a PPPoE line. The sign of a wrong MTU: pings and small pages work, but large pages and downloads hang. The node also logs a line saying the link's MTU is likely too high.
+
+## Keep sites inside the country on the entry
+
+By default, users' traffic for sites inside the country also travels abroad and back. That is slow, and some domestic sites refuse foreign addresses. Send it out of the entry directly instead:
+
+1. On the entry, open **Exits and routing**. The entry's own **Direct** exit should already exist.
+2. Add a rule with the condition **Domain** and **Then send it to** the Direct exit. List the sites by name, or with a wildcard of at least two labels, such as `*.com.tr` and `*.gov.tr`. A whole top-level domain such as `*.tr` is refused. For address ranges, add a rule with **Destination network** instead.
+
+**Domain** matches names that users looked up through the node, which apps do by default. The entry's provider sees these sites, as any local network would.
+
 ## Check that it works
 
-- On both panels the link's card under **Links** shows **Up** within a minute. **Unreachable** means the dialing side cannot reach the other. Check the direction, the address in the offer and the firewall.
+- On both panels the link's card under **Links** shows **Up** within a minute.
+- **Connecting** for more than a minute: the waiting side has not heard from the dialing side. Check that both sides picked the same direction, and that the dialing side's link is turned on.
+- **Unreachable**: the dialing side cannot reach the other. Check the address in the offer, the port, and the waiting server's firewall. Try the link's other transports.
+- **Refused**: the other server answers but does not accept the link. Its half was removed or changed. Remove the link on both sides and pair again.
+- **Key changed**: the other server's certificate has a new key. Pair again.
 - Connect a device to the entry, pick the new exit if it is not the default, and open a site blocked from inside. A "what is my IP" page should show the exit's address and country.
 - The link's **Carried** counter grows on both cards while users browse.
 

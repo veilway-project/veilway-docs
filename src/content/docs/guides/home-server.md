@@ -28,9 +28,9 @@ Both cards should show **Up** within a minute.
 
 **If the two servers already share a private network**, such as a WireGuard tunnel between them, the home server can dial the VPS over it. Make the offer on an inbound that listens on the VPS's address in that network. The panel warns that the address is private; that is expected here.
 
-## 2. Set the MTU
+## 2. Check the MTU
 
-Do this before you test, or large transfers will stall.
+When both servers run v0.3.10 or newer, the link tests its path and lowers its MTU by itself within a minute of coming up. The link's **Manage** shows the size in force. Set it by hand only when one server is older, as below, and do it before you test, or large transfers will stall.
 
 The MTU is the largest packet the link carries. It must fit inside the network the link runs over, and nothing is split to make it fit. The default is `1420`, or `1390` with `udp-obfs`. Over a network that already wraps traffic, such as a WireGuard tunnel, that is too big.
 

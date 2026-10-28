@@ -435,6 +435,8 @@ A device's source address is never part of a session or any answer, whatever `lo
 | `handshake_secs` | Seconds since the link's tunnel last completed a handshake. `null` without a session. |
 | `transport`, `transport_index`, `candidate_index` | On the node that dials: the transport it is at, and the places of that transport and of its candidate in the other node's list, from 0. All `null` on the node that is dialed. |
 | `size_warning` | `true` when the system refused an outer packet of the link for its size within the last 600 seconds, which suggests the link's `mtu` is too high for the path. Anyone on the path can forge such a report, so it only warns. |
+| `mtu` | The link's MTU in force: its configured `mtu`, lowered to the size probing found. From v0.3.10. |
+| `mtu_found` | The largest size that crossed the path in both directions at the last walk that found one, or `null` before any walk found one, as with an older node that answers no probes. From v0.3.10. |
 | `denied` | On the exit half: why this node cut the link off (`disabled`, `expired` or `quota`). `null` for a link that may run. |
 | `exit` | On the entry half: the exit with a `chain` backend the link is behind. |
 | `flows` | The flows the link carries. |

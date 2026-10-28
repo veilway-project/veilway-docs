@@ -77,9 +77,9 @@ The offer lists the inbound's transports, and you untick the ones the link shoul
 - **An exit with no domain still works over `tls`.** Since v0.3.6 a self-signed certificate is trusted through its pin, and the fingerprints you compare are the whole check.
 - **Keep two transports** if the inbound has them, so the link can switch when one is blocked.
 
-## Set the MTU
+## The MTU
 
-The link's MTU defaults to `1420`, or `1390` when it uses `udp-obfs`. It is picked from the transports, not measured. Over `tls` and `ws` it rarely matters. Over `udp` and `udp-obfs`, lower it on **both** servers under **Manage** when the path between them is itself a tunnel or a PPPoE line. The sign of a wrong MTU: pings and small pages work, but large pages and downloads hang. The node also logs a line saying the link's MTU is likely too high.
+The link's MTU defaults to `1420`, or `1390` when it uses `udp-obfs`. From v0.3.10, when both servers run it, the link tests its path and lowers the MTU by itself, so there is nothing to set. With an older server on either side, the link cannot test. Over `tls` and `ws` that rarely matters. Over `udp` and `udp-obfs`, lower it on **both** servers under **Manage** when the path between them is itself a tunnel or a PPPoE line. The sign of a wrong MTU: pings and small pages work, but large pages and downloads hang.
 
 ## Keep sites inside the country on the entry
 

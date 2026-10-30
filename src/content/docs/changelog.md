@@ -5,6 +5,15 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.11-alpha
+
+- **Easier first run.** A fresh install starts with one working inbound (`udp-obfs` on a random free UDP port, printed at the end), and a panel installed with its node already knows the server address and subscription endpoint. See the [Quick start](../quick-start/).
+- **Clearer panel forms.** When something blocks a save, the panel opens the fields that need attention and says how many. Keys, path and cookie fill in by themselves for `tls`, `ws` and `fronted`. The Xray form says what it still needs.
+- **Publish to apps** appears after you apply an inbound change. Apps only get new ports or transports after a publish.
+- **Setup checklist** on the dashboard, and links are now named **Tunnels and links**.
+- **New pages:** [Quick start](../quick-start/), [FAQ](../faq/), and the tunnel guide under that name: [Tunnel: a server in Iran in front of a foreign server](../guides/entry-node/).
+- **Update.** Run `sudo bash veilway.sh update both` (or `update node`) as usual. Existing servers keep their config: the new first inbound is only for fresh installs.
+
 ## New in v0.3.10-alpha
 
 - **Rules can name a country.** `geoip:tr`, `geoip:de` and so on in a rule's **Destination network** match every address registered in that country. Each release carries the list, built from the five internet registries' files, and `veilway.sh` installs it. On an entry server, send your country's sites out the Direct exit and the rest abroad, see [Entry node](../guides/entry-node/#keep-sites-inside-the-country-on-the-entry).

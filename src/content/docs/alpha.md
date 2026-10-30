@@ -1,13 +1,13 @@
 ---
 title: The alpha release
-description: What Veilway v0.3.10-alpha includes, where each part stands, and its known limits.
+description: What Veilway v0.3.11-alpha includes, where each part stands, and its known limits.
 ---
 
-The alpha is `v0.3.10-alpha`, after `v0.3.9-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
+The alpha is `v0.3.11-alpha`, after `v0.3.10-alpha`. Veilway is a node for a server, a web panel for its operator, and client apps. It is for people who want to try the software and report what breaks. It has had no outside security review. Do not rely on it for anything you cannot afford to lose access to.
 
 Downloads and release notes:
 
-- Node and install script: [v0.3.10-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.10-alpha)
+- Node and install script: [v0.3.11-alpha release page](https://github.com/veilway-project/veilway/releases/tag/v0.3.11-alpha)
 - Panel: [veilway-panel releases](https://github.com/veilway-project/veilway-panel/releases)
 
 Report problems on the [issue tracker of the core repository](https://github.com/veilway-project/veilway/issues).

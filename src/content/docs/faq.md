@@ -10,9 +10,7 @@ Yes, if the ports do not clash. Veilway needs these:
 - **The panel** listens on `127.0.0.1:8480`. Only this server can reach it, so it clashes with nothing.
 - **A web server for the panel** needs ports 80 and 443 when you give the installer a domain. If x-ui holds 443, the installer explains and stops before it changes anything. Put the web server on another port instead: `sudo bash veilway.sh install both --domain panel.example.com --https-port 8443`. Port 80 must stay free, because the certificate is checked over it. The panel is then at `https://panel.example.com:8443/<prefix>/`.
 - **No domain** is simpler: `sudo bash veilway.sh install both --no-domain`. The installer takes port 443 if it is free, and 8443 if not.
-- **An inbound** needs a port nothing else uses. `udp-obfs` is UDP, so it does not clash with x-ui on TCP 443. Pick a free port such as 8443.
-
-Do not put a Veilway `tls` transport on 443 if x-ui holds it. Give it another TCP port.
+- **An inbound** needs a TCP port nothing else uses. The installer's first inbound already takes a random free one. Do not put a Veilway `tls` transport on 443 if x-ui holds it.
 
 Veilway does not take over x-ui or import its users. Its [Xray add-on](../manuals/xray/) runs its own Xray, with its own ports.
 
@@ -51,14 +49,14 @@ We do not know how IPv6 behaves on Windows, macOS and Android. Browser leaks suc
 
 ## What is the simplest setup for family or myself?
 
-One server abroad, one `udp-obfs` inbound, one user for each person. Follow the [Quick start](../quick-start/). Give each person their own user, so you can stop one without touching the rest.
+One server abroad, one `tls` inbound, one user for each person. Follow the [Quick start](../quick-start/). Give each person their own user, so you can stop one without touching the rest.
 
-If the network blocks UDP, add a `tls` transport on its own port, see [First inbound and user](../guides/first-user/#3-add-the-inbound). If users cannot reach any server abroad, see [Tunnel: a server in Iran in front of a foreign server](../guides/entry-node/).
+If users cannot reach any server abroad, see [Tunnel: a server in Iran in front of a foreign server](../guides/entry-node/).
 
 ## Why are sites inside Iran slow when the VPN is on?
 
 All traffic goes to the server abroad and back, even to Iranian sites. That is slow, and some Iranian sites refuse foreign addresses.
 
-The fix lives on the server in Iran, in a [tunnel setup](../guides/entry-node/#keep-sites-inside-the-country-on-the-entry): add a rule with **Destination network** `geoip:ir` and send it to the **Direct** exit. Iranian sites then leave from Iran. A single server abroad cannot do this.
+The apps have no split tunneling in this release, so turn the VPN off for those sites.
 
-The apps have no split tunneling. It is not in this release.
+Do not send users' traffic out of a server in Iran directly, not even for Iranian sites. That traffic leaves unprotected from your server, and it carries its own risks.

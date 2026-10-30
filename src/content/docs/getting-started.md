@@ -61,7 +61,7 @@ A fresh `install node` writes `/etc/veilway/node/config.json` if missing, owned 
 
 The script runs `veilway check` and starts the node only if it passes. If not, the node stays stopped and the script says why.
 
-From v0.3.11 the installer also makes a first `udp-obfs` inbound and gives the panel the server address and the subscription endpoint. With an older version the node has no inbound and does nothing yet. Add one in the panel under **Inbounds**. **Generate** next to the inbound's private key makes a key, and the panel fills in the public half. [First inbound and user](../guides/first-user/) goes from first sign-in to a user's link. The [panel manual](../manuals/panel/) covers the rest.
+With `install both` and a web server (a domain or `--no-domain`), the installer also makes a first `tls` inbound on a random free TCP port, with a self-signed certificate and the plain site as its decoy, and gives the panel the server address and the subscription endpoint. A node installed alone has no inbound and does nothing yet. Add one in the panel under **Inbounds**. **Generate** next to the inbound's private key makes a key, and the panel fills in the public half. [First inbound and user](../guides/first-user/) goes from first sign-in to a user's link. The [panel manual](../manuals/panel/) covers the rest.
 
 To check the config any time, run `sudo bash veilway.sh check`.
 

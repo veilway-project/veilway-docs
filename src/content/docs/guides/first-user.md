@@ -47,10 +47,10 @@ Open **Inbounds** and choose **Add inbound**.
 2. **Type**: leave it at **Veilway**.
 3. **Private key**: choose **Generate**. This is the inbound's secret, and the panel derives the public half. To make the key on the server instead, run `veilway genkey` and paste the value of `private_key`.
 4. **Gateway addresses**: `10.66.0.1/16`, the first address of the device address pool with the pool's prefix. The panel never gives it to a device.
-5. **Transport 1** and **Listens on**: how devices reach the node. `udp-obfs` needs only a port, for example `0.0.0.0:8443`. `tls`, `ws` and `fronted` need more settings in the JSON view. See [Inbounds](../../manuals/panel/#inbounds). Pick a port nothing else on the server uses. A web server with HTTP/3 already uses UDP port 443.
+5. **Transport 1** and **Listens on**: how devices reach the node. Pick `tls` and a TCP port nothing else on the server uses, for example `0.0.0.0:8443`. The panel fills in the key, path and cookie, and makes a self-signed certificate. For **Decoy web site**, enter `http://127.0.0.1:8080`, the plain site the installer serves. See [Inbounds](../../manuals/panel/#inbounds). Avoid UDP transports: UDP to an odd port is easy to spot.
 6. Choose **Review changes**, which lists what the node will add, then **Apply to the node**.
 
-Open the port in the server's firewall, for example with `sudo ufw allow 8443/udp`.
+Open the port in the server's firewall, for example with `sudo ufw allow 8443/tcp`.
 
 ## 4. Publish the profile
 
@@ -73,7 +73,7 @@ The user opens the link in the Veilway app, and the app connects. To see the lin
 ## When it does not connect
 
 - **The app cannot fetch the subscription.** The web server must send `/sub/` to the panel. `sudo bash veilway.sh status` shows the admin pages address and the subscription path to forward.
-- **The app fetches, but the tunnel does not come up.** Check that the inbound's port is open in the firewall (UDP for `udp-obfs`) and that **Node address** reaches this server.
+- **The app fetches, but the tunnel does not come up.** Check that the inbound's port is open in the firewall and that **Node address** reaches this server.
 - **The app has no profile to connect with.** Publish the profiles again after every inbound change.
 
 ## On an older panel

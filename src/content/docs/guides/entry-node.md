@@ -33,7 +33,7 @@ The steps below are for two operators, each with a panel. If both servers are yo
 
 1. On the exit, run `sudo bash veilway.sh install node`. It installs the node only.
 2. On the entry's panel, add the exit with [Add a second server](../second-server/). The link it makes carries the panel's control and users' traffic both.
-3. On the entry's panel, open **Exits and routing** with **Server** set to this server. On the **Exits** tab, add an exit that leaves through **Another node**, with that link. Give it the name and country users see, and make it the default exit if all traffic should go abroad.
+3. On the entry's panel, open **Exits and routing** with **Server** set to this server. On the **Exits** tab, add an exit that leaves through **Another node**, with that link. Give it the name and country users see, and make it the default exit. Do not send users' traffic to the entry's own exit (**This server**): traffic that leaves a server in Iran directly carries its own risks.
 4. On each user, set **Servers this user may use** to **Only these servers** with the entry ticked. Otherwise users also get profiles that connect to the exit directly.
 
 The link's traffic leaves through the exit server's own default exit. To change that, open **Exits and routing** with **Server** set to the exit server.
@@ -66,7 +66,7 @@ Have the other server's operator on a call or another channel you trust, because
 3. Both sides pick the same direction. The panel says who makes the offer: the exit in a forward link, the entry in a reverse one. That side picks the Veilway inbound, the transports and the tunnel addresses, then sends the offer code to the other side.
 4. The other side pastes the offer, checks where its server would connect, and sends back the answer code. If the offer was made for the other side, the panel says so and refuses to answer.
 5. The offering side pastes the answer. Both sides read their eight fingerprint groups aloud and type the other's. Confirm only when they match. The link is then in each node's config.
-6. On the entry, give users an exit through the link. Set its name and country, whether it becomes the default exit, and whether it is added to every user who has a list of exits. Users allowed every exit get it anyway. The review shows each change before you apply it.
+6. On the entry, give users an exit through the link. Set its name and country, make it the default exit, so no user traffic leaves from the entry, and choose whether it is added to every user who has a list of exits. Users allowed every exit get it anyway. The review shows each change before you apply it.
 7. On the exit, pick which of its exits the link's traffic may leave through. Leave **Let rules reach private networks** off unless you mean it. When on, the entry's users can reach this server's local networks.
 
 Profiles do not change, so there is nothing to publish. Apps see the new exit at their next connect.
@@ -82,16 +82,6 @@ The offer lists the inbound's transports, and you untick the ones the link shoul
 ## The MTU
 
 The link's MTU defaults to `1420`, or `1390` when it uses `udp-obfs`. From v0.3.10, when both servers run it, the link tests its path and lowers the MTU by itself, so there is nothing to set. With an older server on either side, the link cannot test. Over `tls` and `ws` that rarely matters. Over `udp` and `udp-obfs`, lower it on **both** servers under **Manage** when the path between them is itself a tunnel or a PPPoE line. The sign of a wrong MTU: pings and small pages work, but large pages and downloads hang.
-
-## Keep sites inside the country on the entry
-
-By default, users' traffic for sites inside the country also travels abroad and back. That is slow, and some domestic sites refuse foreign addresses. Send it out of the entry directly instead:
-
-1. On the entry, open **Exits and routing**. The entry's own **Direct** exit should already exist.
-2. Add a rule with the condition **Destination network** set to the country, such as `geoip:tr`, and **Then send it to** the Direct exit. From v0.3.10, this matches every address registered in that country.
-3. For sites hosted abroad but meant for the country, add a rule with the condition **Domain**, with the names, or a wildcard of at least two labels such as `*.com.tr`. A whole top-level domain such as `*.tr` is refused.
-
-The country list comes from the internet registries and installs with the node. A rule naming a country does not validate until it is there, see the [config reference](../../reference/config/#a-rule). **Domain** matches names that users looked up through the node, which apps do by default. The entry's provider sees these sites, as any local network would.
 
 ## Check that it works
 

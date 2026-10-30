@@ -33,7 +33,7 @@ Open the address it printed. Paste the setup token, choose a user name and a pas
 
 The dashboard has a setup checklist. Follow it down to the first user. If the panel shows no inbound, follow [First inbound and user](../guides/first-user/) instead. It takes about 10 minutes.
 
-If the server has a firewall, open the inbound's UDP port. The installer printed it ("inbound main on UDP port ..."). For example `sudo ufw allow 31234/udp`.
+If the server has a firewall, open the inbound's TCP port. The installer printed it ("inbound main on TCP port ..."). For example `sudo ufw allow 31234/tcp`.
 
 When the user exists, choose **Copy Veilway link**. Send it over a channel you trust. Anyone with the link can use the account.
 

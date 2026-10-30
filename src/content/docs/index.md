@@ -11,7 +11,7 @@ It has three parts:
 - **The panel** is the web page where you add users and manage the server.
 - **The apps** are a desktop app for Linux and Windows, and an Android app. There is no iPhone app. macOS has only a command-line client that has never run on a real Mac.
 
-The current release is the alpha, `v0.3.11-alpha`. It is for people who want to try the software and report what breaks. [The alpha release](./alpha/) says what works and what does not.
+The current release is the alpha, `v0.3.12-alpha`. It is for people who want to try the software and report what breaks. [The alpha release](./alpha/) says what works and what does not.
 
 Veilway does not make traffic undetectable. A network that looks closely can still recognize it. Read the [threat model](./security/threat-model/) first.
 

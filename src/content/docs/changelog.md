@@ -5,6 +5,13 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.12-alpha
+
+- **No UDP by default.** The installer's first inbound is now `tls` on a random free TCP port, with a self-signed certificate and the installer's plain site as its decoy. It is made with `install both` and a domain or `--no-domain`. A node installed alone starts with no inbound. UDP to an odd port is easy to spot, so the docs no longer recommend `udp-obfs`.
+- **The panel starts new inbounds as `tls`.** A new Veilway inbound and **Add transport** start as `tls`, with the key, path and cookie filled in.
+- **No direct exit on a server in Iran.** The tunnel guide no longer sends domestic sites out of the entry. Users' traffic should leave through the server abroad.
+- Existing servers keep their config. Update with `sudo bash veilway.sh update both`.
+
 ## New in v0.3.11-alpha
 
 - **Easier first run.** A fresh install starts with one working inbound (`udp-obfs` on a random free UDP port, printed at the end), and a panel installed with its node already knows the server address and subscription endpoint. See the [Quick start](../quick-start/).

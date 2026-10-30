@@ -3,7 +3,7 @@ title: Getting started
 description: Installing the Veilway alpha's node and panel with the install script, or with Docker.
 ---
 
-This page installs the alpha, `v0.3.11-alpha`. Files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Read [the alpha release](../alpha/) first for what it includes and its limits.
+This page installs the alpha, `v0.3.12-alpha`. Files come from the [core release page](https://github.com/veilway-project/veilway/releases) and the [panel release page](https://github.com/veilway-project/veilway-panel/releases). Read [the alpha release](../alpha/) first for what it includes and its limits.
 
 **Next:** in a hurry? Follow the [Quick start](../quick-start/). After the install, [First inbound and user](../guides/first-user/) takes you to a user's link. Users in Iran who cannot reach servers abroad? See [Tunnel: a server in Iran in front of a foreign server](../guides/entry-node/).
 
@@ -206,7 +206,7 @@ Do not pipe a script from a mirror straight into `bash`. Check it first.
 
 ```
 bash veilway.sh mirror-sync ./veilway-mirror
-bash veilway.sh mirror-sync ./veilway-mirror --version v0.3.11-alpha
+bash veilway.sh mirror-sync ./veilway-mirror --version v0.3.12-alpha
 ```
 
 It downloads the node's and panel's files with signatures and pointers, verifies each before storing it, and puts `veilway.sh` at the top. It keeps a newer pointer already there. It does not write the browsable `index.html` that [`veilway-release-mirror`](../guides/release-mirror/) writes.

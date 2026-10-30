@@ -9,7 +9,7 @@ The examples use `vpn.example.com`. Use your own domain.
 
 ## Before you start
 
-- A domain name that points at the server, with a web server in front of the panel. The install script can set one up. See [Put a web server in front](../../getting-started/#put-a-web-server-in-front).
+- A domain name that points at the server, with a web server in front of the panel. The install script can set one up. See [Put a web server in front](../../getting-started/#put-a-web-server-in-front). No domain? See [No domain?](#no-domain) in step 2.
 - The admin pages address and setup token the install printed. To read the token again, run `sudo journalctl -u veilway-panel -o cat | grep 'Setup token' | tail -n 1`.
 - Panel v0.2.8 or later. An older panel needs more steps. See [On an older panel](#on-an-older-panel).
 
@@ -30,6 +30,15 @@ Open **Settings**. If you opened the panel at your domain, setup already filled 
 3. Under **New users**, leave **Device address pool** at `10.66.0.0/16`. Each device gets one address from it. Change it only if your users' own networks use that range.
 4. Choose **Save changes** in the bar at the bottom.
 
+### No domain?
+
+Install with `sudo bash veilway.sh install panel --no-domain` (see [Without a domain](../../getting-started/#without-a-domain)). The script serves subscriptions on the server's IP address with a self-signed certificate, and prints its pin. The admin pages stay on the server itself, so:
+
+1. Reach the panel through SSH from your computer: `ssh -L 8480:127.0.0.1:8480 root@<server-ip>`. Then open `http://localhost:8480/<prefix>/`. The script prints the exact command and address. In step 1, use this address in place of `https://vpn.example.com/<prefix>/`.
+2. Set **Node address** to the server's public IP address.
+3. Add the endpoint with **Address** `https://<server-ip>:<port>/sub/main` and paste the pin the script printed into the pin box under the address. The apps check the certificate by that pin.
+4. Do not open the admin pages in a browser over the self-signed certificate.
+
 ## 3. Add the inbound
 
 Open **Inbounds** and choose **Add inbound**.
@@ -45,7 +54,9 @@ Open the port in the server's firewall, for example with `sudo ufw allow 8443/ud
 
 ## 4. Publish the profile
 
-Open **Profiles**. The inbound's profile shows **Ready**. Choose **Publish profiles**. Apps get it at their next refresh.
+From v0.3.11 the panel offers a **Publish to apps** button right after you apply inbound changes. Use it and skip to step 5.
+
+Otherwise open **Profiles**. The inbound's profile shows **Ready**. Choose **Publish profiles**. Apps get it at their next refresh.
 
 If it is not ready, the page lists what it needs, most often the **Node address** from step 2.
 

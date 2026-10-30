@@ -21,16 +21,24 @@ export default defineConfig({
 			social: [{ icon: "github", label: "GitHub", href: "https://github.com/veilway-project/veilway" }, { icon: "telegram", label: "Telegram", href: "https://t.me/VeilwayGroup" }],
 			sidebar: [
 				{ label: "Introduction", translations: { fa: "معرفی" }, slug: "" },
-				{ label: "The alpha release", translations: { fa: "نسخهٔ آلفا" }, slug: "alpha" },
+				{ label: "Quick start", translations: { fa: "شروع سریع" }, slug: "quick-start" },
 				{ label: "Getting started", translations: { fa: "شروع به کار" }, slug: "getting-started" },
+				{
+					label: "Connect your devices",
+					translations: { fa: "اتصال دستگاه‌ها" },
+					items: [
+						{ label: "Desktop app", translations: { fa: "برنامهٔ دسکتاپ" }, slug: "manuals/client" },
+						{ label: "Android app", translations: { fa: "برنامهٔ اندروید" }, slug: "manuals/android" },
+					],
+				},
 				{
 					label: "Guides",
 					translations: { fa: "آموزش‌ها" },
 					items: [
-						{ label: "First inbound and user", translations: { fa: "اولین ورودی و کاربر" }, slug: "guides/first-user" },
+						{ label: "First inbound and user", translations: { fa: "اولین اینباند و کاربر" }, slug: "guides/first-user" },
+						{ label: "Tunnel: a server in Iran in front of a foreign server", translations: { fa: "تانل (تونل): سرور ایران جلوی سرور خارج" }, slug: "guides/entry-node" },
 						{ label: "Your decoy site", translations: { fa: "سایت پوششی شما" }, slug: "guides/decoy-site" },
 						{ label: "Give an account a proxy login", translations: { fa: "ورود پراکسی برای یک حساب" }, slug: "guides/proxy-inbound" },
-						{ label: "Entry node", translations: { fa: "نود ورودی" }, slug: "guides/entry-node" },
 						{ label: "Add a second server", translations: { fa: "افزودن سرور دوم" }, slug: "guides/second-server" },
 						{ label: "Home server through a VPS", translations: { fa: "سرور خانه از راه VPS" }, slug: "guides/home-server" },
 						{ label: "Release mirror", translations: { fa: "آینهٔ انتشارها" }, slug: "guides/release-mirror" },
@@ -40,6 +48,16 @@ export default defineConfig({
 						{ label: "Use an Xray server as an exit", translations: { fa: "استفاده از سرور Xray به‌عنوان خروجی" }, slug: "guides/xray-outbound" },
 						{ label: "Use a WireGuard server as an exit", translations: { fa: "استفاده از سرور WireGuard به‌عنوان خروجی" }, slug: "guides/wireguard-outbound" },
 						{ label: "Borrowed-site mode (alpha)", translations: { fa: "حالت سایت قرضی (آلفا)" }, slug: "guides/borrowed-site" },
+					],
+				},
+				{ label: "FAQ", translations: { fa: "پرسش‌های پرتکرار" }, slug: "faq" },
+				{
+					label: "Manuals",
+					translations: { fa: "راهنماها" },
+					items: [
+						{ label: "Panel", translations: { fa: "پنل" }, slug: "manuals/panel" },
+						{ label: "Home network", translations: { fa: "شبکهٔ خانگی" }, slug: "manuals/home-network" },
+						{ label: "Xray add-on", translations: { fa: "افزونهٔ Xray" }, slug: "manuals/xray" },
 					],
 				},
 				{
@@ -61,6 +79,7 @@ export default defineConfig({
 					],
 				},
 				{ label: "Config reference", translations: { fa: "مرجع پیکربندی" }, slug: "reference/config" },
+				{ label: "Installer reference", translations: { fa: "مرجع نصب‌کننده" }, slug: "reference/installer" },
 				{ label: "Control API reference", translations: { fa: "مرجع API کنترل" }, slug: "reference/api" },
 				{
 					label: "SDK guides",
@@ -71,17 +90,6 @@ export default defineConfig({
 					],
 				},
 				{
-					label: "Manuals",
-					translations: { fa: "راهنماها" },
-					items: [
-						{ label: "Panel", translations: { fa: "پنل" }, slug: "manuals/panel" },
-						{ label: "Client", translations: { fa: "کلاینت" }, slug: "manuals/client" },
-						{ label: "Android app", translations: { fa: "برنامهٔ اندروید" }, slug: "manuals/android" },
-						{ label: "Home network", translations: { fa: "شبکهٔ خانگی" }, slug: "manuals/home-network" },
-						{ label: "Xray add-on", translations: { fa: "افزونهٔ Xray" }, slug: "manuals/xray" },
-					],
-				},
-				{
 					label: "Security",
 					translations: { fa: "امنیت" },
 					items: [
@@ -89,6 +97,7 @@ export default defineConfig({
 						{ label: "Obfuscation layer status", translations: { fa: "وضعیت لایه مبهم‌سازی" }, slug: "security/obfuscation" },
 					],
 				},
+				{ label: "The alpha release", translations: { fa: "نسخهٔ آلفا" }, slug: "alpha" },
 				{
 					label: "Legal",
 					translations: { fa: "حقوقی" },
@@ -98,6 +107,7 @@ export default defineConfig({
 						{ label: "Provider templates", translations: { fa: "الگوهای ارائه‌دهنده" }, slug: "legal/provider-templates" },
 					],
 				},
+				{ label: "Changelog", translations: { fa: "تاریخچهٔ تغییرات" }, slug: "changelog" },
 			],
 		}),
 	],

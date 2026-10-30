@@ -6,7 +6,7 @@ description: Link a server at home to your VPS, so your users can reach your hom
 A server at home often has no public address or open port. It can still dial out to your VPS. Once it does, your VPS can pass traffic to it in two ways:
 
 - **Your VPN users reach your home network.** A routing rule sends them there, for example everything to `192.168.0.0/16`.
-- **Anyone reaches one service at home.** A tunnel opens a port on the VPS and forwards it to one address at home, such as a web server.
+- **Anyone reaches one service at home.** A port forward opens a port on the VPS and sends it to one address at home, such as a web server. The panel calls it a tunnel.
 
 ```text
  users ---> VPS ===== link =====> home server ---> 192.168.1.x
@@ -62,11 +62,11 @@ A path has at most 3 links. The home server sees the VPS's link address, never t
 
 ## 4. Open one service to anyone (optional)
 
-Use a tunnel when something outside your VPN, such as a browser or a game client, must reach one service at home.
+Use a port forward (the panel's **Tunnels** card) when something outside your VPN, such as a browser or a game client, must reach one service at home.
 
 1. On the **VPS** panel, open **Links**, choose **Guided setup**, then **Forward a port to a home server** (TCP), or **Forward a UDP port to a home server**.
 2. **Exit** is the `home` exit from step 3. **Listen on** is the VPS's address and port, such as `203.0.113.5:8443`. **Target** is the service at home, such as `192.168.1.10:8080`.
-3. Fill **Allowed sources** whenever you can. A tunnel has no sign-in: anyone who reaches the port reaches the target. A UDP tunnel on a public address needs allowed sources.
+3. Fill **Allowed sources** whenever you can. A port forward has no sign-in: anyone who reaches the port reaches the target. A UDP one on a public address needs allowed sources.
 
 The home server must still allow it: step 1's **Let rules reach private networks**, and a rule that sends the target's address to **Direct**. The [Tunnels section of the panel manual](../../manuals/panel/#tunnels) lists every field.
 
@@ -76,6 +76,6 @@ The home server must still allow it: step 1's **Let rules reach private networks
 - **The link shows Refused or Key changed.** The two halves no longer match. Remove the link on both servers and pair again.
 - **The link is Up, but nothing at home answers.** Check, in order: **Let rules reach private networks** on the home server, the home server's rules, the VPS rule's place above `geoip:private`, and the user in the rule.
 - **Small things work, large ones hang.** The MTU is too high. See step 2.
-- **A tunnel shows Refused.** Its card gives the reason, such as a source that is not listed or the link being down.
+- **A port forward shows Refused on its card under Tunnels.** Its card gives the reason, such as a source that is not listed or the link being down.
 
 `veilway doctor` on either server checks its links.

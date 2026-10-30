@@ -758,7 +758,7 @@ On a user's page, **Servers this user may use** is **Every server** or **Only th
 
 ### Tunnels
 
-A tunnel forwards one TCP or UDP port of this node through a [node link](#node-links) to one address on the far node, such as a server at home with no open port of its own. Nobody signs in: whoever reaches the port reaches the target. The **Tunnels** card on the **Links** page lists them below the links. A tunnel needs a link first, and an exit that leaves through it, since those are the only exits its **Exit** field offers.
+A tunnel (a port forward) forwards one TCP or UDP port of this node through a [node link](#node-links) to one address on the far node, such as a server at home with no open port of its own. Nobody signs in: whoever reaches the port reaches the target. The **Tunnels** card on the **Links** page lists them below the links. A tunnel needs a link first, and an exit that leaves through it, since those are the only exits its **Exit** field offers.
 
 Two presets under **Guided setup** start a tunnel with its protocol already set:
 

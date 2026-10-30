@@ -1,9 +1,11 @@
 ---
-title: Set up an entry node
-description: Keep users connected when a country's international links are cut or filtered, with one server inside the country and one abroad.
+title: "Tunnel: a server in Iran in front of a foreign server"
+description: Keep users connected when a country's international links are cut or filtered. Users connect to a server inside the country, which passes their traffic to a server abroad. Often called a tunnel.
 ---
 
-An entry node is a Veilway server inside the country, where users connect. It does not send their traffic to the internet itself. It carries it over one [node link](../../protocol/node-links/) to an exit node abroad, which does.
+Many people call this setup a tunnel: a server in Iran that users connect to, in front of a server abroad. Veilway calls the server in Iran the **entry node** and the one abroad the **exit node**. The two are joined by a node link. This page uses the Veilway names.
+
+The entry node is a Veilway server inside the country, where users connect. It does not send their traffic to the internet itself. It carries it over one [node link](../../protocol/node-links/) to an exit node abroad, which does.
 
 ```text
  users ---> entry node ===== link =====> exit node ---> internet

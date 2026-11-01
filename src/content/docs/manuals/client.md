@@ -36,7 +36,7 @@ The app asks for administrator rights through polkit (the `pkexec` program), and
 
 ### Windows
 
-The Windows installer is per machine: it needs an administrator and installs for every user. It puts `wintun.dll` next to the program, which the tunnel uses to create its network adapter. The command-line `veilway.exe` is one file: it carries the same `wintun.dll`, writes it to `C:\ProgramData\Veilway\wintun` (administrators only) and checks it before each use.
+The Windows installer is per machine: it needs an administrator, installs for every user, and always installs in Program Files, even if you choose another folder, because the app runs with administrator rights. It puts `wintun.dll` next to the program, which the tunnel uses to create its network adapter. The command-line `veilway.exe` is one file: it carries the same `wintun.dll`, writes it to `C:\ProgramData\Veilway\wintun` (administrators only) and checks it before each use.
 
 ### macOS
 

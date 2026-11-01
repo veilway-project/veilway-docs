@@ -9,6 +9,23 @@ The desktop app is part of the [alpha](../../alpha/). On Linux, a 70-point check
 
 The Veilway desktop app (Linux, Windows, macOS) connects this computer to a Veilway node, using a subscription from your provider.
 
+## Which file to download
+
+Open the [release page](https://github.com/veilway-project/veilway/releases) and pick the newest release. Under **Assets**, download the file for your system. `<version>` is the release number, for example `0.3.12`.
+
+| System | File |
+|---|---|
+| Windows | `Veilway_<version>_x64-setup.exe` |
+| Debian, Ubuntu (most PCs) | `Veilway_<version>_amd64.deb` |
+| Debian, Ubuntu (ARM, such as a Raspberry Pi) | `Veilway_<version>_arm64.deb` |
+| Fedora and other RPM systems (most PCs) | `Veilway-<version>-1.x86_64.rpm` |
+| Fedora and other RPM systems (ARM) | `Veilway-<version>-1.aarch64.rpm` |
+| Mac with Apple silicon (M1 or newer) | `veilway-aarch64-apple-darwin` (command line) |
+| Mac with Intel | `veilway-x86_64-apple-darwin` (command line) |
+| Android | `veilway-android-arm64.apk`, see the [Android manual](../android/) |
+
+Skip the files ending in `.minisig`: they are signatures that the installer and the app check. `veilway-x86_64-pc-windows-msvc.exe` and the `linux-musl` files are the command-line program, not the app. The `veilway.sh` file is the server installer.
+
 ## Install
 
 ### Linux
@@ -23,7 +40,15 @@ The Windows installer is per machine: it needs an administrator and installs for
 
 ### macOS
 
-The alpha has no macOS desktop app yet. It comes after it has run on a real Mac. Until then, use the command-line client from the release page (`veilway connect`, run as root).
+The alpha has no macOS desktop app yet. It comes after it has run on a real Mac. Until then, use the command-line client from the table above. In Terminal, in the folder you downloaded it to:
+
+```sh
+chmod +x veilway-aarch64-apple-darwin
+xattr -d com.apple.quarantine veilway-aarch64-apple-darwin
+sudo ./veilway-aarch64-apple-darwin connect <link>
+```
+
+On an Intel Mac use the `x86_64` file name. The `xattr` line stops macOS from blocking a file downloaded from the internet.
 
 ## Administrator rights
 

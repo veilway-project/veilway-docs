@@ -9,6 +9,23 @@ description: نصب و استفاده از برنامهٔ دسکتاپ Veilway.
 
 برنامهٔ دسکتاپ Veilway (لینوکس، ویندوز، macOS) این رایانه را با اشتراکی که ارائه‌دهنده‌تان داده، به یک نود Veilway وصل می‌کند.
 
+## کدام فایل را دانلود کنیم
+
+[صفحهٔ نسخه‌ها](https://github.com/veilway-project/veilway/releases) را باز کنید و تازه‌ترین نسخه را بردارید. زیر **Assets** فایل سیستم خود را دانلود کنید. `<version>` شمارهٔ نسخه است، مثلاً `0.3.12`.
+
+| سیستم | فایل |
+|---|---|
+| ویندوز | `Veilway_<version>_x64-setup.exe` |
+| Debian و Ubuntu (بیشتر رایانه‌ها) | `Veilway_<version>_amd64.deb` |
+| Debian و Ubuntu (ARM، مثل Raspberry Pi) | `Veilway_<version>_arm64.deb` |
+| Fedora و دیگر سیستم‌های RPM (بیشتر رایانه‌ها) | `Veilway-<version>-1.x86_64.rpm` |
+| Fedora و دیگر سیستم‌های RPM (ARM) | `Veilway-<version>-1.aarch64.rpm` |
+| Mac با تراشهٔ Apple (M1 یا تازه‌تر) | `veilway-aarch64-apple-darwin` (خط فرمان) |
+| Mac با Intel | `veilway-x86_64-apple-darwin` (خط فرمان) |
+| اندروید | `veilway-android-arm64.apk`، [راهنمای اندروید](../android/) را ببینید |
+
+فایل‌هایی که به `.minisig` ختم می‌شوند را دانلود نکنید: امضاهایی هستند که نصب‌کننده و برنامه بررسی می‌کنند. `veilway-x86_64-pc-windows-msvc.exe` و فایل‌های `linux-musl` برنامهٔ خط فرمان‌اند، نه برنامهٔ دسکتاپ. فایل `veilway.sh` نصب‌کنندهٔ سرور است.
+
 ## نصب
 
 ### لینوکس
@@ -23,7 +40,15 @@ description: نصب و استفاده از برنامهٔ دسکتاپ Veilway.
 
 ### macOS
 
-آلفا هنوز برنامهٔ دسکتاپ macOS ندارد. بعد از اجرا روی یک Mac واقعی می‌آید. تا آن موقع از کلاینت خط فرمان در صفحهٔ نسخه‌ها استفاده کنید (`veilway connect`، با دسترسی root).
+آلفا هنوز برنامهٔ دسکتاپ macOS ندارد. بعد از اجرا روی یک Mac واقعی می‌آید. تا آن موقع از کلاینت خط فرمان جدول بالا استفاده کنید. در Terminal، در پوشه‌ای که فایل را در آن دانلود کرده‌اید:
+
+```sh
+chmod +x veilway-aarch64-apple-darwin
+xattr -d com.apple.quarantine veilway-aarch64-apple-darwin
+sudo ./veilway-aarch64-apple-darwin connect <link>
+```
+
+در Mac با Intel نام فایل `x86_64` را به کار ببرید. خط `xattr` نمی‌گذارد macOS فایلی را که از اینترنت آمده مسدود کند.
 
 ## دسترسی مدیر
 

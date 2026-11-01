@@ -5,6 +5,12 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.13-alpha
+
+- **Windows app installs in Program Files.** The installer now always uses Program Files, even if you choose another folder. The app runs with administrator rights, and it would not start from a folder other users can change. That folder was why the app could get stuck loading and then fail to show subscriptions.
+- **Clearer errors in the Windows app.** If the install folder is not safe, the app says so before asking for administrator rights. When subscriptions fail to load, the error now shows the reason.
+- Already installed in another folder? Uninstall, then install the new version.
+
 ## New in v0.3.12-alpha
 
 - **No UDP by default.** The installer's first inbound is now `tls` on a random free TCP port, with a self-signed certificate and the installer's plain site as its decoy. It is made with `install both` and a domain or `--no-domain`. A node installed alone starts with no inbound. UDP to an odd port is easy to spot, so the docs no longer recommend `udp-obfs`.

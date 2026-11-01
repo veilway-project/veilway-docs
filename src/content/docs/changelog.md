@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.14-alpha
+
+- **Panel: a server with no user inbound keeps taking updates.** A server that only carries an exit (through a node link) refused every update from the panel once a user allowed on all servers added a device. The panel now leaves that device out of that server's config.
+- Update the panel. Nodes can stay on v0.3.13.
+
 ## New in v0.3.13-alpha
 
 - **Windows app installs in Program Files.** The installer now always uses Program Files, even if you choose another folder. The app runs with administrator rights, and it would not start from a folder other users can change. That folder was why the app could get stuck loading and then fail to show subscriptions.

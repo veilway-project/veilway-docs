@@ -7,7 +7,7 @@ What changed in each alpha release, newest first. For what works today and the k
 
 ## New in v0.3.15-alpha
 
-- **Bridge: `--pin` for a self-signed relay.** `veilway bridge client --pin <pin>` accepts a `wss` relay by its certificate's key instead of a certificate authority, so a relay with a self-signed certificate is safe to use. `veilway bridge relay` logs the pin when it starts. Use it in place of `--insecure`.
+- **Bridge: `--pin` for a self-signed relay.** `veilway bridge client --pin <pin>` accepts a `wss` relay by its certificate's key instead of a certificate authority, so a relay with a self-signed certificate is safe to use. `veilway bridge relay` logs the pin when it starts. Use it in place of `--insecure`. See [WebSocket bridge](../manuals/bridge/).
 - Update the node or the binary that runs the bridge. The panel has no changes.
 
 ## New in v0.3.14-alpha

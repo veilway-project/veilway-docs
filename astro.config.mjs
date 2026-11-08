@@ -58,6 +58,7 @@ export default defineConfig({
 						{ label: "Panel", translations: { fa: "پنل" }, slug: "manuals/panel" },
 						{ label: "Home network", translations: { fa: "شبکهٔ خانگی" }, slug: "manuals/home-network" },
 						{ label: "Xray add-on", translations: { fa: "افزونهٔ Xray" }, slug: "manuals/xray" },
+						{ label: "WebSocket bridge", translations: { fa: "بریج WebSocket" }, slug: "manuals/bridge" },
 					],
 				},
 				{

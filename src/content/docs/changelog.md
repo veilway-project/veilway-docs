@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.15-alpha
+
+- **Bridge: `--pin` for a self-signed relay.** `veilway bridge client --pin <pin>` accepts a `wss` relay by its certificate's key instead of a certificate authority, so a relay with a self-signed certificate is safe to use. `veilway bridge relay` logs the pin when it starts. Use it in place of `--insecure`.
+- Update the node or the binary that runs the bridge. The panel has no changes.
+
 ## New in v0.3.14-alpha
 
 - **Panel: a server with no user inbound keeps taking updates.** A server that only carries an exit (through a node link) refused every update from the panel once a user allowed on all servers added a device. The panel now leaves that device out of that server's config.

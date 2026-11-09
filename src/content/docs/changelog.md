@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.16-alpha
+
+- **Bridge: no more stalls after a slowdown.** After a short slowdown on the TCP path, the WebSocket bridge could stop for good: WireGuard showed fresh handshakes but every packet was lost until the relay restarted. Now packets are dropped when the path backs up, as on a lossy link, and the bridge keeps going. A connection that gets nothing back for 15 seconds closes, and the client dials again. This covers `veilway bridge relay`, `veilway bridge client` and a node's `ws` transport. See [WebSocket bridge](../manuals/bridge/).
+- Update the node and every machine that runs the bridge. The panel has no changes.
+
 ## New in v0.3.15-alpha
 
 - **Bridge: `--pin` for a self-signed relay.** `veilway bridge client --pin <pin>` accepts a `wss` relay by its certificate's key instead of a certificate authority, so a relay with a self-signed certificate is safe to use. `veilway bridge relay` logs the pin when it starts. Use it in place of `--insecure`. See [WebSocket bridge](../manuals/bridge/).

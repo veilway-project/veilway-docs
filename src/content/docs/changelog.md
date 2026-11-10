@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.17-alpha
+
+- **Panel: users show when they were last seen.** The user list showed "Not seen yet" for almost everyone, because it only looked at live connections on the node. Now, when nobody is connected, it shows when one of the user's devices last fetched its subscription. "Not seen yet" now means no device ever has.
+- Update the panel. Nodes can stay on v0.3.16.
+
 ## New in v0.3.16-alpha
 
 - **Bridge: no more stalls after a slowdown.** After a short slowdown on the TCP path, the WebSocket bridge could stop for good: WireGuard showed fresh handshakes but every packet was lost until the relay restarted. Now packets are dropped when the path backs up, as on a lossy link, and the bridge keeps going. A connection that gets nothing back for 15 seconds closes, and the client dials again. This covers `veilway bridge relay`, `veilway bridge client` and a node's `ws` transport. See [WebSocket bridge](../manuals/bridge/).

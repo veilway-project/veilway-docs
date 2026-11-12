@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.18-alpha
+
+- **Panel: gateway addresses are required.** The inbound form marked **Gateway addresses** as optional, but the node refuses an inbound without one, so saving failed with "Too short or too few: at least 1". The field no longer says optional. Put the inbound's own address with its network there, for example `10.66.0.1/16`.
+- Update the panel. Nodes can stay on v0.3.17.
+
 ## New in v0.3.17-alpha
 
 - **Panel: users show when they were last seen.** The user list showed "Not seen yet" for almost everyone, because it only looked at live connections on the node. Now, when nobody is connected, it shows when one of the user's devices last fetched its subscription. "Not seen yet" now means no device ever has.

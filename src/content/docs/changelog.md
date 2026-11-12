@@ -8,6 +8,7 @@ What changed in each alpha release, newest first. For what works today and the k
 ## New in v0.3.18-alpha
 
 - **Panel: gateway addresses are required.** The inbound form marked **Gateway addresses** as optional, but the node refuses an inbound without one, so saving failed with "Too short or too few: at least 1". The field no longer says optional. Put the inbound's own address with its network there, for example `10.66.0.1/16`.
+- **Panel: a banner when no profile is published.** With users but no published profile, every app that adds a link gets "The provider's address did not answer as a subscription server", which pointed at the wrong place. Now every page of the panel shows a red banner with a button to **Profiles** until you publish.
 - Update the panel. Nodes can stay on v0.3.17.
 
 ## New in v0.3.17-alpha

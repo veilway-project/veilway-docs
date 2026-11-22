@@ -5,6 +5,14 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.19-alpha
+
+- **Less delay under load.** A big download through a node used to fill a slow path with seconds of data, so pages, calls and games on the same connection waited behind it. Three changes keep that queue short:
+  - Each TCP connection of a `netstack` exit measures its own round trip and speed, and keeps at most about twice what its path holds in one round trip on the way, in both directions.
+  - The send queue of a `tls`, `ws`, `fronted` or `faketls` session drops a datagram once datagrams have waited there more than about 25 ms for a while, on the node and in the apps. Handshakes and the control channel are never dropped. The listener's stats count these drops as `queue_late`.
+  - On Linux and Android, a stream connection lets the system hold at most 16 KiB unsent, so the wait shows up in that queue.
+- Update the node and the apps. Both ends of a node link need v0.3.19 for the full effect. The panel only changes its version number.
+
 ## New in v0.3.18-alpha
 
 - **Panel: gateway addresses are required.** The inbound form marked **Gateway addresses** as optional, but the node refuses an inbound without one, so saving failed with "Too short or too few: at least 1". The field no longer says optional. Put the inbound's own address with its network there, for example `10.66.0.1/16`.

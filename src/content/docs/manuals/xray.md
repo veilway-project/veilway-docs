@@ -60,8 +60,10 @@ Each UDP destination of a user is a flow like any other. The node refuses loopba
 In the panel, open **Inbounds**, choose **Add Xray inbound**, pick the protocol and fill in:
 
 - **Tag**: a short name for the inbound, such as `vless-443`.
-- **Port**: the TCP port Xray listens on. Open it in your firewall, and UDP too for Shadowsocks.
-- **Certificate file and key file** (VLESS and Trojan): paths on the node, such as your certificate's full chain file. Shadowsocks needs neither.
+- **Port**: the TCP port Xray listens on. The form starts with a random one. Open it in your firewall, and UDP too for Shadowsocks.
+- **Certificate** (VLESS and Trojan): **Self-signed** (the default) or **Certificate files**. Self-signed: the node makes the key and a certificate that lasts about ten years, and every link carries its pin, so the app checks it is talking to your node. **Certificate name** (optional) goes into the certificate and the links' `sni`. Certificate files: paths on the node, such as your certificate's full chain file. Shadowsocks needs neither.
+- **Vision** (VLESS): on by default. It hides the pattern of a TLS connection inside another, which censors look for. See [The shared address](#the-shared-address).
+- **Users**: **All users**, or **Chosen users** and a tick for each. Only the users of an inbound get a credential and a link for it.
 - **Decoy web server** (VLESS and Trojan): the address of your own web server, such as `http://127.0.0.1:8080`. Required. If empty, the panel uses the decoy of the node's `tls` transport.
 - **Host in links** (optional): the name or address the links give. Empty means the node's first public address.
 
@@ -69,9 +71,13 @@ In the panel, open **Inbounds**, choose **Add Xray inbound**, pick the protocol 
 
 A connection to a VLESS or Trojan port with no user's credential goes to your web server, so a probe sees an ordinary site. The test checks this on both ports. Shadowsocks has no decoy, and the test does not check what a stranger gets from its port.
 
+### The pin
+
+With a self-signed certificate, each VLESS or Trojan link ends in `pcs=` and the certificate's pin, 64 hex characters. The user's **Xray links** also show the pin alone, with a copy button. Some apps ignore `pcs`: paste the pin into the app's TLS settings, in the field for a pinned certificate SHA-256. An app that has no such field cannot check the certificate, so use another app. The pin stays the same while the node keeps its certificate files (`xray-<tag>.crt` and `.key` next to the node's config).
+
 ### The shared address
 
-Xray answers on the same address as your native Veilway profiles, and anyone who finds that address can tell it runs a proxy. So native profiles on that address are rated **Detectable** in the subscriptions, and the panel says so before it creates the inbound. Choose this knowingly. Since v0.2.4, only profiles that share an address with an Xray inbound are capped. An inbound that listens on every address (the default) caps them all. An inbound on a separate IP address of the server, with its own host name, leaves profiles on other addresses as they are. A name the panel cannot resolve, or that resolves to the Xray address, counts as shared.
+Xray answers on the same address as your native Veilway profiles. A VLESS inbound with Vision and a decoy answers a stranger as the decoy's web server does, so profiles on its address keep their rating. A Trojan or Shadowsocks inbound, or VLESS without Vision, can be told apart, so native profiles on that address are rated **Detectable** in the subscriptions, and the panel says so before it creates the inbound. Choose this knowingly. Since v0.2.4, only profiles that share an address with an Xray inbound are capped. An inbound that listens on every address (the default) caps them all. An inbound on a separate IP address of the server, with its own host name, leaves profiles on other addresses as they are. A name the panel cannot resolve, or that resolves to the Xray address, counts as shared.
 
 ## Changing credentials
 

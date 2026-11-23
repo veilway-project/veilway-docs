@@ -117,7 +117,7 @@ From v0.2.18, the add-on also works the other way: a node can send an exit's tra
 
 - **UDP is carried for all three protocols**, but a UDP flow ends when the exit has no UDP and its policy says so. The node resolves names a UDP datagram asks for, like those of TCP connections.
 - **No VMess and no Reality** on Xray inbounds. Xray outbounds speak both.
-- **No `l3` or `chain` exits for Xray users.** Xray traffic uses the user's `netstack` exits.
+- **No `l3` or `chain` exits for Xray users.** Xray traffic uses the user's `netstack` exits. When a user's own exit is a `chain` or `l3` exit, add a routing rule with the transport `xray` that sends their Xray traffic to a `netstack` exit they have, such as `{"tag": "xray-out", "transport": ["xray"], "action": {"exit": "de-xray"}}`. Their tunnel keeps its own exit.
 - **Any change restarts Xray briefly.**
 - **The Android app does not connect to Xray links yet.** The desktop app does, since v0.2.0-alpha.
 - **Not tested yet:** removing the add-on with `remove`, and the decoy for Shadowsocks.

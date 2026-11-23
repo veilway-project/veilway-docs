@@ -5,6 +5,13 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.20-alpha
+
+- **Xray inbounds for chosen users.** An Xray inbound serves every user or only the users you tick. Inbounds from before stay on every user.
+- **A self-signed certificate with its pin in the links.** VLESS and Trojan inbounds can use a certificate the node makes. Each link carries its pin as `pcs=`, and the user's **Xray links** show the pin to copy for apps that ignore `pcs`. See [the pin](../manuals/xray/#the-pin).
+- **Vision keeps your profiles' rating.** VLESS inbounds can use the Vision flow, on by default. A VLESS inbound with Vision and a decoy no longer marks the profiles on its address **Detectable**. Trojan and Shadowsocks still do.
+- Update the node and the panel. Phone and desktop apps can stay on v0.3.19.
+
 ## New in v0.3.19-alpha
 
 - **Less delay under load.** A big download through a node used to fill a slow path with seconds of data, so pages, calls and games on the same connection waited behind it. Three changes keep that queue short:

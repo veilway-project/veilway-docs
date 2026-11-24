@@ -592,7 +592,7 @@ UDP ASSOCIATE gives a SOCKS5 client a UDP relay on the node. A datagram carries 
 - **On loopback (Linux)** a datagram is carried only from a socket whose owner, read from the kernel, is the user id that owns the control connection. On macOS and Windows the system cannot tell who owns a socket, so a loopback inbound follows the rule for other addresses.
 - **On any other address** the client must say in its request the port it sends from. Only datagrams from exactly that address and port are carried, and a request with port `0` is refused (`0x02`). A client behind a NAT, which rewrites the port, gets no UDP. Validation warns about this on every such inbound with `udp` on.
 - **`udp_any_port`** is the way out for clients behind a NAT: the association binds to the first datagram from the client's address. The cost is a window before that datagram, in which a sender that shares the client's address (neighbors behind the same carrier NAT, say) can take the association and reach the destinations of the user's flows. Validation warns about it. Leave it off unless your clients are behind a NAT.
-- An association ends with its control connection, after 120 seconds without a datagram, and when the user is cut off. A user holds at most 32 associations and 256 UDP flows, and an inbound 4,096 and 16,384.
+- An association ends with its control connection, after 120 seconds without a datagram, and when the user is cut off. A user holds at most 256 associations and 256 UDP flows, and an inbound 4,096 and 16,384.
 - Datagrams dropped because they did not come from the address and port the client named count as `refused_udp_source`.
 
 ### Limits and failed logins

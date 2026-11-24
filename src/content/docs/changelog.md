@@ -5,6 +5,11 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.22-alpha
+
+- **Xray users can use node links.** TCP from an Xray inbound or a SOCKS5, HTTP or mixed inbound now goes through a `chain` exit, so those users reach what the tunnel reaches through a link, such as a home network. DNS follows the user's DNS servers as before. Other UDP still needs a `netstack` exit. See the [Xray manual](../manuals/xray/#known-limits).
+- Update the node. The panel and the apps can stay on v0.3.21.
+
 ## New in v0.3.21-alpha
 
 - **Xray traffic can have its own exit.** A routing rule can name the transport `xray`. Xray can only use `netstack` exits, so a user whose own exit is a node link (`chain`) or `l3` could not use an Xray link before. A rule like `{"tag": "xray-out", "transport": ["xray"], "action": {"exit": "de-xray"}}` sends their Xray traffic to a `netstack` exit, and their tunnel keeps its own exit. See the [Xray manual](../manuals/xray/#known-limits).

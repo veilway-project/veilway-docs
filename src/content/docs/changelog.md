@@ -5,6 +5,12 @@ description: What changed in each Veilway alpha release, newest first.
 
 What changed in each alpha release, newest first. For what works today and the known limits, see [the alpha release](../alpha/).
 
+## New in v0.3.23-alpha
+
+- **Faster, steadier connections through `netstack` exits.** The node's userspace TCP now tells the other side its segment size, answers every segment and passes data on as soon as it arrives in order, and it uses Cubic. Very large uploads through a `chain` exit can still stall.
+- **Xray users run out of UDP less.** A user holds 256 UDP associations through Xray instead of 32, and one that only carried DNS ends after 10 s of quiet. Apps that make many lookups at once no longer fill the table. See the [Xray manual](../manuals/xray/#known-limits).
+- Update the node. The panel and the apps can stay on v0.3.22.
+
 ## New in v0.3.22-alpha
 
 - **Xray users can use node links.** TCP from an Xray inbound or a SOCKS5, HTTP or mixed inbound now goes through a `chain` exit, so those users reach what the tunnel reaches through a link, such as a home network. DNS follows the user's DNS servers as before. Other UDP still needs a `netstack` exit. See the [Xray manual](../manuals/xray/#known-limits).
